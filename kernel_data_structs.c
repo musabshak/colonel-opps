@@ -5,6 +5,8 @@
  *          - kernel stack, heap, data, text
  *      - array of active processes
  *      - queue of waiting processes
+ *      - array of exit statuses, to be checked for waiting process
+ *          - exit status {int exit_status, process *parent}
  *      - pipe
  *      - lock
  *      - cvar (condition variable)
@@ -27,6 +29,7 @@
  *      kernel_text;
  *      // --- metadata
  *      process_t *parent;
+ *      int pid;
  *      bool initialized; // to see if we own proc mem or its just copied from fork()
  *  } process_t;
  * 
