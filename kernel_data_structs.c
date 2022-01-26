@@ -9,13 +9,41 @@
  *      - lock
  *      - cvar (condition variable)
  * 
+ *      - interrupt vector, vector table
+ * 
  * ===============
  * === PROCESS === 
  * ===============
  *  typdef struct Process {
+ *      // --- userland 
+ *      user_stack;
+ *      user_heap;
+ *      user_data;
+ *      user_text;
+ *      // --- kernelland
+ *      kernel stack;
+ *      kernel_heap;
+ *      kernel_data;
+ *      kernel_text;
+ *      // --- metadata
  *      process_t *parent;
+ *      bool initialized; // to see if we own proc mem or its just copied from fork()
  *  } process_t;
  * 
+ * ========================
+ * === ACTIVE PROCESSES ===
+ * ========================
+ *  typedef struct ActiveProcesses {
+ *      process_t *procs;
+ *      int size;
+ *  } active_procs_t;
+ * 
+ * =========================
+ * === WAITING PROCESSES ===
+ * =========================
+ *  typedef struct WaitingProcesses {
+ *      
+ *  } waiting_procs_t;
  * 
  * ====================
  * === KERNEL STACK ===
