@@ -10,6 +10,11 @@
  *      - pipe
  *      - lock
  *      - cvar (condition variable)
+ *      - file descriptor
+ *          - file descriptor table (per process) ->
+ *          - file table (system wide, indexes opened files with mode) -> 
+ *          - inode table (system wide)
+ *      - file?
  * 
  *      - interrupt vector, vector table
  * 
