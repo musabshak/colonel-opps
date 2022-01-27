@@ -19,7 +19,12 @@
  */
 
 int TrapKernelHandler(UserContext *user_context) {
-    int syscall_code = user_context->code;    
+    // WARNING: I don't think this is correct. user_context->code , as per page 28, contains 
+    // code giving information on particular interrupt/exception/trap, yes, but it doesn't give the syscall
+    // value. Need to figure out where to get the syscall value from
+    int syscall_code = user_context->code;   
+
+
     void **args = user_context->regs;
 
     // Locate syscall in syscall table, invoke with args
@@ -29,18 +34,25 @@ int TrapKernelHandler(UserContext *user_context) {
 
         case 1:
             kFork();
+            break;
         case 2:
             kExec();
+            break;
         case 3:
             kExit();
+            break;
         case 4: 
             kWait();
+            break;
         case 5:
             kGetPid();
+            break;
         case 6:
             kBrk();
+            break;
         case 7:
             kDelay();
+            break;
         
         // ... and so on
 
