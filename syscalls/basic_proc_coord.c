@@ -15,7 +15,7 @@
  *      is 0. If, for any reason, the new process cannot be created, this 
  *      syscall instead returns the value ERROR to the calling process.
  * 
- *  int fork() {
+ *  int kFork() {
  *      //  --- Go to kernelland
  *      
  *      // Identify calling process's 
@@ -32,7 +32,7 @@
  * From manual (p. 31-32):
  *      ???
  * 
- *  int exec(char *filename, char **argvec) {
+ *  int kExec(char *filename, char **argvec) {
  *      // Initialize memory of calling function if it hasn't been
  *      // Load text at filename to proc mem, 
  *      // Let argc = # entries in argvec before NULL
@@ -55,7 +55,7 @@
  *      longer anybody to care.
  *      If the initial process exits, you should halt the system.
  * 
- *  void exit(int status) {
+ *  void kExit(int status) {
  *      // Go to kernelland
  *      // If parent == NULL (the exiting process is an orphan)
  *      // Then return
@@ -78,7 +78,7 @@
  *      On success, the process ID of the child process is returned. If status ptr is 
  *      not null, the exit status of the child is copied to that address.
  * 
- *  int wait(int *status_ptr) {
+ *  int kWait(int *status_ptr) {
  *      // Go to kernelland
  *      // If no children, return with ERROR
  *      // Else, kernel blocks this process by adding it to waiting queue
@@ -91,7 +91,7 @@
  *  === GETPID ===
  *  ==============
  * 
- *  int getpid() {
+ *  int kGetPid() {
  *      // go to kernel land
  *      // return thisproc.pid
  *  }
@@ -102,7 +102,7 @@
  * 
  * Increments the user's heap.
  * 
- *  int Brk(void *addr) {
+ *  int kBrk(void *addr) {
  *      // Calculate the extra memory the user is asking for
  *      // Get enough frames
  *      // Change user heap limit to addr
@@ -119,7 +119,7 @@
  *      If clock ticks is 0, return is immediate. If clock ticks is less than 0, 
  *      time travel is not carried out, and ERROR is returned instead.
  * 
- *  int Delay(int clock_ticks) {
+ *  int kDelay(int clock_ticks) {
  * 
  *  }
  * 

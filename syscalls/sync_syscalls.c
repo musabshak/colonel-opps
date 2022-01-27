@@ -9,7 +9,7 @@
  * 
  */
 
-int LockInit(int *lock_idp) {
+int kLockInit(int *lock_idp) {
 
 }
 
@@ -24,7 +24,7 @@ int LockInit(int *lock_idp) {
  * 
  */
 
-int Acquire(int lock_id) {
+int kAcquire(int lock_id) {
 
 }
 
@@ -39,7 +39,7 @@ int Acquire(int lock_id) {
  * 
  */
 
-int Release(int lock_id) {
+int kRelease(int lock_id) {
 
 }
 
@@ -53,7 +53,7 @@ int Release(int lock_id) {
  *      In case of any error, the value ERROR is returned.
  * 
  */
-int CvarInit(int *cvar_idp) {
+int kCvarInit(int *cvar_idp) {
 
 }
 
@@ -67,7 +67,7 @@ int CvarInit(int *cvar_idp) {
  *      semantics.) In case of any error, the value ERROR is returned.
  * 
  */
-int CvarSignal(int cvar_id) {
+int kCvarSignal(int cvar_id) {
 
 }
 
@@ -81,7 +81,7 @@ int CvarSignal(int cvar_id) {
  *      semantics.) In case of any error, the value ERROR is returned.
  * 
  */
-int CvarBroadcast(int cvar_id) {
+int kCvarBroadcast(int cvar_id) {
 
 }
 
@@ -99,7 +99,7 @@ int CvarBroadcast(int cvar_id) {
  *      of any error, the value ERROR is returned.
  * 
  */
-int CvarWait(int cvar_id, int lock_id) {
+int kCvarWait(int cvar_id, int lock_id) {
 
 }
 
@@ -116,6 +116,6 @@ int CvarWait(int cvar_id, int lock_id) {
  *      scenarios, then create and document it.
  * 
  */
-int Reclaim(int id) {
+int kReclaim(int id) {
 
 }

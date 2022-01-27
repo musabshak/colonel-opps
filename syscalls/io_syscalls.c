@@ -23,7 +23,7 @@
  * 
  */
 
-int TtyRead(int tty_id, void *buf, int len) {
+int kTtyRead(int tty_id, void *buf, int len) {
 
 }
 
@@ -43,6 +43,6 @@ int TtyRead(int tty_id, void *buf, int len) {
  * 
  */
 
-int TtyWrite(int tty_id, void *buf, int len) {
+int kTtyWrite(int tty_id, void *buf, int len) {
 
 }
