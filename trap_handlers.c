@@ -19,17 +19,13 @@
  */
 
 int TrapKernelHandler(UserContext *user_context) {
-    // WARNING: I don't think this is correct. user_context->code , as per page 28, contains 
-    // code giving information on particular interrupt/exception/trap, yes, but it doesn't give the syscall
-    // value. Need to figure out where to get the syscall value from
     int syscall_code = user_context->code;   
 
 
     void **args = user_context->regs;
 
-    // Locate syscall in syscall table, invoke with args
 
-    // TODO: how does trap handler access args given to library syscall wrapper?
+    // for syscall functions that need arguments, look for args in user_context->regs[0...]
     switch(syscall_code) {
 
         case 1:
