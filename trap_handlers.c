@@ -1,3 +1,4 @@
+#include "kernel_syscalls.h" // where kernel syscall subroutines are defined
 
 /*
  *  ===================
@@ -21,8 +22,29 @@ int TrapKernelHandler(UserContext *user_context) {
     int syscall_code = user_context->code;    
     void **args = user_context->regs;
 
-    // Locate syscall in syscall table
-    // Invoke syscall with args    
+    // Locate syscall in syscall table, invoke with args
+
+    // TODO: how does trap handler access args given to library syscall wrapper?
+    switch(syscall_code) {
+
+        case 1:
+            kFork();
+        case 2:
+            kExec();
+        case 3:
+            kExit();
+        case 4: 
+            kWait();
+        case 5:
+            kGetPid();
+        case 6:
+            kBrk();
+        case 7:
+            kDelay();
+        
+        // ... and so on
+
+    }
 }
 
 /*
