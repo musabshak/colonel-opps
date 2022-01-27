@@ -1,3 +1,6 @@
+// Assume global coming from kernel:
+pcb_t *running_process_p;
+
 /*
  *  ============
  *  === FORK ===
@@ -19,11 +22,21 @@
 int kFork() {
     //  --- Go to kernelland
 
-    // Identify calling process's
-    // Copy the process pointers to make a new process
-    // Push new process into active processes array, next operation is to
+    // Identify calling process's pcb
+    pcb_t *parent_pcb;
+
+    // Make a new pcb for child process.
+    // Copy the parent process pointers to make a new process
+    pcb_t *child_pcb = pcb_copy(parent_pcb);
+
+    // Assign a new PID to child_pcb -> pid
+    // Put 0 in register of child_pcb -> uctxt
+
+    // Push new process into ready processes array
+    ready_procs.push(child_pcb);
+
     // return from fork() with 0.
-    //(Parent process) return from fork() with pid of child.
+    return 0;
 }
 
 /*
@@ -96,8 +109,12 @@ int kWait(int *status_ptr) {
  *  ==============
  */
 int kGetPid() {
-    // go to kernel land
-    // return thisproc.pid
+    // Confirm that there is a process that is currently running
+    if (running_process_p == NULL) {
+        return ERROR;
+    }
+
+    return running_process_p->pid;
 }
 
 /* *  ===========

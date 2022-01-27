@@ -10,7 +10,7 @@
  *      - kernel context
  *          - include/hardware.h
  *      - syscall table
- *      - array of active processes
+ *      - queue of ready processes
  *      - queue of waiting processes
  *      - array of exit statuses, to be checked for waiting process
  *          - exit status {int exit_status, process *parent}
@@ -33,7 +33,7 @@
  *
  */
 
-typedef struct Process {
+typedef struct ProcessControlBlock {
     // --- userland
     user_stack;
     user_heap;
@@ -45,9 +45,55 @@ typedef struct Process {
     kernel_data;
     kernel_text;
     // --- metadata
-    process_t *parent;
+    pcb_t *parent;
     int pid;
-} process_t;
+    pagetabe_t *ptable;
+} pcb_t;
+
+// Input: pointer to parent pcb
+// Output: pointer to a newly malloced child pcb
+// Child's pcb has new PID. Other pointers point to copies of what the parent pointers
+// pointed to.
+pcb_t *pcb_copy(pcb_t *pcb_tocopy) {
+
+    // Malloc a new pcb: child_pcb *
+    // Malloc a new pagetable
+    // Copy what parent_pcb's pointers are pointing to, into newly assigned frames
+    pagetable_deepcopy(pcb_tocopy->pagetable);
+}
+
+/*
+ *  =================
+ *  === PAGETABLE ===
+ *  =================
+ */
+
+const int NUM_PT_ENTRIES;
+
+typedef struct PageTable {
+    pte_t *table;
+    int size;
+} pagetable_t;
+
+pagetable_t *pagetable_new();
+pagetable_t *pagetable_deepcopy();
+pagetable_t *pagetable_newcopy(pagetable_t *callers_pt);  // copy pointers to another table's frames
+
+pagetable_t *pagetable_deepcopy(pagetable_t *pagetable_tocopy) {
+    // new_pagetable;
+    //
+    // for i in range(pcb_tocpy->pagetable->size) {
+    //     frame = pcb_tocopy->pagetable[i];
+    //     if frame not valid { continue; }
+
+    //     new_frame = allocate_new_frame();
+    //     for j in old_frame.bytes() {
+    //         new_frame[j] = old_frame[j];
+    //     }
+
+    //     new_pagetable[i] = new_frame;
+    // }
+}
 
 /*
  *  =============
@@ -79,13 +125,13 @@ typedef struct Frame {
 
 /*
  * ========================
- * === ACTIVE PROCESSES ===
+ * === READY PROCESSES ====
  * ========================
  */
-typedef struct ActiveProcesses {
+typedef struct ReadyProcesses {
     process_t *procs;
     int size;
-} active_procs_t;
+} ready_procs_t;
 
 /** =========================
  * === WAITING PROCESSES ===
