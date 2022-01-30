@@ -13,7 +13,7 @@
  *  - Presumably, this is a read and write fd.
  */
 
-int PipeInit(int *pipe_idp) {
+int kPipeInit(int *pipe_idp) {
     // Create a new file of size (pipe internal buffer) in VFS
     // *pipe_idp = fd_of_newfile
 }
@@ -35,7 +35,7 @@ int PipeInit(int *pipe_idp) {
  * 
  */
 
-int PipeRead(int pipe_id, void *buf, int len) {
+int kPipeRead(int pipe_id, void *buf, int len) {
     // Using the fd pipe_id
     // Read byte by byte, consuming upon reading
 }
@@ -54,6 +54,6 @@ int PipeRead(int pipe_id, void *buf, int len) {
  * 
  */
 
-int PipeWrite(int pipe_id, void *buf, int len) {
+int kPipeWrite(int pipe_id, void *buf, int len) {
     
 }
