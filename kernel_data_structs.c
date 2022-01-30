@@ -131,11 +131,14 @@ frame_t frame_new(int ref_count, int id, int base, int limit) {
  * ===================
  * === FRAME TABLE ===
  * ===================
- * 
- *  This structure is how the kernel interacts with physical memory, e.g. 
- *  knows which frames are free, knows which frames to assign to page 
- *  tables, etc. 
- * 
+ *
+ *  This structure is how the kernel interacts with physical memory, e.g.
+ *  knows which frames are free, knows which frames to assign to page
+ *  tables, etc.
+ *
+ *  Easy implementation: bit vector of size PMEM_SIZE?
+ *  Efficient implementation (no overhead): linked list of free frames?
+ *
  */
 
 typedef struct FrameTable {
@@ -144,24 +147,27 @@ typedef struct FrameTable {
 } frametable_t;
 
 /*
- *  Initialize the frametable. This function is called during start-up, 
- *  when the kernel is passed the information about the memory size by the 
+ *  Initialize the frametable. This function is called during start-up,
+ *  when the kernel is passed the information about the memory size by the
  *  hardware.
  */
 frametable_t frametable_init(int hardware_mem_size, int frame_size, int pmem_base) {
     int num_frames = hardware_mem_size / frame_size;
 
-    frame_t *frames = malloc(num_frames*(sizeof(frame_t)));
-    frametable_t frametable = malloc(1*sizeof(frametable_t));
+    frame_t *frames = malloc(num_frames * (sizeof(frame_t)));
+    frametable_t frametable = malloc(1 * sizeof(frametable_t));
 
-    for (int i=0; i<num_frames; i++) {
-        frames[i] = frame_new(0, i, pmem_base + i*frame_size, (i+1)*frame_size);
+    for (int i = 0; i < num_frames; i++) {
+        frames[i] = frame_new(0, i, pmem_base + i * frame_size, (i + 1) * frame_size);
     }
 
-    return frametable_t { frames; num_frames };
+    return frametable_t {
+        frames;
+        num_frames
+    };
 }
 
-/* 
+/*
  * ========================
  * === READY PROCESSES ====
  * ========================
@@ -172,12 +178,20 @@ typedef struct ReadyProcesses {
 } ready_procs_t;
 
 /** =========================
- * === WAITING PROCESSES ===
+ * === Blocked PROCESSES ===
  * =========================
  */
-typedef struct WaitingProcesses {
+typedef struct BlockedProcesses {
 
-} waiting_procs_t;
+} blocked_procs_t;
+
+/** =========================
+ * === Zombie PROCESSES ===
+ * =========================
+ */
+typedef struct BlockedProcesses {
+
+} zombie_procs_t;
 
 /** ====================
  * === KERNEL STACK ===

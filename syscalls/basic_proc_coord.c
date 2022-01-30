@@ -17,6 +17,16 @@ pcb_t *running_process_p;
  *      ID of the new (child) process, while the value returned in the child
  *      is 0. If, for any reason, the new process cannot be created, this
  *      syscall instead returns the value ERROR to the calling process.
+ *
+ * Pseudo-code
+ *
+ * - Create a new page table: new_ptable
+ * - For each page in the old old_ptable
+ *      - Reproduce page permissions in new_ptable (to resemble page's permissions in old_ptable)
+ *      - If page is valid then
+ *              - Find a free frame (new_frame) using get_free_frame()
+ *              - Allocate f_frame to page in new_ptable
+ *              - Copy contents of old_frame into new_frame *
  */
 
 int kFork() {
@@ -46,12 +56,27 @@ int kFork() {
  *
  * From manual (p. 31-32):
  *      ???
+ *
+ * Psuedo-code
+ *
+ * - For page in ptable (of calling process)
+ *      - Deallocate frame associate with page (mark frame as "free" in bitvector/add to freeFrame linkedlist)
+ * - Allocate new frames for text, data, stack for the initial state of new program
+ *      - Make calls to find_free_frame() kernel function
+ * - Populate these frames
+ * - Set up char *argv[i] array in ptable (that has been wiped of old pages)
+ * - Call main(argc, argvec)
+ *
+ *
+ *
  */
 int kExec(char *filename, char **argvec) {
     // Initialize memory of calling function if it hasn't been
     // Load text at filename to proc mem,
     // Let argc = # entries in argvec before NULL
     // Call main(argc, argvec)
+
+    // Store arguments to new program in kernelland address space
 }
 
 /**
@@ -133,18 +158,19 @@ int kBrk(void *addr) {
 
     int new_frames[num_frames_needed];
     int frames_acquired = 0;
-    for (int i=0; j<frametable->size; i++) {
-        if (frametable->frames[i].ref_count != 0) { continue; }
+    for (int i = 0; j < frametable->size; i++) {
+        if (frametable->frames[i].ref_count != 0) {
+            continue;
+        }
 
         new_frames[frames_acquired] = frametable->frames[i].id;
     }
 
     //  --- Update caller's pagetable
     pagetable_t *callers_pagetable = calling_proc->pagetable;
-    // calculate which pages correspond to the requested heap area, update those 
-    // page table entries to point to the frames in new_frames[], change bit to 
+    // calculate which pages correspond to the requested heap area, update those
+    // page table entries to point to the frames in new_frames[], change bit to
     // valid
-
 
     // Change user heap limit to addr
     calling_proc->user_heap->limit = addr;

@@ -111,6 +111,13 @@ int TrapIllegal(UserContext *user_context) {
  */
 
 int TrapMemory(UserContext *user_context) {
+
+    // If user_context->addr < currently_allocated_memory_stack and
+    // user_context->addr > brk: grow stack to cover user_context->addr
+
+    // Else abort currently running user propcess but continue running other processes
+
+    // Note: Maintain at least one page between top of heap and bottom of stack
 }
 
 /*
