@@ -3,7 +3,7 @@
  *      - process
  *          - user stack, heap
  *          - kernel stack, heap, data, text
- *      - page (logical memory), frame (physical memory)
+ *      - page (logical memory), frame (physical memory), frame and page tables
  *          - page table entry (pte) sketched in include/hardware.h
  *      - user context
  *          - include/hardware.h
@@ -72,11 +72,49 @@ typedef struct Process {
  */
 
 typedef struct Frame {
-    int ref_counter;
+    int ref_count;
     int id;
     int base;
     int limit;
 } frame_t;
+
+frame_t frame_new(int ref_count, int id, int base, int limit) {
+    return (frame_t { ref_count; id; base; limit; })
+}
+
+/**
+ * ===================
+ * === FRAME TABLE ===
+ * ===================
+ * 
+ *  This structure is how the kernel interacts with physical memory, e.g. 
+ *  knows which frames are free, knows which frames to assign to page 
+ *  tables, etc. 
+ * 
+ */
+
+typedef struct FrameTable {
+    frame_t *frames;
+    int size;
+} frametable_t;
+
+/*
+ *  Initialize the frametable. This function is called during start-up, 
+ *  when the kernel is passed the information about the memory size by the 
+ *  hardware.
+ */
+frametable_t frametable_init(int hardware_mem_size, int frame_size, int pmem_base) {
+    int num_frames = hardware_mem_size / frame_size;
+
+    frame_t *frames = malloc(num_frames*(sizeof(frame_t)));
+    frametable_t frametable = malloc(1*sizeof(frametable_t));
+
+    for (int i=0; i<num_frames; i++) {
+        frames[i] = frame_new(0, i, pmem_base + i*frame_size, (i+1)*frame_size);
+    }
+
+    return frametable_t { frames; num_frames };
+}
 
 /* 
  * ========================
