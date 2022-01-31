@@ -27,6 +27,18 @@ pcb_t *running_process_p;
  *              - Find a free frame (new_frame) using get_free_frame()
  *              - Allocate f_frame to page in new_ptable
  *              - Copy contents of old_frame into new_frame *
+ *
+ *
+ * COW note
+ * To implement COW, need to:
+ *      - Copy parent's page table (old_ptable) to new_ptable
+ *      - For each valid old_page in old_ptable, new_page in new_ptable points to the same frame as the
+ *      frame pointed to in old_ptable. new_page read/write permission is set to read-only though
+ *      - If child reads a page, it can read from the same frame that's been allcoated to the parent
+ *      - If a child ever tries to write to that page though, some code somwhere will finally have to
+ *      - allocate new frame to the page
+ *      - COW!
+ *
  */
 
 int kFork() {
@@ -59,12 +71,15 @@ int kFork() {
  *
  * Psuedo-code
  *
+ * - Store char *argvec[] (which points to logical addresses in userland stack of old process)
+ * in kernel address space as you wipe out userland address space of calling process in next step
  * - For page in ptable (of calling process)
  *      - Deallocate frame associate with page (mark frame as "free" in bitvector/add to freeFrame linkedlist)
  * - Allocate new frames for text, data, stack for the initial state of new program
  *      - Make calls to find_free_frame() kernel function
  * - Populate these frames
- * - Set up char *argv[i] array in ptable (that has been wiped of old pages)
+ * - Set up char *argvec[i] array in ptable that has been wiped of old pages (will need to copy this from
+ * its temporary resting place in kernelland space)
  * - Call main(argc, argvec)
  *
  *
@@ -147,6 +162,23 @@ int kGetPid() {
  *  ===========
  *
  * Increments the user's heap.
+ *
+ *
+ * Pseudocode
+ *
+ * - Calculate extra memory user is asking to be added to user heap
+ *      - Calculate number of extra frames (= num pages) needed
+ * - Determine if user's request is valid
+ *      - The address user specified must lie in the "hole" area between top of heap and
+ *        bottom of stack
+ *      - If you try to set brk into user stack, or user text area:
+ *          - return ERROR?
+ *          - or perhaps don't return ERROR? (see brkfun.c)
+ * - Allocate new frames to user heap
+ *      - For each new frame, map a page in the process' ptable above the heap
+ *      to the frame (and set page's valid bit to 1)
+ *
+ *
  */
 int kBrk(void *addr) {
     //  --- Calculate the extra memory the user is asking for
