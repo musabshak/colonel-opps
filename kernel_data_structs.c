@@ -235,12 +235,3 @@ typedef struct KernelHeap {
     base;
     limit;
 } ker_heap_t;
-
-/** ===================
- * === Lock ===
- * ===================
-
- *
- *  --- Methods:
- *
- */

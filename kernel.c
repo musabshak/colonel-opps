@@ -18,8 +18,16 @@
  * still valid (p. 23).
  */
 
+// ================= GLOBALS ===================//
+
 // Keep track of process numbers
 int pid;
+
+// Lock id counter
+int lock_id;
+
+// Cvar id counter
+int cvar_id;
 
 // ProcessControlBlock
 pcb_t;
@@ -31,6 +39,8 @@ pcb_t running_process;
 ready_procs_t;
 blocked_procs_t;
 zombie_procs_t;
+
+// ==============================================//
 
 int SetKernelBrik(void *addr) {
 }

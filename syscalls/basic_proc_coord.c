@@ -116,6 +116,7 @@ int kExec(char *filename, char **argvec) {
  * - For page in ptable (of calling process)
  *      - Deallocate frame associate with page (mark frame as "free" in bitvector/add to freeFrame linkedlist)
  *      - Set pagetable valid bit to 0
+ * - Mark any locks the process was holding as corrupted
  */
 
 void kExit(int status) {

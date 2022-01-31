@@ -1,3 +1,51 @@
+/** ===================
+ * === Lock Struct ===
+ * ===================
+ *
+ */
+
+typedef struct Lock {
+    unsigned int lock_id;
+    unsigned int locked;     // takes value 1 or 0 (T or F)
+    unsigned int owner;      // takes pid of process that owns lock
+    unsigned int corrupted;  // indicates whether lock is corrupted (if process holding lock
+                             // exited w/o releasing)
+    lock_t *next;
+    lock_t *previous;
+    queue_t *blocked_processes;  // Queue of blocked processes associated with this lock
+} lock_t;
+
+/*
+LinkedList to hold all the locks (naive data structure).
+In future, replace with hashtable, indexed by lock_id because
+    - Will have to traverse entire list to retrieve a particular lock
+*/
+typedef struct LockList {
+    int size;
+    lock_t *first;
+    lock_t *last;
+} lock_list_t;
+
+/** ===================
+ * === Cvar Struct ===
+ * ===================
+ *
+ */
+typedef struct Cvar {
+    unsigned int cvar_id;
+    unsigned int lock_id;
+    unsigned int pid;
+
+    cvar_t *next;
+    cvar_t *previous;
+    queue_t *blocked_processes;
+} cvar_t;
+
+typedef struct CvarList {
+    cvar_t *first;
+    cvar_t *last;
+} cvar_list_t;
+
 /*
  *  ================
  *  === LOCKINIT ===
@@ -7,6 +55,18 @@
  *      Create a new lock; save its identifier at *lock idp. In case
  *      of any error, the value ERROR is returned.
  *
+ *  Pseudocode
+ *  - Malloc a new lock struct onto the kernel heap (need to malloc, as opposed to just
+ *  storing lock as local variable in kernel stack because need lock to persist in virtual memory
+ *  even as processes are switched; kernel stack is unique per process)
+ *  - Add newly created lock to global lock_list_t (linked list)
+ *  - Initilize lock struct
+ *      - Allocate a unique lock_id for the lock
+ *          - lock_id determined by global lock_id counter (kernel.c)
+ *      - set lock.locked = 0
+ *      - set lock.owner = -1
+ *  - Set *lock_idp = lock.lock_id
+ *  - Return 0 if everything went successfully, ERROR otherwise
  */
 
 int kLockInit(int *lock_idp) {
@@ -20,6 +80,20 @@ int kLockInit(int *lock_idp) {
  *  From manual (p. 34):
  *      Acquire the lock identified by lock id. In case of any error,
  *      the value ERROR is returned.
+ *
+ *  Pseudocode
+ *  - Traverse lock_list_t to find the lock referenced by lock_id
+ *  - if lock.locked == 0
+ *      - lock.locked = 1
+ *      - lock.owner = running_process.pid;
+ *      - return 0
+ *  - elif lock.locked == 1
+ *      - if lock.owner == running_procces.pid
+ *          - return ERROR (you already have the lock!)
+ *      - else
+ *          - add running_process to blocked_processes queue
+ *          - lock.blocked_processes.add(running_process)
+ *          - return 0
  *
  */
 
@@ -35,6 +109,20 @@ int kAcquire(int lock_id) {
  *      Release the lock identified by lock id. The caller must currently
  *      hold this lock. In case of any error, the value ERROR is returned.
  *
+ *  Pseudocode
+ *  - Traverse lock_list_t to find the lock referenced by lock_id
+ *  - if lock.locked == 0 (cannot release an unacquired lock)
+ *      - return ERROR
+ *  - if lock.owner != running_process.pid
+ *      - return ERROR
+ *  - else
+ *      - if len(lock.blocked_processes) != 0
+ *          - proc = lock.blocked_processes.dequeue()
+ *          - lock.owner = proc.id
+ *          - lock.locked = 1 (lock stays locked)
+ *      - else
+ *          - lock.owner = -1
+ *          - lock.locked = 0
  */
 
 int kRelease(int lock_id) {
@@ -49,34 +137,18 @@ int kRelease(int lock_id) {
  *      Create a new condition variable; save its identifier at *cvar_idp.
  *      In case of any error, the value ERROR is returned.
  *
+ *
+ *  Pseudocode
+ *  - Malloc a new cvar struct onto the kernel heap
+ *  - Add newly created cvar to global cvar_list_t (linked list)
+ *  - Initilize cvar struct
+ *      - Allocate a unique cvar_id for the lock
+ *          - cvar_id determined by global cvar_id counter (kernel.c)
+ *  - Set *cvar_idp = cvar.cvar_id
+ *  - Return 0 if everything went successfully, ERROR otherwise
+ *
  */
 int kCvarInit(int *cvar_idp) {
-}
-
-/*
- *  ==================
- *  === CVARSIGNAL ===
- *  ==================
- *
- *  From manual (p. 35):
- *      Signal the condition variable identified by cvar id. (Use Mesa-style
- *      semantics.) In case of any error, the value ERROR is returned.
- *
- */
-int kCvarSignal(int cvar_id) {
-}
-
-/*
- *  =====================
- *  === CVARBROADCAST ===
- *  =====================
- *
- *  From manual (p. 35):
- *      Broadcast the condition variable identified by cvar id. (Use Mesa-style
- *      semantics.) In case of any error, the value ERROR is returned.
- *
- */
-int kCvarBroadcast(int cvar_id) {
 }
 
 /*
@@ -92,8 +164,44 @@ int kCvarBroadcast(int cvar_id) {
  *      When the lock is finally acquired, the call returns to userland. In case
  *      of any error, the value ERROR is returned.
  *
+ *  Pseudocode
+ *  - Traverse cvar_list_t to find cvar associated with cvar_id
+ *  - Set the following
+ *      - cvar_lock_id = lock_id
+ *      - cvar_pid = running_process.pid
+ *  - Add running_process to cvar.blocked_processes queue
+ *  - Call kRelease(lock_id)
+ *
  */
 int kCvarWait(int cvar_id, int lock_id) {
+}
+
+/*
+ *  ==================
+ *  === CVARSIGNAL ===
+ *  ==================
+ *
+ *  From manual (p. 35):
+ *      Signal the condition variable identified by cvar id. (Use Mesa-style
+ *      semantics.) In case of any error, the value ERROR is returned.
+ *
+ *  Pseudocode
+ *  - Traverse cvar_list_t to find cvar associated with cvar_id
+ */
+int kCvarSignal(int cvar_id) {
+}
+
+/*
+ *  =====================
+ *  === CVARBROADCAST ===
+ *  =====================
+ *
+ *  From manual (p. 35):
+ *      Broadcast the condition variable identified by cvar id. (Use Mesa-style
+ *      semantics.) In case of any error, the value ERROR is returned.
+ *
+ */
+int kCvarBroadcast(int cvar_id) {
 }
 
 /*
