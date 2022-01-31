@@ -237,7 +237,7 @@ typedef struct KernelHeap {
 } ker_heap_t;
 
 /** ===================
- * === KERNEL HEAP ===
+ * === Lock ===
  * ===================
 
  *
