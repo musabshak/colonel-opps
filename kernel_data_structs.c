@@ -167,6 +167,13 @@ frametable_t frametable_init(int hardware_mem_size, int frame_size, int pmem_bas
     };
 }
 
+/**
+ * Find free frame in the bit vector representing physical memory. Return index of
+ * the free frame.
+ */
+int find_free_frame() {
+}
+
 /*
  * ========================
  * === READY PROCESSES ====
@@ -228,3 +235,12 @@ typedef struct KernelHeap {
     base;
     limit;
 } ker_heap_t;
+
+/** ===================
+ * === KERNEL HEAP ===
+ * ===================
+
+ *
+ *  --- Methods:
+ *
+ */

@@ -118,6 +118,10 @@ int TrapMemory(UserContext *user_context) {
     // Else abort currently running user propcess but continue running other processes
 
     // Note: Maintain at least one page between top of heap and bottom of stack
+
+    // If COW implemented, and trying to write into a readonly page, the exception
+    // should not kill the process. Instead, should allocate a free frame to
+    // the page trying to be written into.
 }
 
 /*

@@ -19,15 +19,18 @@
  */
 
 // Keep track of process numbers
-int current_pid;
+int pid;
 
 // ProcessControlBlock
 pcb_t;
 
 // Currently running process
-pcb_t current_process;
+pcb_t running_process;
 
 // Queue of ready, blocked, zombie processes
 ready_procs_t;
 blocked_procs_t;
 zombie_procs_t;
+
+int SetKernelBrik(void *addr) {
+}

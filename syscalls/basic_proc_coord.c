@@ -75,6 +75,7 @@ int kFork() {
  * in kernel address space as you wipe out userland address space of calling process in next step
  * - For page in ptable (of calling process)
  *      - Deallocate frame associate with page (mark frame as "free" in bitvector/add to freeFrame linkedlist)
+ *      - Set pagetable valid bit to 0
  * - Allocate new frames for text, data, stack for the initial state of new program
  *      - Make calls to find_free_frame() kernel function
  * - Populate these frames
@@ -110,13 +111,18 @@ int kExec(char *filename, char **argvec) {
  *      later exit, you need not save or report their exit status since there is no
  *      longer anybody to care.
  *      If the initial process exits, you should halt the system.
+ *
+ * Pseudocode
+ * - For page in ptable (of calling process)
+ *      - Deallocate frame associate with page (mark frame as "free" in bitvector/add to freeFrame linkedlist)
+ *      - Set pagetable valid bit to 0
  */
 
 void kExit(int status) {
     // Go to kernelland
-    // If parent == NULL (the exiting process is an orphan)
-    // Then return
-    // Else, add to exit status array
+    // Deallocate frames associated with pages
+    // If parent == NULL (the exiting process is an orphan): return
+    // Else, add process to zombie_processes array
 }
 
 /**
@@ -168,6 +174,8 @@ int kGetPid() {
  *
  * - Calculate extra memory user is asking to be added to user heap
  *      - Calculate number of extra frames (= num pages) needed
+ *      - If memory requested is less than PAGESIZE, allocate a whole page
+ *         (internal fragmentation, oops)
  * - Determine if user's request is valid
  *      - The address user specified must lie in the "hole" area between top of heap and
  *        bottom of stack
@@ -175,6 +183,7 @@ int kGetPid() {
  *          - return ERROR?
  *          - or perhaps don't return ERROR? (see brkfun.c)
  * - Allocate new frames to user heap
+ *      - Use find_free_frame() kernel function
  *      - For each new frame, map a page in the process' ptable above the heap
  *      to the frame (and set page's valid bit to 1)
  *
