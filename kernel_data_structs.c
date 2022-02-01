@@ -1,30 +1,15 @@
-/*
- * Major kernel data structures:
- *      - process
- *          - user stack, heap
- *          - kernel stack, heap, data, text
- *      - page (logical memory), frame (physical memory), frame and page tables
- *          - page table entry (pte) sketched in include/hardware.h
- *      - user context
- *          - include/hardware.h
- *      - kernel context
- *          - include/hardware.h
- *      - syscall table
- *      - queue of ready processes
- *      - queue of waiting processes
- *      - array of exit statuses, to be checked for waiting process
- *          - exit status {int exit_status, process *parent}
- *      - pipe
- *      - lock
- *      - cvar (condition variable)
- *      - file descriptor
- *          - file descriptor table (per process) ->
- *          - file table (system wide, indexes opened files with mode) ->
- *          - inode table (system wide)
- *      - file?
- *
- *      - interrupt vector, vector table
+
+
+#include <queue.h>  // generic queue DS imported from engs50 code
+
+/**
+ * ========================
+ * === GLOBAL PROCESS QUEUES ====
+ * ========================
  */
+queue_t *READY_PROCESSES = qopen();
+queue_t *BLOCKED_PROCESSES = qopen();
+queue_t *ZOMBIE_PROCESSES = qopeon();
 
 /*
  * ===============
@@ -173,32 +158,6 @@ frametable_t frametable_init(int hardware_mem_size, int frame_size, int pmem_bas
  */
 int find_free_frame() {
 }
-
-/*
- * ========================
- * === READY PROCESSES ====
- * ========================
- */
-typedef struct ReadyProcesses {
-    process_t *procs;
-    int size;
-} ready_procs_t;
-
-/** =========================
- * === Blocked PROCESSES ===
- * =========================
- */
-typedef struct BlockedProcesses {
-
-} blocked_procs_t;
-
-/** =========================
- * === Zombie PROCESSES ===
- * =========================
- */
-typedef struct BlockedProcesses {
-
-} zombie_procs_t;
 
 /** ====================
  * === KERNEL STACK ===

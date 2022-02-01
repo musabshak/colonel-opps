@@ -1,4 +1,4 @@
-#include "kernel_syscalls.h"  // where kernel syscall subroutines are defined
+#include "syscalls.h"  // where kernel syscall subroutines are defined
 
 /*
 Trap handlers are functions pointed to by pointers in the interrupt vector table

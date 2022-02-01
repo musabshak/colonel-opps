@@ -1,1 +1,2 @@
-- how does kernel access pcb?
+- How does kernel access process queues?
+    - Have them be globals!
