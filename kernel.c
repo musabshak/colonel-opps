@@ -24,24 +24,16 @@
 bool virtual_mem_enabled;
 
 // Keep track of process numbers
-int pid;
+int PID;
 
 // Lock id counter
-int lock_id;
+int LOCK_ID;
 
 // Cvar id counter
-int cvar_id;
-
-// ProcessControlBlock
-pcb_t;
+int CVAR_ID;
 
 // Currently running process
-pcb_t running_process;
-
-// Queue of ready, blocked, zombie processes
-ready_procs_t;
-blocked_procs_t;
-zombie_procs_t;
+pcb_t RUNNING_PROCESS;
 
 // ==============================================//
 

@@ -49,10 +49,12 @@ typedef struct Cvar {
  *      of any error, the value ERROR is returned.
  *
  *  Pseudocode
- *  - Malloc a new lock struct onto the kernel heap (need to malloc, as opposed to just
- *  storing lock as local variable in kernel stack because need lock to persist in virtual memory
- *  even as processes are switched; kernel stack is unique per process)
+ *  - Malloc a new lock struct onto the kernel heap
+ *      - Need to malloc, as opposed to just storing lock as local variable in kernel stack because
+ *       need lock to persist in virtual memory even as processes are switched; kernel stack is unique
+ *       per process
  *  - Add newly created lock to global lock_list_qp (linked list)
+ *      - qadd(lock_list_qp, lock)
  *  - Initilize lock struct
  *      - Allocate a unique lock_id for the lock
  *          - lock_id determined by global lock_id counter (kernel.c)
