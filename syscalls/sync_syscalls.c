@@ -1,3 +1,15 @@
+#include <queue.h>  // generic queue DS imported from engs50 code
+
+/*
+LinkedList to hold all the locks (naive data structure).
+In future, replace with hashtable, indexed by lock_id because
+    - Will have to traverse entire list to retrieve a particular lock
+*/
+queue_t *lock_list_qp = qopen();
+
+// Queue of cvars
+queue_t *cvar_list_qp = qopen();
+
 /** ===================
  * === Lock Struct ===
  * ===================
@@ -10,21 +22,9 @@ typedef struct Lock {
     unsigned int owner;      // takes pid of process that owns lock
     unsigned int corrupted;  // indicates whether lock is corrupted (if process holding lock
                              // exited w/o releasing)
-    lock_t *next;
-    lock_t *previous;
+
     queue_t *blocked_processes;  // Queue of blocked processes associated with this lock
 } lock_t;
-
-/*
-LinkedList to hold all the locks (naive data structure).
-In future, replace with hashtable, indexed by lock_id because
-    - Will have to traverse entire list to retrieve a particular lock
-*/
-typedef struct LockList {
-    int size;
-    lock_t *first;
-    lock_t *last;
-} lock_list_t;
 
 /** ===================
  * === Cvar Struct ===
@@ -36,15 +36,8 @@ typedef struct Cvar {
     unsigned int lock_id;
     unsigned int pid;
 
-    cvar_t *next;
-    cvar_t *previous;
     queue_t *blocked_processes;
 } cvar_t;
-
-typedef struct CvarList {
-    cvar_t *first;
-    cvar_t *last;
-} cvar_list_t;
 
 /*
  *  ================
@@ -59,7 +52,7 @@ typedef struct CvarList {
  *  - Malloc a new lock struct onto the kernel heap (need to malloc, as opposed to just
  *  storing lock as local variable in kernel stack because need lock to persist in virtual memory
  *  even as processes are switched; kernel stack is unique per process)
- *  - Add newly created lock to global lock_list_t (linked list)
+ *  - Add newly created lock to global lock_list_qp (linked list)
  *  - Initilize lock struct
  *      - Allocate a unique lock_id for the lock
  *          - lock_id determined by global lock_id counter (kernel.c)
@@ -82,7 +75,7 @@ int kLockInit(int *lock_idp) {
  *      the value ERROR is returned.
  *
  *  Pseudocode
- *  - Traverse lock_list_t to find the lock referenced by lock_id
+ *  - Traverse lock_list_qp to find the lock referenced by lock_id
  *  - if lock.locked == 0
  *      - lock.locked = 1
  *      - lock.owner = running_process.pid;
@@ -92,7 +85,7 @@ int kLockInit(int *lock_idp) {
  *          - return ERROR (you already have the lock!)
  *      - else
  *          - add running_process to blocked_processes queue
- *          - lock.blocked_processes.add(running_process)
+ *              - qadd(lock.blocked_processes, running_process)
  *          - return 0
  *
  */
@@ -110,14 +103,14 @@ int kAcquire(int lock_id) {
  *      hold this lock. In case of any error, the value ERROR is returned.
  *
  *  Pseudocode
- *  - Traverse lock_list_t to find the lock referenced by lock_id
+ *  - Traverse lock_list_qp to find the lock referenced by lock_id
  *  - if lock.locked == 0 (cannot release an unacquired lock)
  *      - return ERROR
  *  - if lock.owner != running_process.pid
  *      - return ERROR
  *  - else
- *      - if len(lock.blocked_processes) != 0
- *          - proc = lock.blocked_processes.dequeue()
+ *      - if qsize(lock.blocked_processes) != 0
+ *          - proc = qget(lock.blocked_processes)
  *          - lock.owner = proc.id
  *          - lock.locked = 1 (lock stays locked)
  *      - else
@@ -140,7 +133,7 @@ int kRelease(int lock_id) {
  *
  *  Pseudocode
  *  - Malloc a new cvar struct onto the kernel heap
- *  - Add newly created cvar to global cvar_list_t (linked list)
+ *  - Add newly created cvar to global cvar_list_qp (linked list)
  *  - Initilize cvar struct
  *      - Allocate a unique cvar_id for the lock
  *          - cvar_id determined by global cvar_id counter (kernel.c)
@@ -165,12 +158,19 @@ int kCvarInit(int *cvar_idp) {
  *      of any error, the value ERROR is returned.
  *
  *  Pseudocode
- *  - Traverse cvar_list_t to find cvar associated with cvar_id
+ *  - Traverse cvar_list_qp to find cvar associated with cvar_id
  *  - Set the following
- *      - cvar_lock_id = lock_id
- *      - cvar_pid = running_process.pid
- *  - Add running_process to cvar.blocked_processes queue
+ *      - cvar.lock_id = lock_id
+ *      - cvar.pid = running_process.pid
  *  - Call kRelease(lock_id)
+ *  - Add running_process to cvar.blocked_processes queue
+ *  - ** at this time, cvar_wait method is blocked because the calling process was just
+ *      put into the blocked queue **
+ *  - ** signal wakes up process **
+ *  - Call kAcquire(lock_id)
+ *  - return 0
+ *
+ *
  *
  */
 int kCvarWait(int cvar_id, int lock_id) {
@@ -186,7 +186,11 @@ int kCvarWait(int cvar_id, int lock_id) {
  *      semantics.) In case of any error, the value ERROR is returned.
  *
  *  Pseudocode
- *  - Traverse cvar_list_t to find cvar associated with cvar_id
+ *  - Traverse cvar_list_qp to find cvar associated with cvar_id
+ *  - Find and remove one blocked process associated with the cvar
+ *      - proc = qget(cvar.blocked_process)
+ *  - Add proc to the ready_processes queue
+ *  - return 0
  */
 int kCvarSignal(int cvar_id) {
 }
@@ -199,6 +203,12 @@ int kCvarSignal(int cvar_id) {
  *  From manual (p. 35):
  *      Broadcast the condition variable identified by cvar id. (Use Mesa-style
  *      semantics.) In case of any error, the value ERROR is returned.
+ *
+ *  Pseudocode
+ *  - Traverse cvar_list_qp to find cvar associated with cvar_id
+ *  - Go through cvar.blocked_processes and pop all PCBs from this list
+ *  - Add each popped list to the ready_processes queue
+ *  - return 0
  *
  */
 int kCvarBroadcast(int cvar_id) {
@@ -215,6 +225,19 @@ int kCvarBroadcast(int cvar_id) {
  *      In case of any error, the value ERROR is returned.
  *      If you feel additional specification is necessary to handle unusual
  *      scenarios, then create and document it.
+ *
+ *  Thoughts
+ *  - Not sure how to determine whether its a lock/cvar/pipe being reclaimed, based on id alone
+ *  since we're maintaing separate counters for
+ *      - Suggestions: increment lock_id in multiples of 3, cvar_id in multiples of 5, pipe_id in multiples of 7
+ *
+ *  Pseudocode
+ *  - Determine whether to look in the lock_list_qp or cvar_list_qp or pipe_list_qp
+ *      - if id % 3 == 0: look in lock_qp
+ *      - elif id % 5 == 0: look in cvar_list_qp
+ *      - elif id % 7 == 0: look in pipe_list_qp
+ *  - If lock
+ *      - Go through lock.blocked_processes, remove each process from queue, and kill process?
  *
  */
 int kReclaim(int id) {
