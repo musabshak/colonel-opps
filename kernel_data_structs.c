@@ -75,7 +75,8 @@ typedef struct PageTable {
     int size;
 } pagetable_t;
 
-pagetable_t *pagetable_new();
+pagetable_t *pagetable_new();   // potentially only have one valid page for user's 
+                                // stack, taking hint from KernelStart()'s needs
 pagetable_t *pagetable_deepcopy();
 pagetable_t *pagetable_newcopy(pagetable_t *callers_pt);  // copy pointers to another table's frames
 
@@ -151,7 +152,7 @@ typedef struct FrameTable {
  *  when the kernel is passed the information about the memory size by the
  *  hardware.
  */
-frametable_t frametable_init(int hardware_mem_size, int frame_size, int pmem_base) {
+frametable_t frametable_init(unsigned int hardware_mem_size, int frame_size, int pmem_base) {
     int num_frames = hardware_mem_size / frame_size;
 
     frame_t *frames = malloc(num_frames * (sizeof(frame_t)));
