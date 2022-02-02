@@ -9,7 +9,7 @@
  */
 queue_t *READY_PROCESSES = qopen();
 queue_t *BLOCKED_PROCESSES = qopen();
-queue_t *ZOMBIE_PROCESSES = qopeon();
+queue_t *ZOMBIE_PROCESSES = qopen();
 
 /*
  * ===============
@@ -19,19 +19,17 @@ queue_t *ZOMBIE_PROCESSES = qopeon();
  */
 
 typedef struct ProcessControlBlock {
+    int pid;
     // --- userland
     user_stack;
     user_heap;
     user_data;
     user_text;
-    // --- kernelland
+    // --- kernelland (don't need to keep track of heap/data/text because same for all processes)
     kernel_stack;
-    kernel_heap;
-    kernel_data;
-    kernel_text;
     // --- metadata
     pcb_t *parent;
-    int pid;
+    queue_t *children_procs;
     pagetabe_t *ptable;
 } pcb_t;
 
@@ -60,8 +58,8 @@ typedef struct PageTable {
     int size;
 } pagetable_t;
 
-pagetable_t *pagetable_new();   // potentially only have one valid page for user's 
-                                // stack, taking hint from KernelStart()'s needs
+pagetable_t *pagetable_new();  // potentially only have one valid page for user's
+                               // stack, taking hint from KernelStart()'s needs
 pagetable_t *pagetable_deepcopy();
 pagetable_t *pagetable_newcopy(pagetable_t *callers_pt);  // copy pointers to another table's frames
 

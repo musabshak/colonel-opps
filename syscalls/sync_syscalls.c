@@ -113,6 +113,7 @@ int kAcquire(int lock_id) {
  *  - else
  *      - if qsize(lock.blocked_processes) != 0
  *          - proc = qget(lock.blocked_processes)
+ *          - MOVE proc to READY_PROCESSES
  *          - lock.owner = proc.id
  *          - lock.locked = 1 (lock stays locked)
  *      - else

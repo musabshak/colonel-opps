@@ -32,6 +32,8 @@ int TrapKernelHandler(UserContext *user_context) {
 
     void **args = user_context->regs;
 
+    // TrapKernelHandler: work out how to get the args to the syscall handlers...and the return value back
+
     // for syscall functions that need arguments, look for args in user_context->regs[0...]
     switch (syscall_code) {
 
@@ -107,6 +109,14 @@ int TrapIllegal(UserContext *user_context) {
  *      more discussion, see Section 3.5.2 below.)
  *      Otherwise, abort the currently running Yalnix user process but continue
  *      running other processes.
+ *
+ * Cases that don't lead to error/program exitting
+ * - Page fault
+ *      - In case you're trying to access a page that's on disk
+ * - Trying to access empty space below stack
+ *      - Indicator for growing stack size
+ * - COW stuff
+ *      - If trying to write to COW frame
  *
  */
 
