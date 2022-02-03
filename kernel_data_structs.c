@@ -1,6 +1,6 @@
 
-
-#include <queue.h>  // generic queue DS imported from engs50 code
+#include "hardware.h"
+#include "queue.h"  // generic queue DS imported from engs50 code
 
 /**
  * ========================
@@ -100,16 +100,16 @@ pagetable_t *pagetable_deepcopy(pagetable_t *pagetable_tocopy) {
  *
  */
 
-typedef struct Frame {
-    int ref_count;
-    int id;
-    int base;
-    int limit;
-} frame_t;
+// typedef struct Frame {
+//     int ref_count;
+//     int id;
+//     int base;
+//     int limit;
+// } frame_t;
 
-frame_t frame_new(int ref_count, int id, int base, int limit) {
-    return (frame_t { ref_count; id; base; limit; })
-}
+// frame_t frame_new(int ref_count, int id, int base, int limit) {
+//     return (frame_t { ref_count; id; base; limit; })
+// }
 
 /**
  * ===================
@@ -135,20 +135,20 @@ typedef struct FrameTable {
  *  when the kernel is passed the information about the memory size by the
  *  hardware.
  */
-frametable_t frametable_init(unsigned int hardware_mem_size, int frame_size, int pmem_base) {
-    int num_frames = hardware_mem_size / frame_size;
+frametable_t *frametable_init(unsigned int hardware_mem_size, int pmem_base) {
+    unsigned int num_frames = hardware_mem_size / PAGESIZE;
 
-    frame_t *frames = malloc(num_frames * (sizeof(frame_t)));
-    frametable_t frametable = malloc(1 * sizeof(frametable_t));
+    unsigned int *frames = malloc(num_frames * (sizeof(unsigned int)));
+    frametable_t *frametable = malloc(1 * sizeof(frametable_t));
 
     for (int i = 0; i < num_frames; i++) {
-        frames[i] = frame_new(0, i, pmem_base + i * frame_size, (i + 1) * frame_size);
+        frames[i] = 0;
     }
 
-    return frametable_t {
-        frames;
-        num_frames
-    };
+    frametable->frames = frames;
+    frametable->size = num_frames;
+
+    return frametable;
 }
 
 /**

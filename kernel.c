@@ -1,3 +1,8 @@
+#include "hardware.h"
+
+#include "kernel_data_structs.h"
+
+
 /*
  * =================================
  * === INITIALIZE VIRTUAL MEMORY ===
@@ -35,6 +40,9 @@ int CVAR_ID;
 // Currently running process
 pcb_t RUNNING_PROCESS;
 
+// Frame table
+frametable_t *frametable;
+
 // ==============================================//
 
 /**
@@ -56,7 +64,7 @@ pcb_t RUNNING_PROCESS;
 void KernelStart(char *cmg_args[], unsigned int pmem_size, UserContext *uctxt) {
     //  --- Create a (bit?) vector to track free frames
     // (function def in kernel_data_structs.c)
-    frametable_init(pmem_size, PAGE_SIZE, 0);
+    frametable = frametable_init(pmem_size, PAGE_SIZE, 0);
 
     //  --- Set up initial Region 0 (see 8.2.2)
     _kernel_data_start = TODO;  // lowest address in kernel data region
