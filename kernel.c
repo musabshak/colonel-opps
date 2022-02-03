@@ -1,7 +1,7 @@
+
 #include "hardware.h"
-
 #include "kernel_data_structs.h"
-
+#include "yalnix.h"
 
 /*
  * =================================
@@ -26,7 +26,7 @@
 // ================= GLOBALS ===================//
 
 // See if virtual memory enabled
-bool virtual_mem_enabled;
+int virtual_mem_enabled;
 
 // Keep track of process numbers
 int PID;
@@ -38,7 +38,7 @@ int LOCK_ID;
 int CVAR_ID;
 
 // Currently running process
-pcb_t RUNNING_PROCESS;
+// pcb_t RUNNING_PROCESS;
 
 // Shared kernel stuff, i.e. kernel heap, data, text
 kershared_t *kershared;
@@ -64,10 +64,10 @@ frametable_t *frametable;
  *      The size of physical memory is given in units of bytes.
  *      - The uctxt argument is a pointer to an initial UserContext structure.
  */
-void KernelStart(char *cmg_args[], unsigned int pmem_size, UserContext *uctxt) {
+void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     //  --- Create a (bit?) vector to track free frames
     // (function def in kernel_data_structs.c)
-    frametable = frametable_init(pmem_size, PAGE_SIZE, 0);
+    frametable = frametable_init(pmem_size);
 
     // //  --- Set up initial Region 0 (see 8.2.2)
     // _kernel_data_start = TODO;  // lowest address in kernel data region
@@ -81,13 +81,13 @@ void KernelStart(char *cmg_args[], unsigned int pmem_size, UserContext *uctxt) {
     //  --- Set up Region 1 page table for idle
     // should only have one valid page, for idle's user stack
     // (function def in kernel_data_structs.c)
-    pagetable_new();
+    // pagetable_new();
 
     //  --- If pagetable_new() (or something else) has changed kernel's brk, i.e. by
     // calling SetKernelBrk(), then adjust page table
 
     //  --- Enable virtual memory
-    virtual_mem_enabled = true;
+    virtual_mem_enabled = 1;
 }
 
 /**
@@ -104,16 +104,17 @@ void KernelStart(char *cmg_args[], unsigned int pmem_size, UserContext *uctxt) {
  *      (But be warned: that ERROR may lead to a kernel malloc call returning NULL.)
  */
 int SetKernelBrk(void *addr) {
-    int diff = addr - orig_brk;
+    void *diff = addr - kershared->brk;
 
-    if (virtual_mem_enabled == false) {
-        // safe to just change brk number, no need to update tables or anything
-        return 0;
-    }
+    // if (virtual_mem_enabled == 0) {
+    //     // safe to just change brk number, no need to update tables or anything
+    //     return 0;
+    // }s
 
     // --- Calculate how many frames you need using diff
     // --- Hunt down available frames from the frame data structure
     // --- Update all process pagetables, either by going through each one or
     // by keeping a global kernel pagetable that is shared by all process, includes
     // stuff from region 0 not including kernel stack.
+    return 0;
 }

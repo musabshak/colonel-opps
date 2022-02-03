@@ -1,0 +1,10 @@
+** Hardware level 1 tracing enabled **
+** Yalnix level 1 tracing enabled **
+** User Prog level 1 tracing enabled **
+Hardware   ----
+Hardware   | Calling KernelStart
+Hardware   ----
+Hardware   ----
+Hardware   | Back from KernelStart
+Invalid exception frame: pc and sp both are 0Hardware   
+** Machine Halted **

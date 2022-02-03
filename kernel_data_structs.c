@@ -1,17 +1,17 @@
 
 #include "hardware.h"
-#include "yalnix.h"
-
 #include "queue.h"  // generic queue DS imported from engs50 code
+#include "yalnix.h"
+#include "ylib.h"
 
 /**
  * ========================
  * === GLOBAL PROCESS QUEUES ====
  * ========================
  */
-queue_t *READY_PROCESSES = qopen();
-queue_t *BLOCKED_PROCESSES = qopen();
-queue_t *ZOMBIE_PROCESSES = qopen();
+// queue_t *READY_PROCESSES = qopen();
+// queue_t *BLOCKED_PROCESSES = qopen();
+// queue_t *ZOMBIE_PROCESSES = qopen();
 
 /*
  * ===============
@@ -21,34 +21,48 @@ queue_t *ZOMBIE_PROCESSES = qopen();
  */
 
 typedef struct ProcessControlBlock {
-    int pid;
+    unsigned int pid;
     // --- userland
-    user_stack;
-    user_heap;
-    user_data;
-    user_text;
+    UserContext uctxt;
+    void *user_brk;
+    void *user_data;
+    void *user_text;
     // --- kernelland (don't need to keep track of heap/data/text because same for all processes)
-    kernel_stack;
+    KernelContext kctxt;
     // --- metadata
     pcb_t *parent;
     queue_t *children_procs;
-    pagetabe_t *ptable;
+    pagetable_t *ptable;
 } pcb_t;
 
+pcb_t *pcb_init(UserContext *init_uctxt) {
+    pcb_t *idle_pcb = malloc(sizeof(pcb_t));
+
+    idle_pcb->uctxt = init_uctxt;
+
+    // Set the pc in uctxt to point to idle function in kernel text
+    idle_pcb->uctxt->pc = ? ? ? ;
+    idle_pcb->pid = PID++;
+
+    // Create page table
+    pagetable_t *pagetable = pagetable_init();
+    // One valid pte
+    pte_t *valid_pte = pagetable->table[0];
+}
+
 /**
- * 
- * 
+ *
+ *
  */
 
 typedef struct KernelShared {
-    unsigned int brk;           // heap end
-    unsigned int data_end;      // heap start
-    unsigned int data_start;    // text end
+    void *brk;         // heap end
+    void *data_end;    // heap start
+    void *data_start;  // text end
 } kershared_t;
 
-kershared_t *kershared_init(unsigned int data_start, 
-    unsigned int data_end, unsigned int orig_brk) 
-{
+kershared_t *kershared_init(void *data_start,
+                            void *data_end, void *orig_brk) {
     kershared_t *kershared = malloc(1 * sizeof(kershared_t));
 
     kershared->brk = orig_brk;
@@ -62,13 +76,13 @@ kershared_t *kershared_init(unsigned int data_start,
 // Output: pointer to a newly malloced child pcb
 // Child's pcb has new PID. Other pointers point to copies of what the parent pointers
 // pointed to.
-pcb_t *pcb_copy(pcb_t *pcb_tocopy) {
+// pcb_t *pcb_copy(pcb_t *pcb_tocopy) {
 
-    // Malloc a new pcb: child_pcb *
-    // Malloc a new pagetable
-    // Copy what parent_pcb's pointers are pointing to, into newly assigned frames
-    pagetable_deepcopy(pcb_tocopy->pagetable);
-}
+//     // Malloc a new pcb: child_pcb *
+//     // Malloc a new pagetable
+//     // Copy what parent_pcb's pointers are pointing to, into newly assigned frames
+//     pagetable_deepcopy(pcb_tocopy->ptable);
+// }
 
 /*
  *  =================
@@ -79,17 +93,18 @@ pcb_t *pcb_copy(pcb_t *pcb_tocopy) {
 const int NUM_PT_ENTRIES;
 
 typedef struct PageTable {
-    pte_t *table;
+    pte_t table[VMEM_REGION_SIZE / PAGESIZE];
     int size;
 } pagetable_t;
 
 // potentially only have one valid page for user's
 // stack, taking hint from KernelStart()'s needs
-pagetable_t *pagetable_init() {  
-    unsigned int size = VMEM_REGION_SIZE / PAGE_SIZE;
+pagetable_t *pagetable_init() {
+    unsigned int size = VMEM_REGION_SIZE / PAGESIZE;
 
-    
+    pagetable_t *new_ptable_p = malloc(sizeof *new_ptable_p);
 
+    return new_ptable_p
 }
 
 pagetable_t *pagetable_deepcopy();
@@ -158,7 +173,7 @@ pagetable_t *pagetable_deepcopy(pagetable_t *pagetable_tocopy) {
  */
 
 typedef struct FrameTable {
-    frame_t *frames;
+    unsigned int *frames;
     int size;
 } frametable_t;
 
@@ -167,7 +182,7 @@ typedef struct FrameTable {
  *  when the kernel is passed the information about the memory size by the
  *  hardware.
  */
-frametable_t *frametable_init(unsigned int hardware_mem_size, int pmem_base) {
+frametable_t *frametable_init(unsigned int hardware_mem_size) {
     unsigned int num_frames = hardware_mem_size / PAGESIZE;
 
     unsigned int *frames = malloc(num_frames * (sizeof(unsigned int)));
@@ -203,13 +218,13 @@ int find_free_frame() {
  *  ker_stack_t *ker_stack_new();   // allocate enough space, return pointer
  *                                  // relative to virtual memory of calling process
  */
-typedef struct KernelStack {
-    size;
-    base;
-    limit;
-    frame_ptr;
-    stack_ptr;
-} ker_stack_t;
+// typedef struct KernelStack {
+//     size;
+//     base;
+//     limit;
+//     frame_ptr;
+//     stack_ptr;
+// } ker_stack_t;
 
 /** ===================
  * === KERNEL HEAP ===
@@ -219,9 +234,9 @@ typedef struct KernelStack {
  *  --- Methods:
  *
  */
-typedef struct KernelHeap {
-    brk;
-    size;
-    base;
-    limit;
-} ker_heap_t;
+// typedef struct KernelHeap {
+//     brk;
+//     size;
+//     base;
+//     limit;
+// } ker_heap_t;
