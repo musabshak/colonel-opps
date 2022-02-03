@@ -1,5 +1,7 @@
 
 #include "hardware.h"
+#include "yalnix.h"
+
 #include "queue.h"  // generic queue DS imported from engs50 code
 
 /**
@@ -33,6 +35,29 @@ typedef struct ProcessControlBlock {
     pagetabe_t *ptable;
 } pcb_t;
 
+/**
+ * 
+ * 
+ */
+
+typedef struct KernelShared {
+    unsigned int brk;           // heap end
+    unsigned int data_end;      // heap start
+    unsigned int data_start;    // text end
+} kershared_t;
+
+kershared_t *kershared_init(unsigned int data_start, 
+    unsigned int data_end, unsigned int orig_brk) 
+{
+    kershared_t *kershared = malloc(1 * sizeof(kershared_t));
+
+    kershared->brk = orig_brk;
+    kershared->data_end = data_end;
+    kershared->data_start = data_start;
+
+    return kershared;
+}
+
 // Input: pointer to parent pcb
 // Output: pointer to a newly malloced child pcb
 // Child's pcb has new PID. Other pointers point to copies of what the parent pointers
@@ -58,8 +83,15 @@ typedef struct PageTable {
     int size;
 } pagetable_t;
 
-pagetable_t *pagetable_new();  // potentially only have one valid page for user's
-                               // stack, taking hint from KernelStart()'s needs
+// potentially only have one valid page for user's
+// stack, taking hint from KernelStart()'s needs
+pagetable_t *pagetable_init() {  
+    unsigned int size = VMEM_REGION_SIZE / PAGE_SIZE;
+
+    
+
+}
+
 pagetable_t *pagetable_deepcopy();
 pagetable_t *pagetable_newcopy(pagetable_t *callers_pt);  // copy pointers to another table's frames
 

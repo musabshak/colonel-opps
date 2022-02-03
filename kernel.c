@@ -40,6 +40,9 @@ int CVAR_ID;
 // Currently running process
 pcb_t RUNNING_PROCESS;
 
+// Shared kernel stuff, i.e. kernel heap, data, text
+kershared_t *kershared;
+
 // Frame table
 frametable_t *frametable;
 
@@ -66,12 +69,14 @@ void KernelStart(char *cmg_args[], unsigned int pmem_size, UserContext *uctxt) {
     // (function def in kernel_data_structs.c)
     frametable = frametable_init(pmem_size, PAGE_SIZE, 0);
 
-    //  --- Set up initial Region 0 (see 8.2.2)
-    _kernel_data_start = TODO;  // lowest address in kernel data region
-    _kernel_data_end = TODO;    // lowest address not in use by kernel's instructions
-                                // and global data at boot time
-    _kernel_orig_brk = TODO;    // the address the kernel library believes is its brk
-                                // at boot time
+    // //  --- Set up initial Region 0 (see 8.2.2)
+    // _kernel_data_start = TODO;  // lowest address in kernel data region
+    // _kernel_data_end = TODO;    // lowest address not in use by kernel's instructions
+    //                             // and global data at boot time
+    // _kernel_orig_brk = TODO;    // the address the kernel library believes is its brk
+    //                             // at boot time
+
+    kershared = kershared_init(_kernel_data_start, _kernel_data_end, _kernel_orig_brk);
 
     //  --- Set up Region 1 page table for idle
     // should only have one valid page, for idle's user stack
