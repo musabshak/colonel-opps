@@ -47,7 +47,10 @@ pcb_t *pcb_init(UserContext *init_uctxt) {
     // Create page table
     pagetable_t *pagetable = pagetable_init();
     // One valid pte
-    pte_t *valid_pte = pagetable->table[0];
+    pte_t *valid_pte = pagetable->table[pagetable->size - 1];
+    valid_pte->valid = 0x1;
+    valid_pte->prot = 0x111;
+    valid_pte->pfn =    // within 
 }
 
 /**

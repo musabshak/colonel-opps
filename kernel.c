@@ -63,6 +63,31 @@ frametable_t *frametable;
  *      you are running on, as determined dynamically by the bootstrap firmware.
  *      The size of physical memory is given in units of bytes.
  *      - The uctxt argument is a pointer to an initial UserContext structure.
+ * 
+ *  Initializing virtual memory:
+ *      There are two things we need to do before enabling virtual memory. 
+ *          1. Create region 0 page table
+ *          2. Create region 1 page table
+ *      At this point, we do not need to create a PCB to hold these. 
+ * 
+ *      Now, the function is passed, in particular, the address of its initial 
+ *      (kernel) brk. Let the frame this address resides in be denoted `M`.
+ *      So the next free memory starts after this value of brk, so we write
+ *      the region 0 and region 1 pagetables contiguously starting here.
+ * 
+ *      Suppose these two pagetables take up `d` bytes, for which we will need `D` 
+ *      more frames. Then we can set the pages 0 through M+D as valid in the 
+ *      region 0 pagetable, and make the frames they point to themselves, i.e. 
+ *      page 0 points to frame 0, etc. We remember also to set the kernel brk 
+ *      accordingly.
+ * 
+ *      The region 1 pagetable will only have one valid page for the user stack.
+ *      Let 'Z' be the maximum possible page in virtual memory. Then in the 
+ *      region 1 pagetable, set page `Z` to valid, and let it point to frame
+ *      `M+D+1`. All other pages are not valid.
+ * 
+ *      Now we can enable virtual memory (??) and load page table locations into 
+ *      registers.
  */
 void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     //  --- Create a (bit?) vector to track free frames
