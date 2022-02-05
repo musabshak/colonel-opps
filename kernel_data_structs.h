@@ -22,6 +22,9 @@ const int NUM_PT_ENTRIES;
 
 typedef struct PageTable pagetable_t;
 
+pte_t *pagetable_reg0_init(void *_kernel_data_end);
+pte_t *pagetable_reg1_init(void *_kernel_data_end);
+
 pagetable_t *pagetable_new();
 pagetable_t *pagetable_deepcopy();
 pagetable_t *pagetable_newcopy(pagetable_t *callers_pt);

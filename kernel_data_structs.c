@@ -1,7 +1,6 @@
 
-#include "hardware.h"
 #include "queue.h"  // generic queue DS imported from engs50 code
-#include "yalnix.h"
+#include "ykernel.h"
 #include "ylib.h"
 
 /**
@@ -50,7 +49,7 @@ pcb_t *pcb_init(UserContext *init_uctxt) {
     pte_t *valid_pte = pagetable->table[pagetable->size - 1];
     valid_pte->valid = 0x1;
     valid_pte->prot = 0x111;
-    valid_pte->pfn =    // within 
+    valid_pte->pfn =  // within
 }
 
 /**

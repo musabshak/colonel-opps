@@ -1,7 +1,10 @@
+/**
+ * Authors: Varun Malladi and Musab Shakeel
+ *
+ */
 
-#include "hardware.h"
-#include "kernel_data_structs.h"
-#include "yalnix.h"
+// #include "kernel_data_structs.h"
+#include "ykernel.h"
 
 /*
  * =================================
@@ -28,6 +31,8 @@
 // See if virtual memory enabled
 int virtual_mem_enabled;
 
+void *kernel_brk;
+
 // Keep track of process numbers
 int PID;
 
@@ -41,10 +46,7 @@ int CVAR_ID;
 // pcb_t RUNNING_PROCESS;
 
 // Shared kernel stuff, i.e. kernel heap, data, text
-kershared_t *kershared;
-
-// Frame table
-frametable_t *frametable;
+// kershared_t *kershared;
 
 // ==============================================//
 
@@ -63,53 +65,94 @@ frametable_t *frametable;
  *      you are running on, as determined dynamically by the bootstrap firmware.
  *      The size of physical memory is given in units of bytes.
  *      - The uctxt argument is a pointer to an initial UserContext structure.
- * 
+ *
  *  Initializing virtual memory:
- *      There are two things we need to do before enabling virtual memory. 
+ *      There are two things we need to do before enabling virtual memory.
  *          1. Create region 0 page table
  *          2. Create region 1 page table
- *      At this point, we do not need to create a PCB to hold these. 
- * 
- *      Now, the function is passed, in particular, the address of its initial 
+ *      At this point, we do not need to create a PCB to hold these.
+ *
+ *      Now, the function is passed, in particular, the address of its initial
  *      (kernel) brk. Let the frame this address resides in be denoted `M`.
  *      So the next free memory starts after this value of brk, so we write
  *      the region 0 and region 1 pagetables contiguously starting here.
- * 
- *      Suppose these two pagetables take up `d` bytes, for which we will need `D` 
- *      more frames. Then we can set the pages 0 through M+D as valid in the 
- *      region 0 pagetable, and make the frames they point to themselves, i.e. 
- *      page 0 points to frame 0, etc. We remember also to set the kernel brk 
+ *
+ *      Suppose these two pagetables take up `d` bytes, for which we will need `D`
+ *      more frames. Then we can set the pages 0 through M+D as valid in the
+ *      region 0 pagetable, and make the frames they point to themselves, i.e.
+ *      page 0 points to frame 0, etc. We remember also to set the kernel brk
  *      accordingly.
- * 
+ *
  *      The region 1 pagetable will only have one valid page for the user stack.
- *      Let 'Z' be the maximum possible page in virtual memory. Then in the 
+ *      Let 'Z' be the maximum possible page in virtual memory. Then in the
  *      region 1 pagetable, set page `Z` to valid, and let it point to frame
  *      `M+D+1`. All other pages are not valid.
- * 
- *      Now we can enable virtual memory (??) and load page table locations into 
- *      registers.
+ *
+ *      Now load page table locations into
+ *      registers and THEN enable virtual memory.
  */
 void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
-    //  --- Create a (bit?) vector to track free frames
-    // (function def in kernel_data_structs.c)
-    frametable = frametable_init(pmem_size);
+    // Parse arguments
+    unsigned int frametable_size = pmem_size / PAGESIZE;
 
-    // //  --- Set up initial Region 0 (see 8.2.2)
-    // _kernel_data_start = TODO;  // lowest address in kernel data region
-    // _kernel_data_end = TODO;    // lowest address not in use by kernel's instructions
-    //                             // and global data at boot time
-    // _kernel_orig_brk = TODO;    // the address the kernel library believes is its brk
-    //                             // at boot time
+    // We will be allocating stuff on the kernel heap (brk will change in the next few operations)
+    void *working_brk = _kernel_orig_brk;
 
-    kershared = kershared_init(_kernel_data_start, _kernel_data_end, _kernel_orig_brk);
+    // Creating reg0 pagetable, reg1 pagetable, frametable and putting them in kernel heap
+    pte_t *reg0_table = working_brk;
+    working_brk += sizeof(pte_t) * MAX_PT_LEN + 1;
 
-    //  --- Set up Region 1 page table for idle
-    // should only have one valid page, for idle's user stack
-    // (function def in kernel_data_structs.c)
-    // pagetable_new();
+    pte_t *reg1_table = working_brk;
+    working_brk += sizeof(pte_t) * MAX_PT_LEN + 1;
+
+    unsigned int *frametable = working_brk;
+    working_brk += sizeof(int) * frametable_size + 1;
+
+    pte_t empty_pte = {
+        .valid = 0,
+        .prot = 0,
+        .pfn = 0};
+
+    // We allocated r0, r1 page tables above; loop through all pages in the page tables
+    // and initialize the page table entries (ptes) to invalid.
+    for (int i = 0; i < MAX_PT_LEN; i++) {
+        reg0_table[i] = empty_pte;
+        reg1_table[i] = empty_pte;
+    }
+
+    // Also initialize frametable (to all 0; all free)
+    for (int i = 0; i < frametable_size; i++) {
+        frametable[i] = 0;
+    }
+
+    // Populate region 0 pagetable
+    unsigned int last_address_used = (unsigned int)(working_brk - 1);
+    unsigned int last_used_reg0_frame = last_address_used & PAGEMASK;  // in physical memory
+
+    for (int i = 0; i <= last_used_reg0_frame; i++) {
+        reg0_table[i].valid = 1;
+        reg0_table[i].prot = 7;  // rwx = 111
+        reg0_table[i].pfn = i;
+
+        // Update frametable to reflect these changes
+        frametable[i] = 1;
+    }
+
+    //  --- Set one valid page (last page; bottom of user stack) in region 1 page table (for idle's user stack)
+    reg1_table[MAX_PT_LEN - 1].valid = 1;
+    reg1_table[MAX_PT_LEN - 1].prot = 6;                        // rwx = 110
+    reg1_table[MAX_PT_LEN - 1].pfn = last_used_reg0_frame + 1;  // allocate next available free frame
+    frametable[last_used_reg0_frame + 1] = 1;                   // mark frame as used
 
     //  --- If pagetable_new() (or something else) has changed kernel's brk, i.e. by
     // calling SetKernelBrk(), then adjust page table
+    SetKernelBrk(working_brk);
+
+    //  --- Tell hardware where page tables are stored
+    WriteRegister(REG_PTBR0, (unsigned int)reg0_table);
+    WriteRegister(REG_PTLR0, MAX_PT_LEN);
+    WriteRegister(REG_PTBR1, (unsigned int)reg1_table);
+    WriteRegister(REG_PTLR1, MAX_PT_LEN);
 
     //  --- Enable virtual memory
     virtual_mem_enabled = 1;
@@ -129,12 +172,17 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
  *      (But be warned: that ERROR may lead to a kernel malloc call returning NULL.)
  */
 int SetKernelBrk(void *addr) {
-    void *diff = addr - kershared->brk;
+    // leave 1 page between kernel heap and stack (red zone!)
+    if (!((unsigned int)addr < (KERNEL_STACK_BASE - PAGESIZE) && (unsigned int)addr > (_kernel_data_end))) {
+        TracePrintf(2, "oh no .. trying to extend kernel brk into kernel stack (or kernel data/text);");
+        return ERROR;
+    }
 
-    // if (virtual_mem_enabled == 0) {
-    //     // safe to just change brk number, no need to update tables or anything
-    //     return 0;
-    // }s
+    if (virtual_mem_enabled == 0) {
+        // safe to just change brk number, no need to update tables or anything
+        kernel_brk = addr;
+        return 0;
+    }
 
     // --- Calculate how many frames you need using diff
     // --- Hunt down available frames from the frame data structure
