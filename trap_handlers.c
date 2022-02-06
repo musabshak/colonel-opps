@@ -1,4 +1,4 @@
-#include "syscalls.h"  // where kernel syscall subroutines are defined
+#include "ykernel.h"
 
 /*
 Trap handlers are functions pointed to by pointers in the interrupt vector table
@@ -30,37 +30,39 @@ Trap handlers are functions pointed to by pointers in the interrupt vector table
 int TrapKernelHandler(UserContext *user_context) {
     int syscall_code = user_context->code;
 
-    void **args = user_context->regs;
+    TracePrintf(1, "syscall code is: %d\n", syscall_code);
 
-    // TrapKernelHandler: work out how to get the args to the syscall handlers...and the return value back
+    // void **args = user_context->regs;
 
-    // for syscall functions that need arguments, look for args in user_context->regs[0...]
-    switch (syscall_code) {
+    // // TrapKernelHandler: work out how to get the args to the syscall handlers...and the return value back
 
-        case 1:
-            kFork();
-            break;
-        case 2:
-            kExec();
-            break;
-        case 3:
-            kExit();
-            break;
-        case 4:
-            kWait();
-            break;
-        case 5:
-            kGetPid();
-            break;
-        case 6:
-            kBrk();
-            break;
-        case 7:
-            kDelay();
-            break;
+    // // for syscall functions that need arguments, look for args in user_context->regs[0...]
+    // switch (syscall_code) {
 
-            // ... and so on
-    }
+    //     case 1:
+    //         kFork();
+    //         break;
+    //     case 2:
+    //         kExec();
+    //         break;
+    //     case 3:
+    //         kExit();
+    //         break;
+    //     case 4:
+    //         kWait();
+    //         break;
+    //     case 5:
+    //         kGetPid();
+    //         break;
+    //     case 6:
+    //         kBrk();
+    //         break;
+    //     case 7:
+    //         kDelay();
+    //         break;
+
+    //         // ... and so on
+    // }
 }
 
 /*
@@ -78,6 +80,7 @@ int TrapKernelHandler(UserContext *user_context) {
  */
 
 int TrapClock(UserContext *user_context) {
+    TracePrintf(1, "Clock trap happening!\n");
 }
 
 /*
@@ -195,4 +198,7 @@ int TrapTTYTransmit(UserContext *user_context) {
  */
 
 int TrapDisk(UserContext *user_context) {
+}
+
+int GenericHandler(UserContext *user_context) {
 }

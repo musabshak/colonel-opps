@@ -8,7 +8,4 @@ Hardware       | WriteRegister(REG_PTBR0,0x02e000)
 Hardware       | WriteRegister(REG_PTLR0,0x000080)
 Hardware       | WriteRegister(REG_PTBR1,0x02e201)
 Hardware       | WriteRegister(REG_PTLR1,0x000080)
-Hardware   ----
-Hardware   | Back from KernelStart
-Invalid exception frame: pc and sp both are 0Hardware   
-** Machine Halted **
+Hardware       | WriteRegister(REG_VM_ENABLE,0x000001)

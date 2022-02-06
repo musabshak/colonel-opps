@@ -10,7 +10,7 @@
 K_SRC_DIR = .
 
 # What are the kernel c and include files?
-K_SRCS = kernel.c 
+K_SRCS = kernel.c trap_handlers.c
 K_INCS = 
 
 # Where's your user source?

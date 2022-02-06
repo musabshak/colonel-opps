@@ -4,6 +4,8 @@
  */
 
 // #include "kernel_data_structs.h"
+#include "queue.h"
+#include "trap_handlers.h"
 #include "ykernel.h"
 
 /*
@@ -49,6 +51,25 @@ int CVAR_ID;
 // kershared_t *kershared;
 
 // ==============================================//
+
+typedef struct ProcessControlBlock pcb_t;
+
+typedef struct ProcessControlBlock {
+    unsigned int pid;
+    // --- userland
+    UserContext *uctxt;
+    void *user_brk;
+    void *user_data;
+    void *user_text;
+    // --- kernelland (don't need to keep track of heap/data/text because same for all processes)
+    KernelContext kctxt;
+    // --- metadata
+    pcb_t *parent;
+    queue_t *children_procs;
+    pte_t *ptable;
+} pcb_t;
+
+void doIdle(void);
 
 /**
  * ===================
@@ -127,16 +148,51 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Populate region 0 pagetable
     unsigned int last_address_used = (unsigned int)(working_brk - 1);
-    unsigned int last_used_reg0_frame = last_address_used & PAGEMASK;  // in physical memory
+    unsigned int last_used_reg0_frame = last_address_used >> PAGESHIFT;  // in physical memory
 
+    unsigned int last_text_page = ((unsigned int)(_kernel_data_start) >> PAGESHIFT) - 1;
+    unsigned int last_data_page = (unsigned int)(_kernel_data_end - 1) >> PAGESHIFT;
+
+    // Note that permissions are in order: XWR
+    // Permissions:
+    // - Kernel text 5 = 101
+    // - Kernel data 3 = 011
+    // - Kernel heap 7 = 111
     for (int i = 0; i <= last_used_reg0_frame; i++) {
+        int permission;
+
+        // kernel text
+        if (i <= last_text_page) {
+            permission = 5;
+        }
+        // kernel data
+        else if (last_text_page < i && i <= last_data_page) {
+            permission = 3;
+        }
+        // kernel heap
+        else {
+            permission = 7;  // 111 == all
+        }
+
+        // kernel heap
         reg0_table[i].valid = 1;
-        reg0_table[i].prot = 7;  // rwx = 111
+        reg0_table[i].prot = permission;  // xrw= 111
         reg0_table[i].pfn = i;
 
-        // Update frametable to reflect these changes
+        // Update frametable to mark assigned frame as occupied
         frametable[i] = 1;
     }
+
+    // Set kernel stack page table entries to be valid
+    reg0_table[127].valid = 1;
+    reg0_table[127].prot = 3;
+    reg0_table[127].pfn = 127;
+    frametable[127] = 1;
+
+    reg0_table[126].valid = 1;
+    reg0_table[126].prot = 3;
+    reg0_table[126].pfn = 126;
+    frametable[126] = 1;
 
     //  --- Set one valid page (last page; bottom of user stack) in region 1 page table (for idle's user stack)
     reg1_table[MAX_PT_LEN - 1].valid = 1;
@@ -148,6 +204,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // calling SetKernelBrk(), then adjust page table
     SetKernelBrk(working_brk);
 
+    // TracePrintf(1, "Current page: %d\n", (unsigned int)working_brk >> PAGESqHIFT);
+
     //  --- Tell hardware where page tables are stored
     WriteRegister(REG_PTBR0, (unsigned int)reg0_table);
     WriteRegister(REG_PTLR0, MAX_PT_LEN);
@@ -155,7 +213,43 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     WriteRegister(REG_PTLR1, MAX_PT_LEN);
 
     //  --- Enable virtual memory
+    WriteRegister(REG_VM_ENABLE, 1);
+
     virtual_mem_enabled = 1;
+
+    return 0;
+
+    // // Create an idlePCB for idle process
+    // pcb_t *idlePCB = malloc(sizeof(*idlePCB));  // kernel heap virtual address
+
+    // idlePCB->ptable = reg1_table;
+    // idlePCB->uctxt = uctxt;
+    // idlePCB->pid = helper_new_pid(reg1_table);
+
+    // // Set up interrupt vector table (IVT)
+    // int (**interrupt_vector_table_p)(UserContext *) = malloc(TRAP_VECTOR_SIZE * sizeof(*interrupt_vector_table_p));
+
+    // // Populate IVT
+    // interrupt_vector_table_p[TRAP_KERNEL] = TrapKernelHandler;
+    // interrupt_vector_table_p[TRAP_CLOCK] = TrapClock;
+    // interrupt_vector_table_p[TRAP_ILLEGAL] = TrapIllegal;
+    // interrupt_vector_table_p[TRAP_MEMORY] = TrapMemory;
+    // interrupt_vector_table_p[TRAP_MATH] = GenericHandler;
+    // interrupt_vector_table_p[TRAP_TTY_RECEIVE] = GenericHandler;
+    // interrupt_vector_table_p[TRAP_TTY_TRANSMIT] = GenericHandler;
+    // interrupt_vector_table_p[TRAP_DISK] = GenericHandler;  // 7
+
+    // for (int i = 8; i < TRAP_VECTOR_SIZE; i++) {
+    //     interrupt_vector_table_p[i] = GenericHandler;
+    // }
+
+    // // Write address of IVT into REG_VECTOR_BASE
+    // WriteRegister(REG_VECTOR_BASE, (unsigned int)interrupt_vector_table_p);
+
+    // // Modify UserContext to point pc to doIdle, and sp to point to top of user stack
+    // uctxt->pc = doIdle;
+    // uctxt->sp = (void *)(MAX_VPN << PAGESHIFT);  // same as VMEM1_LIMIT - 1
+    // TracePrintf(2, "%d =? %d\n", MAX_VPN << PAGESHIFT, VMEM_1_LIMIT - 1);
 }
 
 /**
@@ -173,8 +267,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
  */
 int SetKernelBrk(void *addr) {
     // leave 1 page between kernel heap and stack (red zone!)
-    if (!((unsigned int)addr < (KERNEL_STACK_BASE - PAGESIZE) && (unsigned int)addr > (_kernel_data_end))) {
-        TracePrintf(2, "oh no .. trying to extend kernel brk into kernel stack (or kernel data/text);");
+    if (!((unsigned int)addr < (KERNEL_STACK_BASE - PAGESIZE) && (unsigned int)addr > (unsigned int)(_kernel_data_end))) {
+        TracePrintf(1, "oh no .. trying to extend kernel brk into kernel stack (or kernel data/text);");
         return ERROR;
     }
 
@@ -184,10 +278,19 @@ int SetKernelBrk(void *addr) {
         return 0;
     }
 
+    TracePrintf(1, "NOT ENOUGH MEMORY IN KERNEL HEAP; kernel brk happening\n");
+
     // --- Calculate how many frames you need using diff
     // --- Hunt down available frames from the frame data structure
     // --- Update all process pagetables, either by going through each one or
     // by keeping a global kernel pagetable that is shared by all process, includes
     // stuff from region 0 not including kernel stack.
     return 0;
+}
+
+void doIdle(void) {
+    while (1) {
+        TracePrintf(1, "DoIdle\n");
+        Pause();
+    }
 }
