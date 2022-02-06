@@ -95,6 +95,7 @@ int TrapClock(UserContext *user_context) {
  */
 
 int TrapIllegal(UserContext *user_context) {
+    ;
 }
 
 /*
@@ -124,6 +125,7 @@ int TrapIllegal(UserContext *user_context) {
  */
 
 int TrapMemory(UserContext *user_context) {
+    ;
 
     // If user_context->addr < currently_allocated_memory_stack and
     // user_context->addr > brk: grow stack to cover user_context->addr
@@ -147,6 +149,7 @@ int TrapMemory(UserContext *user_context) {
  */
 
 int TrapMath(UserContext *user_context) {
+    ;
 }
 
 /*
@@ -165,6 +168,7 @@ int TrapMath(UserContext *user_context) {
  */
 
 int TrapTTYReceive(UserContext *user_context) {
+    ;
 }
 
 /*
@@ -184,6 +188,7 @@ int TrapTTYReceive(UserContext *user_context) {
  */
 
 int TrapTTYTransmit(UserContext *user_context) {
+    ;
 }
 
 /*
@@ -198,7 +203,9 @@ int TrapTTYTransmit(UserContext *user_context) {
  */
 
 int TrapDisk(UserContext *user_context) {
+    ;
 }
 
 int GenericHandler(UserContext *user_context) {
+    ;
 }

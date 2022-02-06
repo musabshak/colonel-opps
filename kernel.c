@@ -61,7 +61,8 @@ typedef struct ProcessControlBlock {
     void *user_brk;
     void *user_data;
     void *user_text;
-    // --- kernelland (don't need to keep track of heap/data/text because same for all processes)
+    // --- kernelland (don't need to keep track of heap/data/text because same for all
+    // processes)
     KernelContext kctxt;
     // --- metadata
     pcb_t *parent;
@@ -70,6 +71,31 @@ typedef struct ProcessControlBlock {
 } pcb_t;
 
 void doIdle(void);
+
+void print_r0_page_table(pte_t *ptable, int size, int *frametable) {
+
+    TracePrintf(1, "Printing R0 page table\n\n");
+
+    TracePrintf(1, "%3s  %2s    %s|%s|%s\t  F used?\n", "Idx", "P#", "Valid", "Prot",
+                "PFN#");
+    for (int i = size - 1; i >= 0; i--) {
+        TracePrintf(1, "%3d  %2x -->%5x|%4d|%4x\t  %d\n", i, i, ptable[i].valid,
+                    ptable[i].prot, ptable[i].pfn, frametable[i]);
+    }
+    TracePrintf(1, "\n");
+}
+
+void print_r1_page_table(pte_t *ptable, int size) {
+
+    TracePrintf(1, "Printing R1 page table\n\n");
+
+    TracePrintf(1, "%3s  %2s    %s|%s|%s\n", "Idx", "P#", "Valid", "Prot", "PFN#");
+    for (int i = size - 1; i >= 0; i--) {
+        TracePrintf(1, "%3d  %2x -->%5x|%4d|%4x\n", i, i + size, ptable[i].valid,
+                    ptable[i].prot, ptable[i].pfn);
+    }
+    TracePrintf(1, "\n");
+}
 
 /**
  * ===================
@@ -114,10 +140,22 @@ void doIdle(void);
  */
 void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // Parse arguments
+
     unsigned int frametable_size = pmem_size / PAGESIZE;
 
-    // We will be allocating stuff on the kernel heap (brk will change in the next few operations)
+    // We will be allocating stuff on the kernel heap (brk will change in the next few
+    // operations)
     void *working_brk = _kernel_orig_brk;
+    TracePrintf(1, "kernel orig brk: %x (p#: %x)\n", _kernel_orig_brk,
+                (unsigned int)_kernel_orig_brk >> PAGESHIFT);
+    TracePrintf(1, "kernel data start (lowest address in use): %x (p#: %x)\n",
+                _kernel_data_start, (unsigned int)_kernel_data_start >> PAGESHIFT);
+    TracePrintf(1, "kernel data end (lowest address not in use): %x (p#: %x)\n",
+                _kernel_data_end, (unsigned int)_kernel_data_end >> PAGESHIFT);
+
+    TracePrintf(1, "size of pte_t: %d bytes\n", sizeof(pte_t));
+    TracePrintf(1, "size of int: %d bytes\n", sizeof(int));
+    TracePrintf(1, "frametable size: %d entries\n", frametable_size);
 
     // Creating reg0 pagetable, reg1 pagetable, frametable and putting them in kernel heap
     pte_t *reg0_table = working_brk;
@@ -129,10 +167,10 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     unsigned int *frametable = working_brk;
     working_brk += sizeof(int) * frametable_size + 1;
 
-    pte_t empty_pte = {
-        .valid = 0,
-        .prot = 0,
-        .pfn = 0};
+    TracePrintf(1, "working brk: %x (p#: %x)\n", working_brk,
+                (unsigned int)working_brk >> PAGESHIFT);
+
+    pte_t empty_pte = {.valid = 0, .prot = 0, .pfn = 0};
 
     // We allocated r0, r1 page tables above; loop through all pages in the page tables
     // and initialize the page table entries (ptes) to invalid.
@@ -146,9 +184,13 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         frametable[i] = 0;
     }
 
+    print_r0_page_table(reg0_table, MAX_PT_LEN, frametable);
+    // print_r1_page_table(reg1_table, MAX_PT_LEN);
+
     // Populate region 0 pagetable
     unsigned int last_address_used = (unsigned int)(working_brk - 1);
-    unsigned int last_used_reg0_frame = last_address_used >> PAGESHIFT;  // in physical memory
+    unsigned int last_used_reg0_frame =
+        last_address_used >> PAGESHIFT;  // in physical memory
 
     unsigned int last_text_page = ((unsigned int)(_kernel_data_start) >> PAGESHIFT) - 1;
     unsigned int last_data_page = (unsigned int)(_kernel_data_end - 1) >> PAGESHIFT;
@@ -194,15 +236,25 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     reg0_table[126].pfn = 126;
     frametable[126] = 1;
 
-    //  --- Set one valid page (last page; bottom of user stack) in region 1 page table (for idle's user stack)
+    //  --- Set one valid page (last page; bottom of user stack) in region 1 page table
+    //  (for idle's user stack)
     reg1_table[MAX_PT_LEN - 1].valid = 1;
-    reg1_table[MAX_PT_LEN - 1].prot = 6;                        // rwx = 110
-    reg1_table[MAX_PT_LEN - 1].pfn = last_used_reg0_frame + 1;  // allocate next available free frame
-    frametable[last_used_reg0_frame + 1] = 1;                   // mark frame as used
+    reg1_table[MAX_PT_LEN - 1].prot = 3;  // xwr = 011
+    reg1_table[MAX_PT_LEN - 1].pfn =
+        last_used_reg0_frame + 1;              // allocate next available free frame
+    frametable[last_used_reg0_frame + 3] = 1;  // mark frame as used
+
+    print_r0_page_table(reg0_table, MAX_PT_LEN, frametable);
+    // print_r1_page_table(reg1_table, MAX_PT_LEN);
+
+    TracePrintf(1, "working brk: %x (p#: %x)\n", working_brk,
+                (unsigned int)working_brk >> PAGESHIFT);
 
     //  --- If pagetable_new() (or something else) has changed kernel's brk, i.e. by
     // calling SetKernelBrk(), then adjust page table
     SetKernelBrk(working_brk);
+    TracePrintf(1, "working brk: %x (p#: %x)\n", working_brk,
+                (unsigned int)working_brk >> PAGESHIFT);
 
     // TracePrintf(1, "Current page: %d\n", (unsigned int)working_brk >> PAGESqHIFT);
 
@@ -213,43 +265,42 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     WriteRegister(REG_PTLR1, MAX_PT_LEN);
 
     //  --- Enable virtual memory
+    virtual_mem_enabled = 1;
     WriteRegister(REG_VM_ENABLE, 1);
 
-    virtual_mem_enabled = 1;
+    return;
+    // Create an idlePCB for idle process
+    pcb_t *idlePCB = malloc(sizeof(*idlePCB));  // kernel heap virtual address
 
-    return 0;
+    idlePCB->ptable = reg1_table;
+    idlePCB->uctxt = uctxt;
+    idlePCB->pid = helper_new_pid(reg1_table);
 
-    // // Create an idlePCB for idle process
-    // pcb_t *idlePCB = malloc(sizeof(*idlePCB));  // kernel heap virtual address
+    // Set up interrupt vector table (IVT)
+    int (**interrupt_vector_table_p)(UserContext *) =
+        malloc(TRAP_VECTOR_SIZE * sizeof(*interrupt_vector_table_p));
 
-    // idlePCB->ptable = reg1_table;
-    // idlePCB->uctxt = uctxt;
-    // idlePCB->pid = helper_new_pid(reg1_table);
+    // Populate IVT
+    interrupt_vector_table_p[TRAP_KERNEL] = TrapKernelHandler;
+    interrupt_vector_table_p[TRAP_CLOCK] = TrapClock;
+    interrupt_vector_table_p[TRAP_ILLEGAL] = TrapIllegal;
+    interrupt_vector_table_p[TRAP_MEMORY] = TrapMemory;
+    interrupt_vector_table_p[TRAP_MATH] = GenericHandler;
+    interrupt_vector_table_p[TRAP_TTY_RECEIVE] = GenericHandler;
+    interrupt_vector_table_p[TRAP_TTY_TRANSMIT] = GenericHandler;
+    interrupt_vector_table_p[TRAP_DISK] = GenericHandler;  // 7
 
-    // // Set up interrupt vector table (IVT)
-    // int (**interrupt_vector_table_p)(UserContext *) = malloc(TRAP_VECTOR_SIZE * sizeof(*interrupt_vector_table_p));
+    for (int i = 8; i < TRAP_VECTOR_SIZE; i++) {
+        interrupt_vector_table_p[i] = GenericHandler;
+    }
 
-    // // Populate IVT
-    // interrupt_vector_table_p[TRAP_KERNEL] = TrapKernelHandler;
-    // interrupt_vector_table_p[TRAP_CLOCK] = TrapClock;
-    // interrupt_vector_table_p[TRAP_ILLEGAL] = TrapIllegal;
-    // interrupt_vector_table_p[TRAP_MEMORY] = TrapMemory;
-    // interrupt_vector_table_p[TRAP_MATH] = GenericHandler;
-    // interrupt_vector_table_p[TRAP_TTY_RECEIVE] = GenericHandler;
-    // interrupt_vector_table_p[TRAP_TTY_TRANSMIT] = GenericHandler;
-    // interrupt_vector_table_p[TRAP_DISK] = GenericHandler;  // 7
+    // Write address of IVT into REG_VECTOR_BASE
+    WriteRegister(REG_VECTOR_BASE, (unsigned int)interrupt_vector_table_p);
 
-    // for (int i = 8; i < TRAP_VECTOR_SIZE; i++) {
-    //     interrupt_vector_table_p[i] = GenericHandler;
-    // }
-
-    // // Write address of IVT into REG_VECTOR_BASE
-    // WriteRegister(REG_VECTOR_BASE, (unsigned int)interrupt_vector_table_p);
-
-    // // Modify UserContext to point pc to doIdle, and sp to point to top of user stack
-    // uctxt->pc = doIdle;
-    // uctxt->sp = (void *)(MAX_VPN << PAGESHIFT);  // same as VMEM1_LIMIT - 1
-    // TracePrintf(2, "%d =? %d\n", MAX_VPN << PAGESHIFT, VMEM_1_LIMIT - 1);
+    // Modify UserContext to point pc to doIdle, and sp to point to top of user stack
+    uctxt->pc = doIdle;
+    uctxt->sp = (void *)(MAX_VPN << PAGESHIFT);  // same as VMEM1_LIMIT - 1
+    TracePrintf(2, "%d =? %d\n", MAX_VPN << PAGESHIFT, VMEM_1_LIMIT - 1);
 }
 
 /**
@@ -266,9 +317,15 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
  *      (But be warned: that ERROR may lead to a kernel malloc call returning NULL.)
  */
 int SetKernelBrk(void *addr) {
+
+    TracePrintf(1, "CALLING KERNEL BRK w/ arg: %x\n", addr);
+
     // leave 1 page between kernel heap and stack (red zone!)
-    if (!((unsigned int)addr < (KERNEL_STACK_BASE - PAGESIZE) && (unsigned int)addr > (unsigned int)(_kernel_data_end))) {
-        TracePrintf(1, "oh no .. trying to extend kernel brk into kernel stack (or kernel data/text);");
+    if (!((unsigned int)addr < (KERNEL_STACK_BASE - PAGESIZE) &&
+          (unsigned int)addr > (unsigned int)(_kernel_data_end))) {
+        TracePrintf(1,
+                    "oh no .. trying to extend kernel brk into kernel stack (or kernel "
+                    "data/text);");
         return ERROR;
     }
 
@@ -278,14 +335,13 @@ int SetKernelBrk(void *addr) {
         return 0;
     }
 
-    TracePrintf(1, "NOT ENOUGH MEMORY IN KERNEL HEAP; kernel brk happening\n");
+    return ERROR;
 
     // --- Calculate how many frames you need using diff
     // --- Hunt down available frames from the frame data structure
     // --- Update all process pagetables, either by going through each one or
     // by keeping a global kernel pagetable that is shared by all process, includes
     // stuff from region 0 not including kernel stack.
-    return 0;
 }
 
 void doIdle(void) {
