@@ -143,18 +143,20 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     unsigned int frametable_size = pmem_size / PAGESIZE;
 
-    // We will be allocating stuff on the kernel heap (brk will change in the next few
-    // operations)
+    // We will be allocating stuff on the kernel heap; kernel brk will change in the next
+    // few operations so we use a varible to hold the evolving ("working") brk
     void *working_brk = _kernel_orig_brk;
+
+    // For debugging
     TracePrintf(1, "kernel orig brk: %x (p#: %x)\n", _kernel_orig_brk,
                 (unsigned int)_kernel_orig_brk >> PAGESHIFT);
     TracePrintf(1, "kernel data start (lowest address in use): %x (p#: %x)\n",
                 _kernel_data_start, (unsigned int)_kernel_data_start >> PAGESHIFT);
-    TracePrintf(1, "kernel data end (lowest address not in use): %x (p#: %x)\n",
+    TracePrintf(1, "kernel data end (lowest address not in use): %x (p#: %x)\n\n",
                 _kernel_data_end, (unsigned int)_kernel_data_end >> PAGESHIFT);
 
     TracePrintf(1, "size of pte_t: %d bytes\n", sizeof(pte_t));
-    TracePrintf(1, "size of int: %d bytes\n", sizeof(int));
+    TracePrintf(1, "size of int: %d bytes\n\n", sizeof(int));
     TracePrintf(1, "frametable size: %d entries\n", frametable_size);
 
     // Creating reg0 pagetable, reg1 pagetable, frametable and putting them in kernel heap
@@ -226,6 +228,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     }
 
     // Set kernel stack page table entries to be valid
+    // TODO: add for loop that depends on kernel stack size
     reg0_table[127].valid = 1;
     reg0_table[127].prot = 3;
     reg0_table[127].pfn = 127;
@@ -236,22 +239,22 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     reg0_table[126].pfn = 126;
     frametable[126] = 1;
 
-    //  --- Set one valid page (last page; bottom of user stack) in region 1 page table
-    //  (for idle's user stack)
+    //  Set one valid page (last page; bottom of user stack) in region 1 page table
+    //  (for idle's user stack).
     reg1_table[MAX_PT_LEN - 1].valid = 1;
     reg1_table[MAX_PT_LEN - 1].prot = 3;  // xwr = 011
     reg1_table[MAX_PT_LEN - 1].pfn =
         last_used_reg0_frame + 1;              // allocate next available free frame
     frametable[last_used_reg0_frame + 3] = 1;  // mark frame as used
 
+    // Print R0 ptable after populating
     print_r0_page_table(reg0_table, MAX_PT_LEN, frametable);
     // print_r1_page_table(reg1_table, MAX_PT_LEN);
 
     TracePrintf(1, "working brk: %x (p#: %x)\n", working_brk,
                 (unsigned int)working_brk >> PAGESHIFT);
 
-    //  --- If pagetable_new() (or something else) has changed kernel's brk, i.e. by
-    // calling SetKernelBrk(), then adjust page table
+    // Set the global kernel brk to our working_brk
     SetKernelBrk(working_brk);
     TracePrintf(1, "working brk: %x (p#: %x)\n", working_brk,
                 (unsigned int)working_brk >> PAGESHIFT);
@@ -269,6 +272,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     WriteRegister(REG_VM_ENABLE, 1);
 
     return;
+
     // Create an idlePCB for idle process
     pcb_t *idlePCB = malloc(sizeof(*idlePCB));  // kernel heap virtual address
 
