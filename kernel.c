@@ -57,6 +57,8 @@ unsigned int g_len_pagetable = MAX_PT_LEN;
 
 typedef struct ProcessControlBlock pcb_t;
 
+pcb_t *g_running_pcb;
+
 typedef struct ProcessControlBlock {
     unsigned int pid;
     // --- userland
@@ -73,8 +75,15 @@ typedef struct ProcessControlBlock {
     pte_t *ptable;
 } pcb_t;
 
-void doIdle(void);
+// Imitate a userland program
+void doIdle(void) {
+    while (1) {
+        TracePrintf(1, "DoIdle\n");
+        Pause();
+    }
+}
 
+// Utility function
 void print_r0_page_table(pte_t *ptable, int size, int *frametable) {
 
     TracePrintf(1, "Printing R0 page table\n\n");
@@ -88,6 +97,7 @@ void print_r0_page_table(pte_t *ptable, int size, int *frametable) {
     TracePrintf(1, "\n");
 }
 
+// Utility function
 void print_r1_page_table(pte_t *ptable, int size) {
 
     TracePrintf(1, "Printing R1 page table\n\n");
@@ -271,8 +281,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     }
 
     //  Set one valid page  in region 1 page table foridle's user stack.
-    reg1_table[MAX_PT_LEN - 1].valid = 1;
-    reg1_table[MAX_PT_LEN - 1].prot = PROT_READ | PROT_WRITE;
+    reg1_table[g_len_pagetable - 1].valid = 1;
+    reg1_table[g_len_pagetable - 1].prot = PROT_READ | PROT_WRITE;
 
     int free_frame_idx = find_free_frame(frametable);
 
@@ -285,8 +295,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     frametable[free_frame_idx] = 1;  // mark frame as used
 
     // Print ptables after populating
-    print_r0_page_table(reg0_table, MAX_PT_LEN, frametable);
-    print_r1_page_table(reg1_table, MAX_PT_LEN);
+    print_r0_page_table(reg0_table, g_len_pagetable, frametable);
+    print_r1_page_table(reg1_table, g_len_pagetable);
 
     //  --- Tell hardware where page tables are stored
     WriteRegister(REG_PTBR0, (unsigned int)reg0_table);
@@ -328,7 +338,19 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Modify UserContext to point pc to doIdle, and sp to point to top of user stack
     uctxt->pc = doIdle;
-    uctxt->sp = (void *)(MAX_VPN << PAGESHIFT);
+    uctxt->sp = (void *)(0x1fffff);  // TODO: figure this out (why ...f doesn't worko obut
+                                     // ...c works)
+
+    int addr_last_vpn = (unsigned int)MAX_VPN << PAGESHIFT;
+
+    TracePrintf(1, "VMEM_LIMIT: 0x%x == %d\n", VMEM_LIMIT, VMEM_LIMIT);
+    TracePrintf(1, "VMEM_LIMIT - 1: 0x%x == %d\n", VMEM_LIMIT - 1, VMEM_LIMIT - 1);
+    TracePrintf(1, "addr of 0th byte of last page: 0x%x == %d\n", addr_last_vpn,
+                addr_last_vpn);
+    TracePrintf(1, "addr of last byte of last page: 0x%x == %d\n",
+                addr_last_vpn + PAGESIZE - 1, addr_last_vpn + PAGESIZE - 1);
+
+    g_running_pcb = idlePCB;
 }
 
 /**
@@ -370,11 +392,4 @@ int SetKernelBrk(void *addr) {
     // --- Update all process pagetables, either by going through each one or
     // by keeping a global kernel pagetable that is shared by all process, includes
     // stuff from region 0 not including kernel stack.
-}
-
-void doIdle(void) {
-    while (1) {
-        TracePrintf(1, "DoIdle\n");
-        Pause();
-    }
 }

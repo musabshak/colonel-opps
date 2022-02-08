@@ -120,13 +120,52 @@ int TrapIllegal(UserContext *user_context) { ; }
  * - COW stuff
  *      - If trying to write to COW frame
  *
+ * From manual:
+ * This exception results from a disallowed memory access by the current user process.
+ * The access may be disallowed because the address is outside the virtual address range
+ * of the hardware (outside Region 0 and Region 1), because the address is not mapped in
+ * the current page tables, or because the access violates the page protection specified
+ * in the corresponding page table entry
+ *
+ *  user_context->code tells us some context around the trap
+ *  code = 0 means addr is outside virtual address range
+ *  code = 1 means addr is not mapped in current page tables
+ *  code = 2 means access violates the page protection specified in ptable
+ *
  */
 
 int TrapMemory(UserContext *user_context) {
-    ;
 
-    // If user_context->addr < currently_allocated_memory_stack and
-    // user_context->addr > brk: grow stack to cover user_context->addr
+    // TracePrintf(1, "Address of user context: %p; page: %x\n", user_context->addr,
+    //             (unsigned int)(user_context->addr) >> PAGESHIFT);
+
+    // // TODO: handle other codes
+    // if (user_context->code == 0 || user_context->code == 2) {
+    //     TracePrintf(1, "TrapMemory() called with unsupported code %d.\n",
+    //                 user_context->code);
+    // }
+
+    // // If user_context->addr < currently_allocated_memory_stack and
+    // // user_context->addr > brk: grow stack to cover user_context->addr
+    // int page_of_uctx_addr = (unsigned int)(user_context->addr) >> PAGESHIFT;
+
+    // pte_t *reg1_pagetable = g_running_pcb->pagetable;
+
+    // // Allocate one more page to user stack of currently running process
+    // // Need to allocate a free frame, and update R1 page table
+    // for (int i = g_len_pagetable - 1; i > 0; i--) {  // TODO: add red zone
+    //     if (reg1_pagetable[i].valid = 1) {
+    //         continue;
+    //     }
+
+    //     int free_frame_idx = find_free_frame();
+    //     reg1_pagetable[i].valid = 1;
+    //     reg1_pagetable[i].prot = PROT_READ | PROT_WRITE;
+    //     reg1_pagetable[i].pfn = free_frame_idx;
+
+    //     g_running_pcb->sp = i << PAGESHIFT;
+    //     break;
+    // }
 
     // Else abort currently running user propcess but continue running other processes
 
