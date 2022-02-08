@@ -135,6 +135,7 @@ int TrapIllegal(UserContext *user_context) { ; }
  */
 
 int TrapMemory(UserContext *user_context) {
+    TracePrintf(1, "CALLING MEMORY TRAP HANDLER!!\n");
 
     // TracePrintf(1, "Address of user context: %p; page: %x\n", user_context->addr,
     //             (unsigned int)(user_context->addr) >> PAGESHIFT);

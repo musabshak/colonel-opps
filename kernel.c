@@ -170,10 +170,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_len_frametable = pmem_size / PAGESIZE;
     g_kernel_brk = _kernel_orig_brk;
 
-    // We will be allocating stuff on the kernel heap; kernel brk will change in the next
-    // few operations so we use a varible to hold the evolving ("working") brk
-    // void *working_brk = _kernel_orig_brk;
-
     // For debugging
     TracePrintf(1, "kernel orig brk: %x (p#: %x)\n", _kernel_orig_brk,
                 (unsigned int)_kernel_orig_brk >> PAGESHIFT);
@@ -188,7 +184,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Creating reg0 pagetable, reg1 pagetable, frametable and putting them in kernel heap
     pte_t *reg0_table = malloc(sizeof(pte_t) * MAX_PT_LEN);
-    // working_brk += sizeof(pte_t) * MAX_PT_LEN + 1;
 
     // Check that malloc was successful
     if (reg0_table == NULL) {
@@ -197,7 +192,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     }
 
     pte_t *reg1_table = malloc(sizeof(pte_t) * MAX_PT_LEN);
-    // working_brk += sizeof(pte_t) * MAX_PT_LEN + 1;
 
     // Check that malloc was successful
     if (reg1_table == NULL) {
@@ -206,15 +200,11 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     }
 
     unsigned int *frametable = malloc(sizeof(int) * g_len_frametable);
-    // working_brk += sizeof(int) * frametable_size + 1;
 
     if (frametable == NULL) {
         TracePrintf(2, "Malloc failed\n");
         return;
     }
-
-    // TracePrintf(1, "working brk: %x (p#: %x)\n", working_brk,
-    //             (unsigned int)working_brk >> PAGESHIFT);
 
     pte_t empty_pte = {.valid = 0, .prot = 0, .pfn = 0};
 
@@ -280,14 +270,14 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         reg0_table[idx].pfn = idx;
     }
 
-    //  Set one valid page  in region 1 page table foridle's user stack.
+    //  Set one valid page in R1 page table for idle's user stack.
     reg1_table[g_len_pagetable - 1].valid = 1;
     reg1_table[g_len_pagetable - 1].prot = PROT_READ | PROT_WRITE;
 
     int free_frame_idx = find_free_frame(frametable);
 
     if (free_frame_idx == -1) {
-        TracePrintf(2, "No free frame found!\n");
+        TracePrintf(1, "No free frame found!\n");
         return;
     }
 
@@ -338,7 +328,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Modify UserContext to point pc to doIdle, and sp to point to top of user stack
     uctxt->pc = doIdle;
-    uctxt->sp = (void *)(0x1fffff);  // TODO: figure this out (why ...f doesn't worko obut
+    uctxt->sp = (void *)(0x1fffff);  // TODO: figure this out (why ...f doesn't work but
                                      // ...c works)
 
     int addr_last_vpn = (unsigned int)MAX_VPN << PAGESHIFT;
