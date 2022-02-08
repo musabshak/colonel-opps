@@ -33,7 +33,7 @@
 // See if virtual memory enabled
 int virtual_mem_enabled;
 
-void *kernel_brk;
+void *g_kernel_brk;
 
 // Keep track of process numbers
 int PID;
@@ -49,6 +49,9 @@ int CVAR_ID;
 
 // Shared kernel stuff, i.e. kernel heap, data, text
 // kershared_t *kershared;
+
+unsigned int g_len_frametable;
+unsigned int g_len_pagetable = MAX_PT_LEN;
 
 // ==============================================//
 
@@ -97,6 +100,19 @@ void print_r1_page_table(pte_t *ptable, int size) {
     TracePrintf(1, "\n");
 }
 
+// Given a frametable, return an index of a free frame
+// Return -1 if error or if no free frame could be found
+int find_free_frame(unsigned int *frametable) {
+
+    for (int idx = 0; idx < g_len_frametable; idx++) {
+        if (frametable[idx] == 0) {
+            return idx;
+        }
+    }
+
+    return -1;
+}
+
 /**
  * ===================
  * === KERNELSTART ===
@@ -141,11 +157,12 @@ void print_r1_page_table(pte_t *ptable, int size) {
 void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // Parse arguments
 
-    unsigned int frametable_size = pmem_size / PAGESIZE;
+    g_len_frametable = pmem_size / PAGESIZE;
+    g_kernel_brk = _kernel_orig_brk;
 
     // We will be allocating stuff on the kernel heap; kernel brk will change in the next
     // few operations so we use a varible to hold the evolving ("working") brk
-    void *working_brk = _kernel_orig_brk;
+    // void *working_brk = _kernel_orig_brk;
 
     // For debugging
     TracePrintf(1, "kernel orig brk: %x (p#: %x)\n", _kernel_orig_brk,
@@ -157,70 +174,86 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     TracePrintf(1, "size of pte_t: %d bytes\n", sizeof(pte_t));
     TracePrintf(1, "size of int: %d bytes\n\n", sizeof(int));
-    TracePrintf(1, "frametable size: %d entries\n", frametable_size);
+    TracePrintf(1, "frametable size: %d entries\n", g_len_frametable);
 
     // Creating reg0 pagetable, reg1 pagetable, frametable and putting them in kernel heap
-    pte_t *reg0_table = working_brk;
-    working_brk += sizeof(pte_t) * MAX_PT_LEN + 1;
+    pte_t *reg0_table = malloc(sizeof(pte_t) * MAX_PT_LEN);
+    // working_brk += sizeof(pte_t) * MAX_PT_LEN + 1;
 
-    pte_t *reg1_table = working_brk;
-    working_brk += sizeof(pte_t) * MAX_PT_LEN + 1;
+    // Check that malloc was successful
+    if (reg0_table == NULL) {
+        TracePrintf(2, "Malloc failed\n");
+        return;
+    }
 
-    unsigned int *frametable = working_brk;
-    working_brk += sizeof(int) * frametable_size + 1;
+    pte_t *reg1_table = malloc(sizeof(pte_t) * MAX_PT_LEN);
+    // working_brk += sizeof(pte_t) * MAX_PT_LEN + 1;
 
-    TracePrintf(1, "working brk: %x (p#: %x)\n", working_brk,
-                (unsigned int)working_brk >> PAGESHIFT);
+    // Check that malloc was successful
+    if (reg1_table == NULL) {
+        TracePrintf(2, "Malloc failed\n");
+        return;
+    }
+
+    unsigned int *frametable = malloc(sizeof(int) * g_len_frametable);
+    // working_brk += sizeof(int) * frametable_size + 1;
+
+    if (frametable == NULL) {
+        TracePrintf(2, "Malloc failed\n");
+        return;
+    }
+
+    // TracePrintf(1, "working brk: %x (p#: %x)\n", working_brk,
+    //             (unsigned int)working_brk >> PAGESHIFT);
 
     pte_t empty_pte = {.valid = 0, .prot = 0, .pfn = 0};
 
     // We allocated r0, r1 page tables above; loop through all pages in the page tables
     // and initialize the page table entries (ptes) to invalid.
-    for (int i = 0; i < MAX_PT_LEN; i++) {
+    for (int i = 0; i < g_len_pagetable; i++) {
         reg0_table[i] = empty_pte;
         reg1_table[i] = empty_pte;
     }
 
     // Also initialize frametable (to all 0; all free)
-    for (int i = 0; i < frametable_size; i++) {
+    for (int i = 0; i < g_len_frametable; i++) {
         frametable[i] = 0;
     }
 
     print_r0_page_table(reg0_table, MAX_PT_LEN, frametable);
-    // print_r1_page_table(reg1_table, MAX_PT_LEN);
+    print_r1_page_table(reg1_table, MAX_PT_LEN);
 
     // Populate region 0 pagetable
-    unsigned int last_address_used = (unsigned int)(working_brk - 1);
+    unsigned int last_address_used = (unsigned int)(g_kernel_brk - 1);
     unsigned int last_used_reg0_frame =
         last_address_used >> PAGESHIFT;  // in physical memory
 
     unsigned int last_text_page = ((unsigned int)(_kernel_data_start) >> PAGESHIFT) - 1;
     unsigned int last_data_page = (unsigned int)(_kernel_data_end - 1) >> PAGESHIFT;
 
-    // Note that permissions are in order: XWR
+    TracePrintf(1, "last_used_reg0_frame: %d\n", last_used_reg0_frame);
+
     // Permissions:
-    // - Kernel text 5 = 101
-    // - Kernel data 3 = 011
-    // - Kernel heap 7 = 111
     for (int i = 0; i <= last_used_reg0_frame; i++) {
+
         int permission;
 
         // kernel text
         if (i <= last_text_page) {
-            permission = 5;
+            permission = PROT_READ | PROT_EXEC;
         }
         // kernel data
         else if (last_text_page < i && i <= last_data_page) {
-            permission = 3;
+            permission = PROT_READ | PROT_WRITE;
         }
         // kernel heap
         else {
-            permission = 7;  // 111 == all
+            permission = PROT_READ | PROT_WRITE;
         }
 
         // kernel heap
         reg0_table[i].valid = 1;
-        reg0_table[i].prot = permission;  // xrw= 111
+        reg0_table[i].prot = permission;
         reg0_table[i].pfn = i;
 
         // Update frametable to mark assigned frame as occupied
@@ -228,38 +261,32 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     }
 
     // Set kernel stack page table entries to be valid
-    // TODO: add for loop that depends on kernel stack size
-    reg0_table[127].valid = 1;
-    reg0_table[127].prot = 3;
-    reg0_table[127].pfn = 127;
-    frametable[127] = 1;
+    int num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
 
-    reg0_table[126].valid = 1;
-    reg0_table[126].prot = 3;
-    reg0_table[126].pfn = 126;
-    frametable[126] = 1;
+    for (int i = 0; i < num_kernel_stack_pages; i++) {
+        int idx = g_len_pagetable - 1 - i;
+        reg0_table[idx].valid = 1;
+        reg0_table[idx].prot = PROT_READ | PROT_WRITE;
+        reg0_table[idx].pfn = idx;
+    }
 
-    //  Set one valid page (last page; bottom of user stack) in region 1 page table
-    //  (for idle's user stack).
+    //  Set one valid page  in region 1 page table foridle's user stack.
     reg1_table[MAX_PT_LEN - 1].valid = 1;
-    reg1_table[MAX_PT_LEN - 1].prot = 3;  // xwr = 011
-    reg1_table[MAX_PT_LEN - 1].pfn =
-        last_used_reg0_frame + 1;              // allocate next available free frame
-    frametable[last_used_reg0_frame + 3] = 1;  // mark frame as used
+    reg1_table[MAX_PT_LEN - 1].prot = PROT_READ | PROT_WRITE;
 
-    // Print R0 ptable after populating
+    int free_frame_idx = find_free_frame(frametable);
+
+    if (free_frame_idx == -1) {
+        TracePrintf(2, "No free frame found!\n");
+        return;
+    }
+
+    reg1_table[g_len_pagetable - 1].pfn = free_frame_idx;
+    frametable[free_frame_idx] = 1;  // mark frame as used
+
+    // Print ptables after populating
     print_r0_page_table(reg0_table, MAX_PT_LEN, frametable);
-    // print_r1_page_table(reg1_table, MAX_PT_LEN);
-
-    TracePrintf(1, "working brk: %x (p#: %x)\n", working_brk,
-                (unsigned int)working_brk >> PAGESHIFT);
-
-    // Set the global kernel brk to our working_brk
-    SetKernelBrk(working_brk);
-    TracePrintf(1, "working brk: %x (p#: %x)\n", working_brk,
-                (unsigned int)working_brk >> PAGESHIFT);
-
-    // TracePrintf(1, "Current page: %d\n", (unsigned int)working_brk >> PAGESqHIFT);
+    print_r1_page_table(reg1_table, MAX_PT_LEN);
 
     //  --- Tell hardware where page tables are stored
     WriteRegister(REG_PTBR0, (unsigned int)reg0_table);
@@ -270,8 +297,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     //  --- Enable virtual memory
     virtual_mem_enabled = 1;
     WriteRegister(REG_VM_ENABLE, 1);
-
-    return;
 
     // Create an idlePCB for idle process
     pcb_t *idlePCB = malloc(sizeof(*idlePCB));  // kernel heap virtual address
@@ -303,8 +328,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Modify UserContext to point pc to doIdle, and sp to point to top of user stack
     uctxt->pc = doIdle;
-    uctxt->sp = (void *)(MAX_VPN << PAGESHIFT);  // same as VMEM1_LIMIT - 1
-    TracePrintf(2, "%d =? %d\n", MAX_VPN << PAGESHIFT, VMEM_1_LIMIT - 1);
+    uctxt->sp = (void *)(MAX_VPN << PAGESHIFT);
 }
 
 /**
@@ -335,7 +359,7 @@ int SetKernelBrk(void *addr) {
 
     if (virtual_mem_enabled == 0) {
         // safe to just change brk number, no need to update tables or anything
-        kernel_brk = addr;
+        g_kernel_brk = addr;
         return 0;
     }
 

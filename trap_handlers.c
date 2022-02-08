@@ -20,10 +20,11 @@ Trap handlers are functions pointed to by pointers in the interrupt vector table
  *
  *  - The code numbers are found in include/yalnix.h
  *
- *  This handler really only needs to call the appropriate kernel syscall subroutine, based on the
- *  kernel code received in user_context->code field. The only implementation design of significance
- *  is how arguments are parsed from *user_context and passed into the syscall, and how the syscall
- *  return value is passed back to userland via user_context.
+ *  This handler really only needs to call the appropriate kernel syscall subroutine,
+ * based on the kernel code received in user_context->code field. The only implementation
+ * design of significance is how arguments are parsed from *user_context and passed into
+ * the syscall, and how the syscall return value is passed back to userland via
+ * user_context.
  *
  */
 
@@ -34,10 +35,11 @@ int TrapKernelHandler(UserContext *user_context) {
 
     // void **args = user_context->regs;
 
-    // // TrapKernelHandler: work out how to get the args to the syscall handlers...and the return value back
+    // // TrapKernelHandler: work out how to get the args to the syscall handlers...and
+    // the return value back
 
-    // // for syscall functions that need arguments, look for args in user_context->regs[0...]
-    // switch (syscall_code) {
+    // // for syscall functions that need arguments, look for args in
+    // user_context->regs[0...] switch (syscall_code) {
 
     //     case 1:
     //         kFork();
@@ -79,9 +81,7 @@ int TrapKernelHandler(UserContext *user_context) {
  *
  */
 
-int TrapClock(UserContext *user_context) {
-    TracePrintf(1, "Clock trap happening!\n");
-}
+int TrapClock(UserContext *user_context) { TracePrintf(1, "Clock trap happening!\n"); }
 
 /*
  *  ===================
@@ -94,9 +94,7 @@ int TrapClock(UserContext *user_context) {
  *
  */
 
-int TrapIllegal(UserContext *user_context) {
-    ;
-}
+int TrapIllegal(UserContext *user_context) { ; }
 
 /*
  *  ==================
@@ -148,9 +146,7 @@ int TrapMemory(UserContext *user_context) {
  *
  */
 
-int TrapMath(UserContext *user_context) {
-    ;
-}
+int TrapMath(UserContext *user_context) { ; }
 
 /*
  *  ======================
@@ -167,9 +163,7 @@ int TrapMath(UserContext *user_context) {
  *
  */
 
-int TrapTTYReceive(UserContext *user_context) {
-    ;
-}
+int TrapTTYReceive(UserContext *user_context) { ; }
 
 /*
  *  =======================
@@ -187,9 +181,7 @@ int TrapTTYReceive(UserContext *user_context) {
  *
  */
 
-int TrapTTYTransmit(UserContext *user_context) {
-    ;
-}
+int TrapTTYTransmit(UserContext *user_context) { ; }
 
 /*
  *  ================
@@ -202,10 +194,6 @@ int TrapTTYTransmit(UserContext *user_context) {
  *
  */
 
-int TrapDisk(UserContext *user_context) {
-    ;
-}
+int TrapDisk(UserContext *user_context) { ; }
 
-int GenericHandler(UserContext *user_context) {
-    ;
-}
+int GenericHandler(UserContext *user_context) { ; }
