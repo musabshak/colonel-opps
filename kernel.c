@@ -75,14 +75,6 @@ typedef struct ProcessControlBlock {
     pte_t *ptable;
 } pcb_t;
 
-// Imitate a userland program
-void doIdle(void) {
-    while (1) {
-        TracePrintf(1, "DoIdle\n");
-        Pause();
-    }
-}
-
 // Utility function
 void print_r0_page_table(pte_t *ptable, int size, int *frametable) {
 
@@ -122,6 +114,8 @@ int find_free_frame(unsigned int *frametable) {
 
     return -1;
 }
+
+void doIdle(void);
 
 /**
  * ===================
@@ -328,8 +322,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Modify UserContext to point pc to doIdle, and sp to point to top of user stack
     uctxt->pc = doIdle;
-    uctxt->sp = (void *)(0x1fffff);  // TODO: figure this out (why ...f doesn't work but
-                                     // ...c works)
+    uctxt->sp = (void *)(0x1ffffc);  // TODO: figure this out (why ...f doesn't work
+                                     // but ...c works)
 
     int addr_last_vpn = (unsigned int)MAX_VPN << PAGESHIFT;
 
@@ -382,4 +376,12 @@ int SetKernelBrk(void *addr) {
     // --- Update all process pagetables, either by going through each one or
     // by keeping a global kernel pagetable that is shared by all process, includes
     // stuff from region 0 not including kernel stack.
+}
+
+// Imitate a userland program
+void doIdle(void) {
+    while (1) {
+        TracePrintf(1, "DoIdle\n");
+        Pause();
+    }
 }
