@@ -290,6 +290,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     WriteRegister(REG_PTLR1, MAX_PT_LEN);
 
     // ====================  Testing SetKernelBrk() ==================== //
+    virtual_mem_enabled = 1;
     TracePrintf(1, "kernel current brk: %x (p#: %x)\n", g_kernel_brk,
                 (unsigned int)g_kernel_brk >> PAGESHIFT);
 
@@ -302,12 +303,12 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     int rc;
 
     void *expected_brk;
-    int *expected_page;
+    int expected_page;
 
     void *new_brk;
-    int *new_page;
+    int new_page;
 
-    int test_case_num = 6;
+    int test_case_num = 7;
     switch (test_case_num) {
 
         case 1:
@@ -384,6 +385,10 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
             TracePrintf(1, "rc is %d and should be 0\n", rc);
             TracePrintf(1, "new kernel brk is: %x (p#: %x) and should be %x (p#: %x)\n", new_brk, new_page,
                         expected_brk, expected_page);
+
+            TracePrintf(1, "new page allocated: %d\n", 1 == reg0_ptable[new_page - 1].valid);
+            TracePrintf(1, "new page allocated: %d\n", 1 == reg0_ptable[new_page].valid);
+            print_r0_page_table(reg0_ptable, MAX_PT_LEN, g_frametable);
             break;
 
         case 8:
@@ -400,6 +405,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
             TracePrintf(1, "rc is %d and should be 0\n", rc);
             TracePrintf(1, "new kernel brk is: %x (p#: %x) and should be %x (p#: %x)\n", new_brk, new_page,
                         expected_brk, expected_page);
+            TracePrintf(1, "new page allocated: %d\n", 1 == reg0_ptable[new_page].valid);
             break;
     }
     // ====================  Testing SetKernelBrk() ==================== //
@@ -409,6 +415,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
 int h_raise_brk(unsigned int bytes_to_raise) {
     // ERROR checking
+    TracePrintf(1, "Calling h_raise_brk\n");
 
     unsigned int working_bytes_to_raise = bytes_to_raise;
 
@@ -421,10 +428,7 @@ int h_raise_brk(unsigned int bytes_to_raise) {
         return 0;
     }
 
-    unsigned int pages_requested = working_bytes_to_raise / PAGESIZE;
-    if ((working_bytes_to_raise % PAGESIZE) != 0) {
-        pages_requested++;
-    }
+    unsigned int pages_requested = working_bytes_to_raise / PAGESIZE + 1;
 
     for (int i = 0; i < pages_requested; i++) {
         int free_frame_idx = find_free_frame(g_frametable);
@@ -432,7 +436,7 @@ int h_raise_brk(unsigned int bytes_to_raise) {
             return ERROR;
         }
 
-        unsigned int next_page = (unsigned int)g_kernel_brk >> PAGESHIFT + i + 1;
+        unsigned int next_page = ((unsigned int)g_kernel_brk >> PAGESHIFT) + i + 1;
         reg0_ptable[next_page].valid = 1;
         reg0_ptable[next_page].prot = PROT_READ | PROT_WRITE;
         reg0_ptable[next_page].pfn = free_frame_idx;
@@ -484,11 +488,11 @@ int SetKernelBrk(void *new_brk) {
     if (bytes_to_raise == 0) {
         return 0;
     }
-    // reducing brk
-    else if (bytes_to_raise < 0) {
+    // raising brk
+    else if (bytes_to_raise > 0) {
         h_raise_brk(bytes_to_raise);
     }
-    // raising brk
+    // reducing brk
     else {
     }
 }
