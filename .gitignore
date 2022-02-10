@@ -2,6 +2,7 @@
 .vscode/
 TRACE
 TTY*
+DISK
 *.o
 crash*
 yalnix
