@@ -266,6 +266,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         reg0_ptable[idx].valid = 1;
         reg0_ptable[idx].prot = PROT_READ | PROT_WRITE;
         reg0_ptable[idx].pfn = idx;
+        g_frametable[idx] = 1;  // mark used
     }
 
     //  Set one valid page in R1 page table for idle's user stack.
@@ -283,7 +284,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_frametable[free_frame_idx] = 1;  // mark frame as used
 
     // Print ptables after populating
-    print_r0_page_table(reg0_ptable, g_len_pagetable, g_frametable);
+    // print_r0_page_table(reg0_ptable, g_len_pagetable, g_frametable);
     // print_r1_page_table(reg1_table, g_len_pagetable);
 
     //  --- Tell hardware where page tables are stored
@@ -373,11 +374,11 @@ int h_raise_brk(void *new_brk) {
 
 int h_lower_brk(void *new_brk) {
 
-    TracePrintf(1, "Calling h_raise_brk\n");
+    TracePrintf(1, "Calling h_lower_brk\n");
 
     unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
-    unsigned int num_pages_to_lower = new_page - current_page;
+    unsigned int num_pages_to_lower = current_page - new_page;
 
     for (int i = 0; i < num_pages_to_lower; i++) {
         unsigned int prev_page = current_page - i;
@@ -392,7 +393,6 @@ int h_lower_brk(void *new_brk) {
 
     return 0;
 }
-
 /**
  *  From manual (p. 71):
  *      The argument addr here is similar to that used by user processes in
@@ -412,7 +412,7 @@ int SetKernelBrk(void *new_brk) {
 
     // leave 1 page between kernel heap and stack (red zone!)
     if (!((unsigned int)new_brk < (KERNEL_STACK_BASE - PAGESIZE) &&
-          (unsigned int)new_brk > (unsigned int)(_kernel_data_end))) {
+          (unsigned int)new_brk >= (unsigned int)(_kernel_data_end))) {
         TracePrintf(1,
                     "oh no .. trying to extend kernel brk into kernel stack (or kernel "
                     "data/text)\n");
