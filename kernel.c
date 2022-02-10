@@ -266,6 +266,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         reg0_ptable[idx].valid = 1;
         reg0_ptable[idx].prot = PROT_READ | PROT_WRITE;
         reg0_ptable[idx].pfn = idx;
+        g_frametable[idx] = 1;  // mark used
     }
 
     //  Set one valid page in R1 page table for idle's user stack.
@@ -283,7 +284,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_frametable[free_frame_idx] = 1;  // mark frame as used
 
     // Print ptables after populating
-    print_r0_page_table(reg0_ptable, g_len_pagetable, g_frametable);
+    // print_r0_page_table(reg0_ptable, g_len_pagetable, g_frametable);
     // print_r1_page_table(reg1_table, g_len_pagetable);
 
     //  --- Tell hardware where page tables are stored
@@ -311,11 +312,11 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     void *new_brk;
     int new_page;
 
-    int test_case_num = 1;
+    int test_case_num = 10;
     switch (test_case_num) {
 
         case 1:
-            // Test case 1: raise kernel brk into kernel text
+            // Test case 1: lower by 1 page
             // Expect: non-zero return
             test_brk = SetKernelBrk;
             rc = SetKernelBrk(test_brk);
@@ -323,7 +324,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
             break;
 
         case 2:
-            // Test case 2: raise kernel brk into kernel data
+            // Test case 2: lower by 2
             // Expect: non-zero return
             test_brk = &g_kernel_brk;
             rc = SetKernelBrk(new_brk);
@@ -411,6 +412,64 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
             TracePrintf(1, "new page allocated: %d\n", 1 == reg0_ptable[new_page].valid);
             print_r0_page_table(reg0_ptable, MAX_PT_LEN, g_frametable);
             break;
+
+        case 9:
+            // Test case 9: lower kernel brk to 0th byte of same page
+            TracePrintf(1, "Test case 9: lower kernel brk to 0th byte of same page\n");
+
+            SetKernelBrk(g_kernel_brk + 50);
+            print_r0_page_table(reg0_ptable, MAX_PT_LEN, g_frametable);
+            old_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+            TracePrintf(1, "old brk: %x (p#: %x)\n", test_brk, old_page);
+            test_brk = (unsigned int)g_kernel_brk & PAGEMASK;
+            expected_brk = (unsigned int)g_kernel_brk & PAGEMASK;
+            expected_page = old_page;
+            rc = SetKernelBrk(test_brk);
+            new_brk = g_kernel_brk;
+            new_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+            TracePrintf(1, "rc is %d and should be 0\n", rc);
+            TracePrintf(1, "new kernel brk is: %x (p#: %x) and should be %x (p#: %x)\n", new_brk, new_page,
+                        expected_brk, expected_page);
+            TracePrintf(1, "current page not de-allocated: %d\n", 1 == reg0_ptable[new_page].valid);
+            print_r0_page_table(reg0_ptable, MAX_PT_LEN, g_frametable);
+            break;
+
+        case 10:
+            // lower by 1 page
+            TracePrintf(1, "Test case 10: lower kernel brk by 1 page\n");
+
+            test_brk = g_kernel_brk + 3 * PAGESIZE;
+            TracePrintf(1, "\traising brk to page %x...\n", (unsigned int)test_brk >> PAGESHIFT);
+            rc = SetKernelBrk(test_brk);
+
+            test_brk = g_kernel_brk - 1 * PAGESIZE;
+            TracePrintf(1, "\tlowering brk... to page %x\n", (unsigned int)test_brk >> PAGESHIFT);
+            rc = SetKernelBrk(test_brk);
+
+            print_r0_page_table(reg0_ptable, MAX_PT_LEN, g_frametable);
+            TracePrintf(1, "Success:\t%d", rc && (g_kernel_brk == test_brk));
+            break;
+
+        case 11:
+            // Test case 11: lower kernel brk by one page
+            TracePrintf(1, "Test case 11: lower kernel brk to 0th byte two pages below\n");
+
+            SetKernelBrk(g_kernel_brk + 3 * PAGESIZE + 40);
+            print_r0_page_table(reg0_ptable, MAX_PT_LEN, g_frametable);
+            old_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+            TracePrintf(1, "old brk: %x (p#: %x)\n", old_brk, old_page);
+            test_brk = g_kernel_brk - PAGESIZE * 2;
+            expected_brk = g_kernel_brk - PAGESIZE * 2;
+            expected_page = old_page - 2;
+            rc = SetKernelBrk(test_brk);
+            new_brk = g_kernel_brk;
+            new_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+            TracePrintf(1, "rc is %d and should be 0\n", rc);
+            TracePrintf(1, "new kernel brk is: %x (p#: %x) and should be %x (p#: %x)\n", new_brk, new_page,
+                        expected_brk, expected_page);
+            TracePrintf(1, "current page not de-allocated: %d\n", 1 == reg0_ptable[new_page].valid);
+            print_r0_page_table(reg0_ptable, MAX_PT_LEN, g_frametable);
+            break;
     }
     // ====================  Testing SetKernelBrk() ==================== //
 
@@ -444,6 +503,7 @@ int h_raise_brk(void *new_brk) {
 
     for (int i = 0; i < pages_requested; i++) {
         int free_frame_idx = find_free_frame(g_frametable);
+        g_frametable[free_frame_idx] = 1;
         if (free_frame_idx < 0) {
             return ERROR;
         }
@@ -452,6 +512,28 @@ int h_raise_brk(void *new_brk) {
         reg0_ptable[next_page].valid = 1;
         reg0_ptable[next_page].prot = PROT_READ | PROT_WRITE;
         reg0_ptable[next_page].pfn = free_frame_idx;
+    }
+
+    g_kernel_brk = new_brk;
+
+    return 0;
+}
+
+int h_lower_brk(void *new_brk) {
+
+    TracePrintf(1, "Calling h_lower_brk\n");
+
+    unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+    unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+    unsigned int num_pages_to_lower = current_page - new_page;
+
+    for (int i = 0; i < num_pages_to_lower; i++) {
+        unsigned int prev_page = current_page - i;
+        unsigned int idx_to_free = reg0_ptable[prev_page].pfn;
+        g_frametable[idx_to_free] = 0;  // mark frame as un-used
+        reg0_ptable[prev_page].valid = 0;
+        reg0_ptable[prev_page].prot = PROT_NONE;
+        reg0_ptable[prev_page].pfn = 0;  // should never be touched
     }
 
     g_kernel_brk = new_brk;
@@ -477,7 +559,7 @@ int SetKernelBrk(void *new_brk) {
 
     // leave 1 page between kernel heap and stack (red zone!)
     if (!((unsigned int)new_brk < (KERNEL_STACK_BASE - PAGESIZE) &&
-          (unsigned int)new_brk > (unsigned int)(_kernel_data_end))) {
+          (unsigned int)new_brk >= (unsigned int)(_kernel_data_end))) {
         TracePrintf(1,
                     "oh no .. trying to extend kernel brk into kernel stack (or kernel "
                     "data/text)\n");
@@ -506,6 +588,7 @@ int SetKernelBrk(void *new_brk) {
     }
     // reducing brk
     else {
+        h_lower_brk(new_brk);
     }
 }
 
