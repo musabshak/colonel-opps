@@ -292,153 +292,62 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     WriteRegister(REG_PTBR1, (unsigned int)reg1_table);
     WriteRegister(REG_PTLR1, MAX_PT_LEN);
 
-    // ====================  Testing SetKernelBrk() ==================== //
+    //  --- Enable virtual memory
     virtual_mem_enabled = 1;
-    TracePrintf(1, "kernel current brk: %x (p#: %x)\n", g_kernel_brk,
-                (unsigned int)g_kernel_brk >> PAGESHIFT);
+    WriteRegister(REG_VM_ENABLE, 1);
 
-    // print_r0_page_table(reg0_ptable, MAX_PT_LEN, g_frametable);
+    // Create an idlePCB for idle process
+    pcb_t *idlePCB = malloc(sizeof(*idlePCB));  // kernel heap virtual address
 
-    void *old_brk = g_kernel_brk;
-    int old_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+    idlePCB->ptable = reg1_table;
+    idlePCB->uctxt = uctxt;
+    idlePCB->pid = helper_new_pid(reg1_table);
 
-    void *test_brk;
-    int rc;
+    // Set up interrupt vector table (IVT)
+    int (**interrupt_vector_table_p)(UserContext *) =
+        malloc(TRAP_VECTOR_SIZE * sizeof(*interrupt_vector_table_p));
 
-    void *expected_brk;
-    int expected_page;
+    // Populate IVT
+    interrupt_vector_table_p[TRAP_KERNEL] = TrapKernelHandler;
+    interrupt_vector_table_p[TRAP_CLOCK] = TrapClock;
+    interrupt_vector_table_p[TRAP_ILLEGAL] = TrapIllegal;
+    interrupt_vector_table_p[TRAP_MEMORY] = TrapMemory;
+    interrupt_vector_table_p[TRAP_MATH] = GenericHandler;
+    interrupt_vector_table_p[TRAP_TTY_RECEIVE] = GenericHandler;
+    interrupt_vector_table_p[TRAP_TTY_TRANSMIT] = GenericHandler;
+    interrupt_vector_table_p[TRAP_DISK] = GenericHandler;  // 7
 
-    void *new_brk;
-    int new_page;
-
-    int test_case_num = 1;
-    switch (test_case_num) {
-
-        case 1:
-            // Test case 1: raise kernel brk into kernel text
-            // Expect: non-zero return
-            test_brk = SetKernelBrk;
-            rc = SetKernelBrk(test_brk);
-            TracePrintf(1, "Test 1:\t%d\n", (rc < 0));
-            break;
-
-        case 2:
-            // Test case 2: raise kernel brk into kernel data
-            // Expect: non-zero return
-            test_brk = &g_kernel_brk;
-            rc = SetKernelBrk(new_brk);
-            TracePrintf(1, "Test 2:\t%d\n", (rc < 0));
-            break;
-
-        case 3:
-            // Test case 3: raise into kernel stack
-            // Expect: non-zero return
-            test_brk = &rc;
-            rc = SetKernelBrk(new_brk);
-            TracePrintf(1, "Test 3:\t%d\n", (rc < 0));
-            break;
-
-        case 4:
-            // Test case 4: raise within 1 page of kernel stack (redzone)
-            // Expect: non-zero return
-            test_brk = DOWN_TO_PAGE(&rc) - 1;
-            rc = SetKernelBrk(test_brk);
-            TracePrintf(1, "Test 4:\t%d\n", (rc < 0));
-            break;
-
-        case 5:
-            // Test case 5: raise into region 1
-            // Expect: non-zero return
-            test_brk = VMEM_1_BASE + PAGEOFFSET;
-            rc = SetKernelBrk(test_brk);
-            TracePrintf(1, "Test 5:\t%d\n", (rc < 0));
-            break;
-
-        case 6:
-            // Test case 6: raise kernel brk to address in the same page
-            // Expect: new page should not be allocated; currentbrkpage should remain same
-            if (((unsigned int)g_kernel_brk & PAGEOFFSET) == PAGEOFFSET) {
-                TracePrintf(1, "Test 6:\tn/a\n");
-            } else {
-                old_brk = g_kernel_brk;
-                test_brk = g_kernel_brk + 1;
-
-                unsigned int current_brk_page = (unsigned int)g_kernel_brk >> PAGEOFFSET;
-
-                rc = SetKernelBrk(test_brk);
-                new_brk = g_kernel_brk;
-                unsigned int new_page = (unsigned int)g_kernel_brk >> PAGEOFFSET;
-
-                TracePrintf(1, "Test 6:\t%d %d %d\n", (rc == 0), (current_brk_page == new_page),
-                            (old_brk != new_brk));
-            }
-            break;
-
-        case 7:
-            // Test case 7: raise kernel brk to address two pages from current page
-            // Expect: two new pages should be allocated; currentbrkpage should be currentbrkpage + 2
-            TracePrintf(1, "Test case 7: raise kernel brk to address two pages from current page\n");
-            TracePrintf(1, "old brk: %x (p#: %x)\n", old_brk, old_page);
-            test_brk = UP_TO_PAGE(UP_TO_PAGE(g_kernel_brk + 1) + 1);
-            expected_brk = UP_TO_PAGE(UP_TO_PAGE(g_kernel_brk + 1) + 1);
-            expected_page = old_page + 2;
-            rc = SetKernelBrk(test_brk);
-            new_brk = g_kernel_brk;
-            new_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
-            TracePrintf(1, "rc is %d and should be 0\n", rc);
-            TracePrintf(1, "new kernel brk is: %x (p#: %x) and should be %x (p#: %x)\n", new_brk, new_page,
-                        expected_brk, expected_page);
-
-            TracePrintf(1, "new page allocated: %d\n", 1 == reg0_ptable[new_page - 1].valid);
-            TracePrintf(1, "new page allocated: %d\n", 1 == reg0_ptable[new_page].valid);
-            print_r0_page_table(reg0_ptable, MAX_PT_LEN, g_frametable);
-            break;
-
-        case 8:
-            // Test case 8: raise kernel brk to 0th byte of next page
-            // Expect: one new page should be allocated; currentbrkpage should be currentbrkpage + 1
-            TracePrintf(1, "Test case 8: raise kernel brk to 0th byte of next page\n");
-            TracePrintf(1, "old brk: %x (p#: %x)\n", old_brk, old_page);
-            test_brk = UP_TO_PAGE(g_kernel_brk + 1);
-            expected_brk = UP_TO_PAGE(g_kernel_brk + 1);
-            expected_page = old_page + 1;
-            rc = SetKernelBrk(test_brk);
-            new_brk = g_kernel_brk;
-            new_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
-            TracePrintf(1, "rc is %d and should be 0\n", rc);
-            TracePrintf(1, "new kernel brk is: %x (p#: %x) and should be %x (p#: %x)\n", new_brk, new_page,
-                        expected_brk, expected_page);
-            TracePrintf(1, "new page allocated: %d\n", 1 == reg0_ptable[new_page].valid);
-            print_r0_page_table(reg0_ptable, MAX_PT_LEN, g_frametable);
-            break;
+    for (int i = 8; i < TRAP_VECTOR_SIZE; i++) {
+        interrupt_vector_table_p[i] = GenericHandler;
     }
-    // ====================  Testing SetKernelBrk() ==================== //
 
-    // End of KernelStart()
+    // Write address of IVT into REG_VECTOR_BASE
+    WriteRegister(REG_VECTOR_BASE, (unsigned int)interrupt_vector_table_p);
+
+    // Modify UserContext to point pc to doIdle, and sp to point to top of user stack
+    uctxt->pc = doIdle;
+
+    // Stack values increment in 4 bytes; Intel is little-endian; sp needs to point to
+    // 0x1ffffc
+    uctxt->sp = (void *)(VMEM_LIMIT - 4);
+
+    int addr_last_vpn = (unsigned int)MAX_VPN << PAGESHIFT;
+
+    // TracePrintf(1, "VMEM_LIMIT: 0x%x == %d\n", VMEM_LIMIT, VMEM_LIMIT);
+    // TracePrintf(1, "VMEM_LIMIT - 1: 0x%x == %d\n", VMEM_LIMIT - 1, VMEM_LIMIT - 1);
+    // TracePrintf(1, "addr of 0th byte of last page: 0x%x == %d\n", addr_last_vpn,
+    //             addr_last_vpn);
+    // TracePrintf(1, "addr of last byte of last page: 0x%x == %d\n",
+    //             addr_last_vpn + PAGESIZE - 1, addr_last_vpn + PAGESIZE - 1);
+
+    g_running_pcb = idlePCB;
 }
 
 int h_raise_brk(void *new_brk) {
     // ERROR checking
     TracePrintf(1, "Calling h_raise_brk\n");
 
-    // int working_bytes_to_raise = bytes_to_raise;
-
-    // // there is room on the page current brk is on
-    // unsigned int bytes_left_on_currentbrk_page = PAGESIZE - ((unsigned int)g_kernel_brk & PAGEOFFSET);
-    // working_bytes_to_raise -= bytes_left_on_currentbrk_page;
-
-    // unsigned int pages_requested;
-
-    // if (working_bytes_to_raise < 0) {
-    //     g_kernel_brk += bytes_to_raise;  // can we add like this?
-    //     return 0;
-    // } else if (working_bytes_to_raise = 0) {
-    //     pages_requested = 1;
-    // } else {
-    //     working_bytes_to_raise / PAGESIZE + 1;
-    // }
-
-    unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+       unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
     unsigned int pages_requested = new_page - current_page;
 
