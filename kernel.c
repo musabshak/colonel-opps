@@ -155,18 +155,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_len_frametable = pmem_size / PAGESIZE;
     g_kernel_brk = _kernel_orig_brk;  // _k_orig_brk is populated by hardware
 
-    // Debugging
-    // TracePrintf(1, "kernel orig brk: %x (p#: %x)\n", _kernel_orig_brk,
-    //             (unsigned int)_kernel_orig_brk >> PAGESHIFT);
-    // TracePrintf(1, "kernel data start (lowest address in use): %x (p#: %x)\n", _kernel_data_start,
-    //             (unsigned int)_kernel_data_start >> PAGESHIFT);
-    // TracePrintf(1, "kernel data end (lowest address not in use): %x (p#: %x)\n\n", _kernel_data_end,
-    //             (unsigned int)_kernel_data_end >> PAGESHIFT);
-
-    // TracePrintf(1, "size of pte_t: %d bytes\n", sizeof(pte_t));
-    // TracePrintf(1, "size of int: %d bytes\n\n", sizeof(int));
-    // TracePrintf(1, "frametable size: %d entries\n", g_len_frametable);
-
     /* S=================== ALLOCATE + INITIALIZE PAGETABLES ==================== */
     /* Creating R0, R1 pagetables, and frametable. Put all these in kernel heap */
 
@@ -202,10 +190,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         g_frametable[i] = 0;
     }
 
-    // Debugging
-    // print_r0_page_table(reg0_ptable, g_len_pagetable, g_frametable);
-    // print_r1_page_table(reg1_table, g_len_pagetable);
-
     /* S=================== POPULATE PAGETABLES ==================== */
 
     // NOTE: If kernel brk is on 0th byte of new page initially, we allocate that page too.
@@ -215,9 +199,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     unsigned int last_text_page = ((unsigned int)(_kernel_data_start) >> PAGESHIFT) - 1;
     unsigned int last_data_page = (unsigned int)(_kernel_data_end - 1) >> PAGESHIFT;
-
-    // Debugging
-    // TracePrintf(1, "last_used_reg0_frame: %x\n", last_used_reg0_frame);
 
     /* Populate R0 ptable */
     for (int i = 0; i <= last_used_reg0_frame; i++) {
@@ -273,11 +254,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     reg1_table[g_len_pagetable - 1].pfn = free_frame_idx;
     g_frametable[free_frame_idx] = 1;  // mark frame as used
-
-    // Debugging
-    // Print ptables after populating
-    // print_r0_page_table(reg0_ptable, g_len_pagetable, g_frametable);
-    // print_r1_page_table(reg1_table, g_len_pagetable);
 
     /* S=================== ENABLE VIRTUAL MEMORY ==================== */
 
@@ -352,7 +328,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
  *      - g_kernel_brk
  */
 int h_raise_brk(void *new_brk) {
-    // TracePrintf(1, "Calling h_raise_brk\n");
 
     unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
@@ -388,7 +363,6 @@ int h_raise_brk(void *new_brk) {
  *      - g_kernel_brk
  */
 int h_lower_brk(void *new_brk) {
-    // TracePrintf(1, "Calling h_lower_brk\n");
 
     unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
