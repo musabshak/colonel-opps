@@ -1,0 +1,2 @@
+- How does kernel access process queues?
+    - Have them be globals!
