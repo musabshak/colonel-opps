@@ -347,17 +347,20 @@ int h_raise_brk(void *new_brk) {
     // ERROR checking
     TracePrintf(1, "Calling h_raise_brk\n");
 
-       unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+    unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
     unsigned int pages_requested = new_page - current_page;
 
     for (int i = 0; i < pages_requested; i++) {
         int free_frame_idx = find_free_frame(g_frametable);
+        g_frametable[free_frame_idx] = 1;  // mark frame as used
+
         if (free_frame_idx < 0) {
             return ERROR;
         }
 
-        unsigned int next_page = ((unsigned int)g_kernel_brk >> PAGESHIFT) + i + 1;
+        // Assumes crrent_page has already been allocated
+        unsigned int next_page = current_page + i + 1;
         reg0_ptable[next_page].valid = 1;
         reg0_ptable[next_page].prot = PROT_READ | PROT_WRITE;
         reg0_ptable[next_page].pfn = free_frame_idx;
@@ -367,6 +370,29 @@ int h_raise_brk(void *new_brk) {
 
     return 0;
 }
+
+int h_lower_brk(void *new_brk) {
+
+    TracePrintf(1, "Calling h_raise_brk\n");
+
+    unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+    unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+    unsigned int num_pages_to_lower = new_page - current_page;
+
+    for (int i = 0; i < num_pages_to_lower; i++) {
+        unsigned int prev_page = current_page - i;
+        unsigned int idx_to_free = reg0_ptable[prev_page].pfn;
+        g_frametable[idx_to_free] = 0;  // mark frame as un-used
+        reg0_ptable[prev_page].valid = 0;
+        reg0_ptable[prev_page].prot = PROT_NONE;
+        reg0_ptable[prev_page].pfn = 0;  // should never be touched
+    }
+
+    g_kernel_brk = new_brk;
+
+    return 0;
+}
+
 /**
  *  From manual (p. 71):
  *      The argument addr here is similar to that used by user processes in
@@ -415,6 +441,7 @@ int SetKernelBrk(void *new_brk) {
     }
     // reducing brk
     else {
+        h_lower_brk(new_brk);
     }
 }
 
