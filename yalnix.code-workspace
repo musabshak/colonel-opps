@@ -1,0 +1,25 @@
+{
+	"folders": [
+		{
+			"name": "colonel-opps",
+			"path": "."
+		},
+		{
+			"name": "yalnix_framework",
+			"path": "../yalnix_framework"
+		},
+		{
+			"name": "cs58",
+			"path": "../0 coursework/cs58"
+		},
+		{
+			"path": "../0 coursework/engs50/git_dir/tse"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"queue.h": "c",
+			"kernel_data_structs.h": "c"
+		}
+	}
+}
