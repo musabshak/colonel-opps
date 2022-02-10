@@ -220,15 +220,18 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // print_r1_page_table(reg1_table, MAX_PT_LEN);
 
     // Populate region 0 pagetable
-    unsigned int last_address_used = (unsigned int)(g_kernel_brk - 1);
-    unsigned int last_used_reg0_frame = last_address_used >> PAGESHIFT;  // in physical memory
+    // unsigned int last_address_used = (unsigned int)(g_kernel_brk - 1);
+
+    // NOTE: If kernel brk is on 0th byte of new page initially, we allocate that page too
+    // the frame that kernel brk is on
+    unsigned int last_used_reg0_frame = (unsigned int)g_kernel_brk >> PAGESHIFT;  // in physical memory
 
     unsigned int last_text_page = ((unsigned int)(_kernel_data_start) >> PAGESHIFT) - 1;
     unsigned int last_data_page = (unsigned int)(_kernel_data_end - 1) >> PAGESHIFT;
 
-    TracePrintf(1, "last_used_reg0_frame: %d\n", last_used_reg0_frame);
+    TracePrintf(1, "last_used_reg0_frame: %x\n", last_used_reg0_frame);
 
-    // Permissions:
+    // Permission
     for (int i = 0; i <= last_used_reg0_frame; i++) {
 
         int permission;
@@ -280,7 +283,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_frametable[free_frame_idx] = 1;  // mark frame as used
 
     // Print ptables after populating
-    // print_r0_page_table(reg0_ptable, g_len_pagetable, g_frametable);
+    print_r0_page_table(reg0_ptable, g_len_pagetable, g_frametable);
     // print_r1_page_table(reg1_table, g_len_pagetable);
 
     //  --- Tell hardware where page tables are stored
@@ -308,7 +311,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     void *new_brk;
     int new_page;
 
-    int test_case_num = 7;
+    int test_case_num = 1;
     switch (test_case_num) {
 
         case 1:
@@ -406,6 +409,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
             TracePrintf(1, "new kernel brk is: %x (p#: %x) and should be %x (p#: %x)\n", new_brk, new_page,
                         expected_brk, expected_page);
             TracePrintf(1, "new page allocated: %d\n", 1 == reg0_ptable[new_page].valid);
+            print_r0_page_table(reg0_ptable, MAX_PT_LEN, g_frametable);
             break;
     }
     // ====================  Testing SetKernelBrk() ==================== //
@@ -413,22 +417,30 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // End of KernelStart()
 }
 
-int h_raise_brk(unsigned int bytes_to_raise) {
+int h_raise_brk(void *new_brk) {
     // ERROR checking
     TracePrintf(1, "Calling h_raise_brk\n");
 
-    unsigned int working_bytes_to_raise = bytes_to_raise;
+    // int working_bytes_to_raise = bytes_to_raise;
 
-    // there is room on the page current brk is on
-    unsigned int bytes_left_on_currentbrk_page = PAGESIZE - ((unsigned int)g_kernel_brk & PAGEOFFSET);
-    working_bytes_to_raise -= bytes_left_on_currentbrk_page;
+    // // there is room on the page current brk is on
+    // unsigned int bytes_left_on_currentbrk_page = PAGESIZE - ((unsigned int)g_kernel_brk & PAGEOFFSET);
+    // working_bytes_to_raise -= bytes_left_on_currentbrk_page;
 
-    if (working_bytes_to_raise <= 0) {
-        g_kernel_brk += bytes_to_raise;  // can we add like this?
-        return 0;
-    }
+    // unsigned int pages_requested;
 
-    unsigned int pages_requested = working_bytes_to_raise / PAGESIZE + 1;
+    // if (working_bytes_to_raise < 0) {
+    //     g_kernel_brk += bytes_to_raise;  // can we add like this?
+    //     return 0;
+    // } else if (working_bytes_to_raise = 0) {
+    //     pages_requested = 1;
+    // } else {
+    //     working_bytes_to_raise / PAGESIZE + 1;
+    // }
+
+    unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+    unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+    unsigned int pages_requested = new_page - current_page;
 
     for (int i = 0; i < pages_requested; i++) {
         int free_frame_idx = find_free_frame(g_frametable);
@@ -442,7 +454,7 @@ int h_raise_brk(unsigned int bytes_to_raise) {
         reg0_ptable[next_page].pfn = free_frame_idx;
     }
 
-    g_kernel_brk += bytes_to_raise;
+    g_kernel_brk = new_brk;
 
     return 0;
 }
@@ -490,7 +502,7 @@ int SetKernelBrk(void *new_brk) {
     }
     // raising brk
     else if (bytes_to_raise > 0) {
-        h_raise_brk(bytes_to_raise);
+        h_raise_brk(new_brk);
     }
     // reducing brk
     else {
