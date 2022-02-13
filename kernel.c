@@ -31,9 +31,11 @@ unsigned int g_len_pagetable = MAX_PT_LEN;  // number of pages in R0 or R1 paget
 unsigned int *g_frametable;  // bitvector containing info on used/unused physical
                              // memory frames
 
-pte_t *reg0_ptable;  // pagetable for kernel structures shared accross processes
+pte_t *g_reg0_ptable;  // pagetable for kernel structures shared accross processes
 
 pcb_t *g_running_pcb;  // pcb of process that is currently running
+
+const unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
 
 /* E=== GLOBALS === */
 
@@ -48,12 +50,13 @@ typedef struct ProcessControlBlock {
     void *user_brk;
     void *user_data;
     void *user_text;
-
+    // --- kernelland
     KernelContext kctxt;
+    unsigned int kstack_frame_idxs[g_num_kernel_stack_pages];
     // --- metadata
     pcb_t *parent;
     queue_t *children_procs;
-    pte_t *ptable;
+    pte_t *r1_ptable;
 } pcb_t;
 
 /* E== DATA STRUCTURES === */
@@ -170,14 +173,14 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     /* S=================== ALLOCATE + INITIALIZE PAGETABLES ==================== */
     /* Creating R0, R1 pagetables, and frametable. Put all these in kernel heap */
 
-    reg0_ptable = malloc(sizeof(pte_t) * MAX_PT_LEN);
-    if (reg0_ptable == NULL) {
+    g_reg0_ptable = malloc(sizeof(pte_t) * MAX_PT_LEN);
+    if (g_reg0_ptable == NULL) {
         TracePrintf(1, "Malloc failed\n");
         return;
     }
 
-    pte_t *reg1_table = malloc(sizeof(pte_t) * MAX_PT_LEN);
-    if (reg1_table == NULL) {
+    pte_t *r1_ptable = malloc(sizeof(pte_t) * MAX_PT_LEN);
+    if (r1_ptable == NULL) {
         TracePrintf(1, "Malloc failed\n");
         return;
     }
@@ -193,8 +196,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     pte_t empty_pte = {.valid = 0, .prot = 0, .pfn = 0};
 
     for (int i = 0; i < g_len_pagetable; i++) {
-        reg0_ptable[i] = empty_pte;
-        reg1_table[i] = empty_pte;
+        g_reg0_ptable[i] = empty_pte;
+        r1_ptable[i] = empty_pte;
     }
 
     // Also initialize frametable (to all 0; all free).
@@ -203,8 +206,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     }
 
     // Debugging
-    // print_r0_page_table(reg0_ptable, g_len_pagetable, g_frametable);
-    // print_r1_page_table(reg1_table, g_len_pagetable);
+    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+    // print_r1_page_table(r1_ptable, g_len_pagetable);
 
     /* S=================== POPULATE PAGETABLES ==================== */
 
@@ -237,9 +240,9 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
             permission = PROT_READ | PROT_WRITE;
         }
 
-        reg0_ptable[i].valid = 1;
-        reg0_ptable[i].prot = permission;
-        reg0_ptable[i].pfn = i;
+        g_reg0_ptable[i].valid = 1;
+        g_reg0_ptable[i].prot = permission;
+        g_reg0_ptable[i].pfn = i;
 
         // Importaint: update frametable to mark assigned frame as occupied
         g_frametable[i] = 1;
@@ -248,48 +251,86 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     /* Populate kernel stack part of R0 ptable. */
 
     // Set kernel stack page table entries to be valid.
-    int num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
-
-    for (int i = 0; i < num_kernel_stack_pages; i++) {
+    for (int i = 0; i < g_num_kernel_stack_pages; i++) {
         int idx = g_len_pagetable - 1 - i;
-        reg0_ptable[idx].valid = 1;
-        reg0_ptable[idx].prot = PROT_READ | PROT_WRITE;
-        reg0_ptable[idx].pfn = idx;
+        g_reg0_ptable[idx].valid = 1;
+        g_reg0_ptable[idx].prot = PROT_READ | PROT_WRITE;
+        g_reg0_ptable[idx].pfn = idx;
         g_frametable[idx] = 1;  // mark frame as used
     }
 
-    /* Populate R1 ptable. */
+    // /* Populate R1 ptable. */
 
-    //  Set one valid page in R1 page table for idle's user stack.
-    reg1_table[g_len_pagetable - 1].valid = 1;
-    reg1_table[g_len_pagetable - 1].prot = PROT_READ | PROT_WRITE;
+    // //  Set one valid page in R1 page table for idle's user stack.
+    // r1_ptable[g_len_pagetable - 1].valid = 1;
+    // r1_ptable[g_len_pagetable - 1].prot = PROT_READ | PROT_WRITE;
 
-    int free_frame_idx = find_free_frame(g_frametable);
+    // int free_frame_idx = find_free_frame(g_frametable);
 
-    if (free_frame_idx == -1) {
-        TracePrintf(1, "No free frame found!\n");
-        return;
-    }
+    // if (free_frame_idx == -1) {
+    //     TracePrintf(1, "No free frame found!\n");
+    //     return;
+    // }
 
-    reg1_table[g_len_pagetable - 1].pfn = free_frame_idx;
-    g_frametable[free_frame_idx] = 1;  // mark frame as used
+    // r1_ptable[g_len_pagetable - 1].pfn = free_frame_idx;
+    // g_frametable[free_frame_idx] = 1;  // mark frame as used
 
     // Debugging
     // Print ptables after populating
-    // print_r0_page_table(reg0_ptable, g_len_pagetable, g_frametable);
-    // print_r1_page_table(reg1_table, g_len_pagetable);
+    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+    // print_r1_page_table(r1_ptable, g_len_pagetable);
 
     /* S=================== ENABLE VIRTUAL MEMORY ==================== */
 
     // Tell hardware where page tables are stored
-    WriteRegister(REG_PTBR0, (unsigned int)reg0_ptable);
+    WriteRegister(REG_PTBR0, (unsigned int)g_reg0_ptable);
     WriteRegister(REG_PTLR0, MAX_PT_LEN);
-    WriteRegister(REG_PTBR1, (unsigned int)reg1_table);
+    WriteRegister(REG_PTBR1, (unsigned int)r1_ptable);
     WriteRegister(REG_PTLR1, MAX_PT_LEN);
 
     //  Enable virtual memory
     g_virtual_mem_enabled = 1;
     WriteRegister(REG_VM_ENABLE, 1);
+
+    /* S=================== SETUP PROCESS FOR FIRST PROGRAM ==================== */
+    /**
+     * The first program may be specified by the user as a command line argument,
+     * for example `./yalnix my_program arg1 arg2`. If no program specified, e.g.
+     * `./yalnix`, then find and run ./init in kernel.
+     */
+
+    pcb_t *init_pcb = malloc(sizeof(*init_pcb));
+
+    init_pcb->pid = helper_new_pid(r1_ptable);
+    init_pcb->r1_ptable = r1_ptable;
+    init_pcb->uctxt = uctxt;
+    init_pcb->kstack_frame_idxs[0] = g_len_pagetable - 1;
+    init_pcb->kstack_frame_idxs[1] = g_len_pagetable - 2;
+
+    // Get free frames for init's kernel stack
+    // for (int i = 0; i < g_num_kernel_stack_pages; i++) {
+    //     int idx = find_free_frame(g_frametable);
+
+    //     if (idx != 0) {
+    //         TracePrintf(1, "find_free_frame() failed\n");
+    //         return;
+    //     }
+    //     init_pcb->kstack_frame_idxs[i] = idx;
+    //     g_frametable[idx] = 1;
+    // }
+
+    /* Parse cmd_args to figure out which process to init with */
+    unsigned int num_args = 0;
+
+    char *tmp = cmd_args;
+    while (tmp != NULL) {
+        tmp++;
+        num_args += 1;
+    }
+
+    // If no arguments specified, load default ./init program
+    if (num_args == 0) {
+    }
 
     /* S=================== SETUP IDLE PROCESS ==================== */
 
@@ -301,9 +342,9 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     }
 
     // Populate idlePCB
-    idlePCB->ptable = reg1_table;
+    idlePCB->r1_ptable = r1_ptable;
     idlePCB->uctxt = uctxt;
-    idlePCB->pid = helper_new_pid(reg1_table);  // hardware defined function for generating PID
+    idlePCB->pid = helper_new_pid(r1_ptable);  // hardware defined function for generating PID
 
     // Setup interrupt vector table (IVT). IVT is an array of function pointers. Each function
     // takes in a UserContext *, and returns an int
@@ -370,9 +411,9 @@ int h_raise_brk(void *new_brk) {
 
         // (current_page + i + 1) => assumes current_page has already been allocated
         unsigned int next_page = current_page + i + 1;
-        reg0_ptable[next_page].valid = 1;
-        reg0_ptable[next_page].prot = PROT_READ | PROT_WRITE;
-        reg0_ptable[next_page].pfn = free_frame_idx;
+        g_reg0_ptable[next_page].valid = 1;
+        g_reg0_ptable[next_page].prot = PROT_READ | PROT_WRITE;
+        g_reg0_ptable[next_page].pfn = free_frame_idx;
     }
 
     g_kernel_brk = new_brk;
@@ -397,12 +438,12 @@ int h_lower_brk(void *new_brk) {
     // "Frees" pages from R0 pagetable (marks those frames as unused, etc.)
     for (int i = 0; i < num_pages_to_lower; i++) {
         unsigned int prev_page = current_page - i;
-        unsigned int idx_to_free = reg0_ptable[prev_page].pfn;
+        unsigned int idx_to_free = g_reg0_ptable[prev_page].pfn;
         g_frametable[idx_to_free] = 0;  // mark frame as un-used
 
-        reg0_ptable[prev_page].valid = 0;
-        reg0_ptable[prev_page].prot = PROT_NONE;
-        reg0_ptable[prev_page].pfn = 0;  // should never be touched
+        g_reg0_ptable[prev_page].valid = 0;
+        g_reg0_ptable[prev_page].prot = PROT_NONE;
+        g_reg0_ptable[prev_page].pfn = 0;  // should never be touched
     }
 
     g_kernel_brk = new_brk;
@@ -458,4 +499,45 @@ int SetKernelBrk(void *new_brk) {
     }
 
     return rc;
+}
+
+int copy_page_contents(unsigned int source_page, unsigned int target_page) {
+
+    memcpy((void *)(target_page << PAGESHIFT), (void *)(source_page << PAGESHIFT), PAGEOFFSET);
+
+    return SUCCESS;
+}
+
+KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
+    // Copy the kernel context of old process into the new process
+    pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
+    new_pcb->kctxt = *kc_in;
+
+    unsigned int page_below_kstack = g_len_pagetable - g_num_kernel_stack_pages;
+
+    // Copy contents of current kernel stack (g_r0_ptable) into frames allocated for the new process's
+    // kernel stack
+    for (int i = 0; i < g_num_kernel_stack_pages; i++) {
+
+        // Map page below kernel stack to allocated free frame for new kernel stack
+        g_reg0_ptable[page_below_kstack].valid = 1;
+        g_reg0_ptable[page_below_kstack].prot = PROT_READ | PROT_WRITE;
+        g_reg0_ptable[page_below_kstack].pfn = new_pcb->kstack_frame_idxs[i];
+
+        // Copy page contents
+        unsigned int source_page = g_len_pagetable - 1 - i;
+        unsigned int target_page = page_below_kstack;
+        int rc = copy_page_contents(source_page, target_page);
+
+        if (rc != 0) {
+            TracePrintf(1, "Error occurred in copy_page_contents in KCCopy()\n");
+            return;
+        }
+    }
+
+    // Make redzone page invalid again
+    g_reg0_ptable[page_below_kstack].valid = 0;
+    g_reg0_ptable[page_below_kstack].prot = PROT_NONE;
+
+    return kc_in;
 }

@@ -1,8 +1,7 @@
-
-
-
-
 ## Bugs
+### Checkpoint 3
+
+
 ### Checkpoint 2
 - Segfault as soon as virtual memory turned on
     - We were getting a segfault right as we enabled virtual memory with WriteRegister(ENABLE_VM, 1)
@@ -22,6 +21,10 @@
 
 
 ## Challenges
+### Checkpoint 3
+
+
+### Checkpoint 2
 - Figuring out how Thayer Babylons dump core
     - Solution
         - Need to set `ulimit -c unlimited`
@@ -35,6 +38,8 @@
     simulation are not provided to us, so `gdb` gets confused
 
 
+
+
 ## Todos
 ### Todo other
 - Bring SetKernelBrk tests into main code
@@ -46,13 +51,13 @@
     - If none specified, load ./init into R1 ptable
     - If specified, load the specified program ./my_program_executable and feed it the entire cmd_args array
 - Prepare kernel for loading init program into colonel-opps
-    - Create new PCB (init_pcb)
-        - New PID (helper_new_pid())
-        - New R1 ptable (all invalid)
-        - Allocate frames for init's kernel stack frames
+    - Create new PCB (init_pcb) X
+        - New PID (helper_new_pid()) X
+        - New R1 ptable (all invalid) X
+        - Allocate frames for init's kernel stack frames X
             - But no new pages exist in R0 ptable for init's kernel stack
-        - User Context (from uctxt arg to KernelStart)
-    - Write KCCopy()
+        - User Context (from uctxt arg to KernelStart) X
+    - Write KCCopy() X
         - Copies the current KernelContext into init_pcb
         - Copies contents of current kernel stack into new kernel stack frames in init_pcb 
             - Since the allocated frames for init's kernel stack haven't been mapped onto, to do this, temporarily map the destination frame into some page (perhaps the page right below the kernel stack (red zone page))
