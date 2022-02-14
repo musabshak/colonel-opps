@@ -1,7 +1,7 @@
 ## Bugs
 ### Checkpoint 3
 - u_long type not found (used in load_info.h, included in load_program.c)
-
+    - Include hardware.h in load_program.c
 ### Checkpoint 2
 - Segfault as soon as virtual memory turned on
     - We were getting a segfault right as we enabled virtual memory with WriteRegister(ENABLE_VM, 1)

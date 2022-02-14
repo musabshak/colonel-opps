@@ -4,8 +4,8 @@
  * ==>> marked with "==>>".  You must replace these lines with your own code.
  * ==>> You might also want to save the original annotations as comments.
  */
-
 #include <fcntl.h>
+#include <hardware.h>
 #include <load_info.h>
 #include <unistd.h>
 #include <ykernel.h>
@@ -13,6 +13,7 @@
 /*
  * ==>> #include anything you need for your kernel here
  */
+
 #include "kernel_data_structs.h"
 extern int *g_frametable;
 
@@ -311,7 +312,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     /*
      * Zero out the uninitialized data area
      */
-    bzero(li.id_end, li.ud_end - li.id_end);
+    bzero((void *)li.id_end, li.ud_end - li.id_end);
 
     /*
      * Set the entry point in the process's UserContext

@@ -447,10 +447,12 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     unsigned int num_args = 0;
 
     char **tmp = cmd_args;
-    while (tmp != NULL) {
-        tmp++;
+    while (*tmp != NULL) {
         num_args += 1;
+        tmp++;
     }
+
+    TracePrintf(1, "num args: %d\n", num_args);
 
     // Can't give too many arguments
     if (num_args > 10) {

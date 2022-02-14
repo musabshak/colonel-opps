@@ -10,11 +10,11 @@
 K_SRC_DIR = .
 
 # What are the kernel c and include files?
-K_SRCS = kernel.c trap_handlers.c kernel_data_structs.c queue.c load_program.c
+K_SRCS =  kernel.c trap_handlers.c kernel_data_structs.c queue.c load_program.c
 K_INCS = 
 
 # Where's your user source?
-U_SRC_DIR = ./test
+U_SRC_DIR = .
 
 # What are the user c and include files?
 U_SRCS = init.c
@@ -91,7 +91,7 @@ CPPFLAGS= -D_FILE_OFFSET_BITS=64 -m32 -fno-builtin -I. -I$(INCDIR) -g -DLINUX
 all: $(ALL)	
 
 clean:
-	rm -f *.o *~ TTYLOG* TRACE $(YALNIX_OUTPUT) $(USER_APPS) $(KERNEL_OBJS) $(USER_OBJS) core.* ~/core
+	rm -f *.o *~ TTYLOG* TRACE $(YALNIX_OUTPUT) $(USER_APPS) $(KERNEL_OBJS) $(USER_OBJS) core.* ~/core DISK
 
 count:
 	wc $(KERNEL_SRCS) $(USER_SRCS)
