@@ -35,7 +35,7 @@ pte_t *g_reg0_ptable;  // pagetable for kernel structures shared accross process
 
 pcb_t *g_running_pcb;  // pcb of process that is currently running
 
-const unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
+unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
 
 /* E=== GLOBALS === */
 
@@ -52,7 +52,7 @@ typedef struct ProcessControlBlock {
     void *user_text;
     // --- kernelland
     KernelContext kctxt;
-    unsigned int kstack_frame_idxs[g_num_kernel_stack_pages];
+    unsigned int kstack_frame_idxs[KERNEL_STACK_MAXSIZE / PAGESIZE];
     // --- metadata
     pcb_t *parent;
     queue_t *children_procs;
@@ -322,7 +322,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     /* Parse cmd_args to figure out which process to init with */
     unsigned int num_args = 0;
 
-    char *tmp = cmd_args;
+    char **tmp = cmd_args;
     while (tmp != NULL) {
         tmp++;
         num_args += 1;
@@ -503,7 +503,7 @@ int SetKernelBrk(void *new_brk) {
 
 int copy_page_contents(unsigned int source_page, unsigned int target_page) {
 
-    memcpy((void *)(target_page << PAGESHIFT), (void *)(source_page << PAGESHIFT), PAGEOFFSET);
+    memcpy((void *)(target_page << PAGESHIFT), (void *)(source_page << PAGESHIFT), PAGESIZE);
 
     return SUCCESS;
 }
@@ -519,7 +519,8 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     // kernel stack
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
 
-        // Map page below kernel stack to allocated free frame for new kernel stack
+        // Map page below kernel stack to allocated free frame for new kernel stack. This is a hack for
+        // copying pages into unmapped frames (unmapped frames for new kernel stack).
         g_reg0_ptable[page_below_kstack].valid = 1;
         g_reg0_ptable[page_below_kstack].prot = PROT_READ | PROT_WRITE;
         g_reg0_ptable[page_below_kstack].pfn = new_pcb->kstack_frame_idxs[i];
@@ -531,7 +532,7 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
 
         if (rc != 0) {
             TracePrintf(1, "Error occurred in copy_page_contents in KCCopy()\n");
-            return;
+            return NULL;
         }
     }
 
@@ -541,3 +542,24 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
 
     return kc_in;
 }
+
+KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p) {
+    pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
+    pcb_t *curr_pcb = ((pcb_t *)curr_pcb);
+
+    // Save current kernel context in current process's pcb (saving current state of
+    // current process in it's pcb so we can return to it later).
+    curr_pcb->kctxt = *kc_in;
+
+    // Update mapping of kernel stack in R0 ptable to reflect new kernel's stack frames
+    for (int i = 0; i < g_num_kernel_stack_pages; i++) {
+        g_reg0_ptable[g_len_pagetable - 1 - i].pfn = new_pcb->kstack_frame_idxs[i];
+    }
+
+    // At the end of switching, return kernel context (previously) saved in new_pcb'
+    return &(new_pcb->kctxt);
+}
+
+// How we'll call the provided context switching function
+// KernelContextSwitch(KCCopy, new_pcb, NULL);
+// KernelContextSwitch(KCSwitch, curr_pcb, new_pcb);

@@ -14,10 +14,10 @@ K_SRCS = kernel.c trap_handlers.c
 K_INCS = 
 
 # Where's your user source?
-U_SRC_DIR = ./test
+U_SRC_DIR = .
 
 # What are the user c and include files?
-U_SRCS = 
+U_SRCS = init.c
 U_INCS = 
 
 
@@ -73,7 +73,7 @@ LINK_KERNEL = $(LINK.c)
 
 USER_LIBS = $(LIBDIR)/libuser.a
 ASFLAGS = -D__ASM__
-CPPFLAGS= -m32 -fno-builtin -I. -I$(INCDIR) -g -DLINUX 
+CPPFLAGS= -D_FILE_OFFSET_BITS=64 -m32 -fno-builtin -I. -I$(INCDIR) -g -DLINUX
 
 
 ##########################
