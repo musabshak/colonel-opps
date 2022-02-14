@@ -1,4 +1,8 @@
+#include "kernel_data_structs.h"
 #include "ykernel.h"
+
+extern pcb_t *g_running_pcb;
+extern queue_t *g_read_procs_queue;
 
 /*
 Trap handlers are functions pointed to by pointers in the interrupt vector table
@@ -81,7 +85,50 @@ int TrapKernelHandler(UserContext *user_context) {
  *
  */
 
-int TrapClock(UserContext *user_context) { TracePrintf(1, "Clock trap happening!\n"); }
+int TrapClock(UserContext *user_context) {
+
+    // - Edit TrapClock(UserContext *user_context)
+    //     - At the start of TrapClock, copy current user_context into PCB of old running process
+    //     (running_process_pcb) (old_process_pcb)
+    //     - Get new process from g_ready_processes: new_process_pcb
+    //     - At the end of TrapClock, make sure hardware is using r1_ptable of the new_process_pcb
+    //     (new_process_pcb->r1_ptable)
+    //     - Copy the user_context of the new process (new_process_pcb->user_context) into the uctxt
+    //     address passed to TrapClock
+    //     - Invoke KCSwitch()
+    //         - Changes kernel stack contents from old_process to new_process
+    //         - Copy current KernelContext into old_process_pcb
+    //         - Change R0 kernel stack mappings to those for the new_process_pcb
+    //         - Return a pointer to the KernelContext in the new_process_pcb
+
+    TracePrintf(1, "Clock trap happening!\n");
+
+    // Copy current UserContext into PCB of running process
+    g_running_pcb->uctxt = *user_context;
+
+    // Get a new process from ready queue
+    pcb_t *new_pcb = (pcb_t *)qget(g_read_procs_queue);
+
+    // Put currently running process into ready queue
+    int rc = qput(g_ready_procs_queue, (void *)g_running_pcb);
+    if (rc != 0) {
+        TracePrintf(2, "Failed to return running process to ready queue.\n");
+        return ERROR;
+    }
+
+    // Invoke KCSwitch()
+    int rc = KernelContextSwitch(KCSwitch, g_running_pcb, new_pcb);
+
+    // Set global current process to new process
+    g_running_pcb = new_pcb;
+
+    // Tell MMU to look at new process' R1 page table
+    WriteRegister(REG_PTBR1, (unsigned int)(new_pcb->r1_ptable));
+
+    // Flush the TLB
+    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_ALL);
+    user_context = &(g_running_pcb->uctxt);
+}
 
 /*
  *  ===================

@@ -1,45 +1,28 @@
-#ifndef __KERNEL_DATA_STRUCTS
-#define __KERNEL_DATA_STRUCTS
 
-//  ===== GLOBAL DATA =====
-// queue_t *READY_PROCESSES;
-// queue_t *BLOCKED_PROCESSES;
-// queue_t *ZOMBIE_PROCESSES;
+#ifndef __KERNEL_DATA_STRUCTS_H
+#define __KERNEL_DATA_STRUCTS_H
 
-//  ===== PROCESS CONTROL BLOCK =====
-typedef struct ProcessControlBlock pcb_t;
-typedef struct KernelShared {
-    void *brk;
-} kershared_t;
+// #pragma once
 
-kershared_t *kershared_init(void *data_start,
-                            void *data_end, void *orig_brk);
+#include "queue.h"
+#include "ykernel.h"
 
-pcb_t *pcb_copy(pcb_t *pcb_tocopy);
+typedef struct ProcessControlBlock {
+    unsigned int pid;
+    // --- userland
+    UserContext uctxt;
+    void *user_brk;
+    void *user_data;
+    void *user_text;
+    // --- kernelland
+    KernelContext kctxt;
+    unsigned int kstack_frame_idxs[KERNEL_STACK_MAXSIZE / PAGESIZE];
+    // --- metadata
+    pcb_t *parent;
+    queue_t *children_procs;
+    pte_t *r1_ptable;
+} pcb_t;
 
-//  ===== PAGE TABLE =====
-const int NUM_PT_ENTRIES;
+KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p);
 
-typedef struct PageTable pagetable_t;
-
-pte_t *pagetable_reg0_init(void *_kernel_data_end);
-pte_t *pagetable_reg1_init(void *_kernel_data_end);
-
-pagetable_t *pagetable_new();
-pagetable_t *pagetable_deepcopy();
-pagetable_t *pagetable_newcopy(pagetable_t *callers_pt);
-pagetable_t *pagetable_deepcopy(pagetable_t *pagetable_tocopy);
-
-//  ===== FRAME, FRAME TABLE =====
-typedef struct Frame frame_t;
-typedef struct FrameTable frametable_t;
-
-frame_t frame_new(int ref_count, int id, int base, int limit);
-frametable_t *frametable_init(unsigned int hardware_mem_size);
-int find_free_frame();
-
-//  ===== KERNEL STUFF =====
-typedef struct KernelStack ker_stack_t;
-typedef struct KernelHeap ker_heap_t;
-
-#endif  // __KERNEL_DATA_STRUCTS
+#endif  // __KERNEL_DATA_STRUCTS_H

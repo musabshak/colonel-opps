@@ -44,6 +44,7 @@
 ### Todo other
 - Bring SetKernelBrk tests into main code
     - Write some thoughtful, SetKernelBrk-specific macros?
+- CLARIFY C header/extern/linking concepts
 
 ### Todo cp3
 - Write userland init program source (init.c)

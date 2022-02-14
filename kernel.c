@@ -8,11 +8,10 @@
  */
 
 // #include "kernel_data_structs.h"
-#include "queue.h"
+#include "kernel_data_structs.h"
+#include "load_program.h"
 #include "trap_handlers.h"
 #include "ykernel.h"
-
-typedef struct ProcessControlBlock pcb_t;
 
 /* ================ */
 /* S=== GLOBALS === */
@@ -37,29 +36,9 @@ pcb_t *g_running_pcb;  // pcb of process that is currently running
 
 unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
 
+queue_t *g_read_procs_queue;
+
 /* E=== GLOBALS === */
-
-/* ======================= */
-/* S== DATA STRUCTURES === */
-/* ======================= */
-
-typedef struct ProcessControlBlock {
-    unsigned int pid;
-    // --- userland
-    UserContext *uctxt;
-    void *user_brk;
-    void *user_data;
-    void *user_text;
-    // --- kernelland
-    KernelContext kctxt;
-    unsigned int kstack_frame_idxs[KERNEL_STACK_MAXSIZE / PAGESIZE];
-    // --- metadata
-    pcb_t *parent;
-    queue_t *children_procs;
-    pte_t *r1_ptable;
-} pcb_t;
-
-/* E== DATA STRUCTURES === */
 
 /* ========================= */
 /* S== UTILITY FUNCTIONS === */
@@ -179,8 +158,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         return;
     }
 
-    pte_t *r1_ptable = malloc(sizeof(pte_t) * MAX_PT_LEN);
-    if (r1_ptable == NULL) {
+    pte_t *init_r1_ptable = malloc(sizeof(pte_t) * MAX_PT_LEN);
+    if (init_r1_ptable == NULL) {
         TracePrintf(1, "Malloc failed\n");
         return;
     }
@@ -197,7 +176,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     for (int i = 0; i < g_len_pagetable; i++) {
         g_reg0_ptable[i] = empty_pte;
-        r1_ptable[i] = empty_pte;
+        init_r1_ptable[i] = empty_pte;
     }
 
     // Also initialize frametable (to all 0; all free).
@@ -207,7 +186,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Debugging
     // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
-    // print_r1_page_table(r1_ptable, g_len_pagetable);
+    // print_r1_page_table(init_r1_ptable, g_len_pagetable);
 
     /* S=================== POPULATE PAGETABLES ==================== */
 
@@ -262,8 +241,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // /* Populate R1 ptable. */
 
     // //  Set one valid page in R1 page table for idle's user stack.
-    // r1_ptable[g_len_pagetable - 1].valid = 1;
-    // r1_ptable[g_len_pagetable - 1].prot = PROT_READ | PROT_WRITE;
+    // init_r1_ptable[g_len_pagetable - 1].valid = 1;
+    // init_r1_ptable[g_len_pagetable - 1].prot = PROT_READ | PROT_WRITE;
 
     // int free_frame_idx = find_free_frame(g_frametable);
 
@@ -272,20 +251,20 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     //     return;
     // }
 
-    // r1_ptable[g_len_pagetable - 1].pfn = free_frame_idx;
+    // init_r1_ptable[g_len_pagetable - 1].pfn = free_frame_idx;
     // g_frametable[free_frame_idx] = 1;  // mark frame as used
 
     // Debugging
     // Print ptables after populating
     // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
-    // print_r1_page_table(r1_ptable, g_len_pagetable);
+    // print_r1_page_table(init_r1_ptable, g_len_pagetable);
 
     /* S=================== ENABLE VIRTUAL MEMORY ==================== */
 
     // Tell hardware where page tables are stored
     WriteRegister(REG_PTBR0, (unsigned int)g_reg0_ptable);
     WriteRegister(REG_PTLR0, MAX_PT_LEN);
-    WriteRegister(REG_PTBR1, (unsigned int)r1_ptable);
+    WriteRegister(REG_PTBR1, (unsigned int)init_r1_ptable);
     WriteRegister(REG_PTLR1, MAX_PT_LEN);
 
     //  Enable virtual memory
@@ -301,9 +280,9 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     pcb_t *init_pcb = malloc(sizeof(*init_pcb));
 
-    init_pcb->pid = helper_new_pid(r1_ptable);
-    init_pcb->r1_ptable = r1_ptable;
-    init_pcb->uctxt = uctxt;
+    init_pcb->pid = helper_new_pid(init_r1_ptable);
+    init_pcb->r1_ptable = init_r1_ptable;
+    init_pcb->uctxt = *uctxt;
     init_pcb->kstack_frame_idxs[0] = g_len_pagetable - 1;
     init_pcb->kstack_frame_idxs[1] = g_len_pagetable - 2;
 
@@ -328,23 +307,22 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         num_args += 1;
     }
 
-    // If no arguments specified, load default ./init program
-    if (num_args == 0) {
-    }
-
-    /* S=================== SETUP IDLE PROCESS ==================== */
-
-    // Allocate an idlePCB for idle process. Returns virtual address in kernel heap
-    pcb_t *idlePCB = malloc(sizeof(*idlePCB));
-    if (idlePCB == NULL) {
-        TracePrintf(1, "malloc for idlePCB failed.\n");
+    // Can't give too many arguments
+    if (num_args > 10) {
+        TracePrintf(1, "Can't give more than 9 arguments to your program!\n");
         return;
     }
 
-    // Populate idlePCB
-    idlePCB->r1_ptable = r1_ptable;
-    idlePCB->uctxt = uctxt;
-    idlePCB->pid = helper_new_pid(r1_ptable);  // hardware defined function for generating PID
+    // TODO: check argument name length
+
+    // If no arguments specified, load default ./init program
+    char *first_process_name = num_args == 0 ? 'init' : cmd_args[0];
+
+    LoadProgram(first_process_name, cmd_args, init_pcb);
+
+    g_running_pcb = init_pcb;
+
+    /* S=================== SETUP IVT ==================== */
 
     // Setup interrupt vector table (IVT). IVT is an array of function pointers. Each function
     // takes in a UserContext *, and returns an int
@@ -372,6 +350,23 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Tell hardware where IVT is
     WriteRegister(REG_VECTOR_BASE, (unsigned int)interrupt_vector_table_p);
+    /* E=================== SETUP IVT ==================== */
+
+    /* S=================== SETUP IDLE PROCESS ==================== */
+
+    // Allocate an idlePCB for idle process. Returns virtual address in kernel heap
+    pcb_t *idlePCB = malloc(sizeof(*idlePCB));
+    if (idlePCB == NULL) {
+        TracePrintf(1, "malloc for idlePCB failed.\n");
+        return;
+    }
+
+    // Populate idlePCB
+    idlePCB->r1_ptable = init_r1_ptable;
+    idlePCB->uctxt = *uctxt;
+    idlePCB->pid = helper_new_pid(init_r1_ptable);  // hardware defined function for generating PID
+
+    // KernelContextSwitch(KCCopy, new_pcb, NULL);
 
     /* Modify UserContext to point pc to doIdle, and sp to point to top of user stack */
 
@@ -382,7 +377,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     uctxt->sp = (void *)(VMEM_LIMIT - 4);
 
     // return from KernelStart running idle process
-    g_running_pcb = idlePCB;
+    // g_running_pcb = idlePCB;
 }
 
 /**
@@ -542,24 +537,3 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
 
     return kc_in;
 }
-
-KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p) {
-    pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
-    pcb_t *curr_pcb = ((pcb_t *)curr_pcb);
-
-    // Save current kernel context in current process's pcb (saving current state of
-    // current process in it's pcb so we can return to it later).
-    curr_pcb->kctxt = *kc_in;
-
-    // Update mapping of kernel stack in R0 ptable to reflect new kernel's stack frames
-    for (int i = 0; i < g_num_kernel_stack_pages; i++) {
-        g_reg0_ptable[g_len_pagetable - 1 - i].pfn = new_pcb->kstack_frame_idxs[i];
-    }
-
-    // At the end of switching, return kernel context (previously) saved in new_pcb'
-    return &(new_pcb->kctxt);
-}
-
-// How we'll call the provided context switching function
-// KernelContextSwitch(KCCopy, new_pcb, NULL);
-// KernelContextSwitch(KCSwitch, curr_pcb, new_pcb);

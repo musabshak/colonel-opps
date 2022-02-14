@@ -13,6 +13,7 @@
 /*
  * ==>> #include anything you need for your kernel here
  */
+#include "kernel_data_structs.h"
 
 /*
  *  Load a program into an existing address space.  The program comes from
@@ -26,7 +27,7 @@
  * ==>> Declare the argument "proc" to be a pointer to the PCB of
  * ==>> the current process.
  */
-int LoadProgram(char *name, char *args[], proc)
+int LoadProgram(char *name, char *args[], pcb_t *proc)
 
 {
     int fd;
