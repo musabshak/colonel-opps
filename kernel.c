@@ -10,6 +10,7 @@
 // #include "kernel_data_structs.h"
 #include "kernel_data_structs.h"
 #include "load_program.h"
+#include "queue.h"
 #include "trap_handlers.h"
 #include "ykernel.h"
 

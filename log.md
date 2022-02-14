@@ -1,6 +1,6 @@
 ## Bugs
 ### Checkpoint 3
-
+- u_long type not found (used in load_info.h, included in load_program.c)
 
 ### Checkpoint 2
 - Segfault as soon as virtual memory turned on
