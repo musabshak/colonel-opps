@@ -304,7 +304,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     for (int i = 0; i < li.t_npg; i++) {
         r1_ptable[text_pg1 + i - MAX_PT_LEN].prot = PROT_READ | PROT_EXEC;
 
-        unsigned int page_address = (text_pg1 + i) >> PAGEOFFSET;
+        unsigned int page_address = (text_pg1 + i) << PAGESHIFT;
         WriteRegister(REG_TLB_FLUSH, page_address);
     }
 

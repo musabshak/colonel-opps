@@ -19,11 +19,10 @@
 //     pte_t *r1_ptable;
 // } pcb_t;
 
-pcb_t *something;
-
-extern g_len_pagetable;
-extern g_num_kernel_stack_pages;
-extern g_reg0_ptable;
+extern unsigned int g_len_pagetable;
+extern unsigned int g_len_frametable;
+extern unsigned int g_num_kernel_stack_pages;
+extern pte_t *g_reg0_ptable;
 
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p) {
     pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
@@ -40,4 +39,19 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
 
     // At the end of switching, return kernel context (previously) saved in new_pcb'
     return &(new_pcb->kctxt);
+}
+
+/**
+ * Returns index of first free frame in given frame table. Returns -1 if no free frames
+ * available.
+ *
+ * Note that this function does *not* mark the frame as "used" in the frametable.
+ */
+int find_free_frame(unsigned int *frametable) {
+    for (int idx = 0; idx < g_len_frametable; idx++) {
+        if (frametable[idx] == 0) {
+            return idx;
+        }
+    }
+    return -1;
 }

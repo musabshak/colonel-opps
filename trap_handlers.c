@@ -1,8 +1,10 @@
 #include "kernel_data_structs.h"
+#include "queue.h"
 #include "ykernel.h"
 
 extern pcb_t *g_running_pcb;
-extern queue_t *g_read_procs_queue;
+extern pcb_t *g_idle_pcb;
+extern queue_t *g_ready_procs_queue;
 
 /*
 Trap handlers are functions pointed to by pointers in the interrupt vector table
@@ -107,27 +109,31 @@ int TrapClock(UserContext *user_context) {
     g_running_pcb->uctxt = *user_context;
 
     // Get a new process from ready queue
-    pcb_t *new_pcb = (pcb_t *)qget(g_read_procs_queue);
+    pcb_t *new_pcb = (pcb_t *)qget(g_ready_procs_queue);
+    if (new_pcb == NULL) {
+        new_pcb = g_idle_pcb;
+    }
 
+    int rc;
     // Put currently running process into ready queue
-    int rc = qput(g_ready_procs_queue, (void *)g_running_pcb);
+    rc = qput(g_ready_procs_queue, (void *)g_running_pcb);
     if (rc != 0) {
         TracePrintf(2, "Failed to return running process to ready queue.\n");
         return ERROR;
     }
 
     // Invoke KCSwitch()
-    int rc = KernelContextSwitch(KCSwitch, g_running_pcb, new_pcb);
-
-    // Set global current process to new process
-    g_running_pcb = new_pcb;
+    rc = KernelContextSwitch(KCSwitch, g_running_pcb, new_pcb);
 
     // Tell MMU to look at new process' R1 page table
     WriteRegister(REG_PTBR1, (unsigned int)(new_pcb->r1_ptable));
 
     // Flush the TLB
     WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_ALL);
-    user_context = &(g_running_pcb->uctxt);
+    user_context = &(new_pcb->uctxt);
+
+    // Set global current process to new process
+    g_running_pcb = new_pcb;
 }
 
 /*

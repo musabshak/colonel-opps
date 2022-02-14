@@ -33,10 +33,11 @@ unsigned int *g_frametable;  // bitvector containing info on used/unused physica
 pte_t *g_reg0_ptable;  // pagetable for kernel structures shared accross processes
 
 pcb_t *g_running_pcb;  // pcb of process that is currently running
+pcb_t *g_idle_pcb;
 
 unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
 
-queue_t *g_read_procs_queue;
+queue_t *g_ready_procs_queue;
 
 /* E=== GLOBALS === */
 
@@ -70,27 +71,170 @@ void print_r1_page_table(pte_t *ptable, int size) {
 
 /* E== UTILITY FUNCTIONS === */
 
-/**
- * Returns index of first free frame in given frame table. Returns -1 if no free frames
- * available.
- *
- * Note that this function does *not* mark the frame as "used" in the frametable.
- */
-int find_free_frame(unsigned int *frametable) {
-    for (int idx = 0; idx < g_len_frametable; idx++) {
-        if (frametable[idx] == 0) {
-            return idx;
-        }
-    }
-    return -1;
-}
-
 // Imitate a userland program for checkpoint 2.
 void doIdle(void) {
     while (1) {
         TracePrintf(1, "DoIdle\n");
         Pause();
     }
+}
+
+/**
+ * Helper function called by SetKernelBrk(void *addr) in the case that addr > g_kernel_brk.
+ *
+ * Modifies (if need be)
+ *      - The global R0 pagetable (allocates new pages)
+ *      - g_kernel_brk
+ */
+int h_raise_brk(void *new_brk) {
+    // TracePrintf(1, "Calling h_raise_brk\n");
+
+    unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+    unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+    unsigned int num_pages_to_raise = new_page - current_page;
+
+    // Allocate new pages in R0 ptable (find free frames for each page etc.)
+    for (int i = 0; i < num_pages_to_raise; i++) {
+        int free_frame_idx = find_free_frame(g_frametable);
+        g_frametable[free_frame_idx] = 1;  // mark frame as used
+
+        // no free frames were found
+        if (free_frame_idx < 0) {
+            return ERROR;
+        }
+
+        // (current_page + i + 1) => assumes current_page has already been allocated
+        unsigned int next_page = current_page + i + 1;
+        g_reg0_ptable[next_page].valid = 1;
+        g_reg0_ptable[next_page].prot = PROT_READ | PROT_WRITE;
+        g_reg0_ptable[next_page].pfn = free_frame_idx;
+    }
+
+    g_kernel_brk = new_brk;
+
+    return 0;
+}
+
+/**
+ * Helper function called by SetKernelBrk(void *addr) in the case that addr < g_kernel_brk.
+ *
+ * Modifies (if need be)
+ *      - The global R0 pagetable (allocates new pages)
+ *      - g_kernel_brk
+ */
+int h_lower_brk(void *new_brk) {
+    // TracePrintf(1, "Calling h_lower_brk\n");
+
+    unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+    unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+    unsigned int num_pages_to_lower = current_page - new_page;
+
+    // "Frees" pages from R0 pagetable (marks those frames as unused, etc.)
+    for (int i = 0; i < num_pages_to_lower; i++) {
+        unsigned int prev_page = current_page - i;
+        unsigned int idx_to_free = g_reg0_ptable[prev_page].pfn;
+        g_frametable[idx_to_free] = 0;  // mark frame as un-used
+
+        g_reg0_ptable[prev_page].valid = 0;
+        g_reg0_ptable[prev_page].prot = PROT_NONE;
+        g_reg0_ptable[prev_page].pfn = 0;  // should never be touched
+    }
+
+    g_kernel_brk = new_brk;
+
+    return 0;
+}
+
+/**
+ *  Changes g_kernel_brk to new_brk. Handles case when virtual memory is not
+ *  enabled and also the case when it is enabled. Also does associated tasks,
+ *  such as allocating frames, updating R0 pagetable, etc.
+ *
+ *  Returns 0 if successful, ERROR if not.
+ */
+int SetKernelBrk(void *new_brk) {
+
+    TracePrintf(1, "Calling SetKernelBrk w/ arg: %x\n", new_brk);
+
+    unsigned int new_brk_int = (unsigned int)new_brk;
+    unsigned int last_addr_above_data = (unsigned int)(_kernel_data_end);
+
+    // Fail if new_brk lies anywhere but the region above kernel data and below kernel stack.
+    // Leave 1 page between kernel heap and stack (red zone!)
+    if (!(new_brk_int < (KERNEL_STACK_BASE - PAGESIZE) && new_brk_int >= last_addr_above_data)) {
+        TracePrintf(1,
+                    "oh no .. trying to extend kernel brk into kernel stack (or kernel "
+                    "data/text)\n");
+        return ERROR;
+    }
+
+    // If virtual memory is not enabled, safe to just change brk number,
+    // no need to update tables or anything
+    if (g_virtual_mem_enabled == 0) {
+        g_kernel_brk = new_brk;
+        return 0;
+    }
+
+    // Determine whether raising brk or lowering brk
+    int bytes_to_raise = new_brk - g_kernel_brk;
+
+    int rc = ERROR;
+
+    if (bytes_to_raise == 0) {
+        rc = 0;
+    }
+    // raising brk
+    else if (bytes_to_raise > 0) {
+        rc = h_raise_brk(new_brk);
+    }
+    // reducing brk
+    else {
+        rc = h_lower_brk(new_brk);
+    }
+
+    return rc;
+}
+
+int copy_page_contents(unsigned int source_page, unsigned int target_page) {
+
+    memcpy((void *)(target_page << PAGESHIFT), (void *)(source_page << PAGESHIFT), PAGESIZE);
+
+    return SUCCESS;
+}
+
+KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
+    // Copy the kernel context of old process into the new process
+    pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
+    new_pcb->kctxt = *kc_in;
+
+    unsigned int page_below_kstack = g_len_pagetable - g_num_kernel_stack_pages;
+
+    // Copy contents of current kernel stack (g_r0_ptable) into frames allocated for the new process's
+    // kernel stack
+    for (int i = 0; i < g_num_kernel_stack_pages; i++) {
+
+        // Map page below kernel stack to allocated free frame for new kernel stack. This is a hack for
+        // copying pages into unmapped frames (unmapped frames for new kernel stack).
+        g_reg0_ptable[page_below_kstack].valid = 1;
+        g_reg0_ptable[page_below_kstack].prot = PROT_READ | PROT_WRITE;
+        g_reg0_ptable[page_below_kstack].pfn = new_pcb->kstack_frame_idxs[i];
+
+        // Copy page contents
+        unsigned int source_page = g_len_pagetable - 1 - i;
+        unsigned int target_page = page_below_kstack;
+        int rc = copy_page_contents(source_page, target_page);
+
+        if (rc != 0) {
+            TracePrintf(1, "Error occurred in copy_page_contents in KCCopy()\n");
+            return NULL;
+        }
+    }
+
+    // Make redzone page invalid again
+    g_reg0_ptable[page_below_kstack].valid = 0;
+    g_reg0_ptable[page_below_kstack].prot = PROT_NONE;
+
+    return kc_in;
 }
 
 /**
@@ -316,11 +460,9 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // TODO: check argument name length
 
     // If no arguments specified, load default ./init program
-    char *first_process_name = num_args == 0 ? 'init' : cmd_args[0];
+    char *first_process_name = num_args == 0 ? "init" : cmd_args[0];
 
     LoadProgram(first_process_name, cmd_args, init_pcb);
-
-    g_running_pcb = init_pcb;
 
     /* S=================== SETUP IVT ==================== */
 
@@ -350,190 +492,44 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Tell hardware where IVT is
     WriteRegister(REG_VECTOR_BASE, (unsigned int)interrupt_vector_table_p);
+
     /* E=================== SETUP IVT ==================== */
 
     /* S=================== SETUP IDLE PROCESS ==================== */
 
     // Allocate an idlePCB for idle process. Returns virtual address in kernel heap
-    pcb_t *idlePCB = malloc(sizeof(*idlePCB));
-    if (idlePCB == NULL) {
+    g_idle_pcb = malloc(sizeof(*g_idle_pcb));
+    if (g_idle_pcb == NULL) {
         TracePrintf(1, "malloc for idlePCB failed.\n");
         return;
     }
 
-    // Populate idlePCB
-    idlePCB->r1_ptable = init_r1_ptable;
-    idlePCB->uctxt = *uctxt;
-    idlePCB->pid = helper_new_pid(init_r1_ptable);  // hardware defined function for generating PID
+    pte_t *idle_r1_ptable = malloc(sizeof(pte_t) * g_len_pagetable);
+    if (idle_r1_ptable == NULL) {
+        TracePrintf(1, "Malloc failed for idle_r1_ptable\n");
+        return;
+    }
 
-    // KernelContextSwitch(KCCopy, new_pcb, NULL);
+    // Populate idlePCB
+    g_idle_pcb->r1_ptable = idle_r1_ptable;
+    g_idle_pcb->uctxt = *uctxt;
+    g_idle_pcb->pid = helper_new_pid(idle_r1_ptable);  // hardware defined function for generating PID
+
+    int rc = KernelContextSwitch(KCCopy, g_idle_pcb, NULL);
+    /* E=================== SETUP IDLE PROCESS ==================== */
+
+    /* S=================== PREPARE TO RETURN CONTROL TO USERLAND ==================== */
 
     /* Modify UserContext to point pc to doIdle, and sp to point to top of user stack */
 
-    uctxt->pc = doIdle;
+    uctxt->pc = init_pcb->uctxt.pc;
+    uctxt->sp = init_pcb->uctxt.sp;
 
-    // Stack values increment in 4 bytes. Intel is little-endian; sp needs to point to
-    // 0x1ffffc (and not 0x1fffff)
-    uctxt->sp = (void *)(VMEM_LIMIT - 4);
+    // // Stack values increment in 4 bytes. Intel is little-endian; sp needs to point to
+    // // 0x1ffffc (and not 0x1fffff)
+    // uctxt->sp = (void *)(VMEM_LIMIT - 4);
 
-    // return from KernelStart running idle process
-    // g_running_pcb = idlePCB;
-}
+    /* S=================== PREPARE TO RETURN CONTROL TO USERLAND ==================== */
 
-/**
- * Helper function called by SetKernelBrk(void *addr) in the case that addr > g_kernel_brk.
- *
- * Modifies (if need be)
- *      - The global R0 pagetable (allocates new pages)
- *      - g_kernel_brk
- */
-int h_raise_brk(void *new_brk) {
-    // TracePrintf(1, "Calling h_raise_brk\n");
-
-    unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
-    unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
-    unsigned int num_pages_to_raise = new_page - current_page;
-
-    // Allocate new pages in R0 ptable (find free frames for each page etc.)
-    for (int i = 0; i < num_pages_to_raise; i++) {
-        int free_frame_idx = find_free_frame(g_frametable);
-        g_frametable[free_frame_idx] = 1;  // mark frame as used
-
-        // no free frames were found
-        if (free_frame_idx < 0) {
-            return ERROR;
-        }
-
-        // (current_page + i + 1) => assumes current_page has already been allocated
-        unsigned int next_page = current_page + i + 1;
-        g_reg0_ptable[next_page].valid = 1;
-        g_reg0_ptable[next_page].prot = PROT_READ | PROT_WRITE;
-        g_reg0_ptable[next_page].pfn = free_frame_idx;
-    }
-
-    g_kernel_brk = new_brk;
-
-    return 0;
-}
-
-/**
- * Helper function called by SetKernelBrk(void *addr) in the case that addr < g_kernel_brk.
- *
- * Modifies (if need be)
- *      - The global R0 pagetable (allocates new pages)
- *      - g_kernel_brk
- */
-int h_lower_brk(void *new_brk) {
-    // TracePrintf(1, "Calling h_lower_brk\n");
-
-    unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
-    unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
-    unsigned int num_pages_to_lower = current_page - new_page;
-
-    // "Frees" pages from R0 pagetable (marks those frames as unused, etc.)
-    for (int i = 0; i < num_pages_to_lower; i++) {
-        unsigned int prev_page = current_page - i;
-        unsigned int idx_to_free = g_reg0_ptable[prev_page].pfn;
-        g_frametable[idx_to_free] = 0;  // mark frame as un-used
-
-        g_reg0_ptable[prev_page].valid = 0;
-        g_reg0_ptable[prev_page].prot = PROT_NONE;
-        g_reg0_ptable[prev_page].pfn = 0;  // should never be touched
-    }
-
-    g_kernel_brk = new_brk;
-
-    return 0;
-}
-
-/**
- *  Changes g_kernel_brk to new_brk. Handles case when virtual memory is not
- *  enabled and also the case when it is enabled. Also does associated tasks,
- *  such as allocating frames, updating R0 pagetable, etc.
- *
- *  Returns 0 if successful, ERROR if not.
- */
-int SetKernelBrk(void *new_brk) {
-
-    TracePrintf(1, "Calling SetKernelBrk w/ arg: %x\n", new_brk);
-
-    unsigned int new_brk_int = (unsigned int)new_brk;
-    unsigned int last_addr_above_data = (unsigned int)(_kernel_data_end);
-
-    // Fail if new_brk lies anywhere but the region above kernel data and below kernel stack.
-    // Leave 1 page between kernel heap and stack (red zone!)
-    if (!(new_brk_int < (KERNEL_STACK_BASE - PAGESIZE) && new_brk_int >= last_addr_above_data)) {
-        TracePrintf(1,
-                    "oh no .. trying to extend kernel brk into kernel stack (or kernel "
-                    "data/text)\n");
-        return ERROR;
-    }
-
-    // If virtual memory is not enabled, safe to just change brk number,
-    // no need to update tables or anything
-    if (g_virtual_mem_enabled == 0) {
-        g_kernel_brk = new_brk;
-        return 0;
-    }
-
-    // Determine whether raising brk or lowering brk
-    int bytes_to_raise = new_brk - g_kernel_brk;
-
-    int rc = ERROR;
-
-    if (bytes_to_raise == 0) {
-        rc = 0;
-    }
-    // raising brk
-    else if (bytes_to_raise > 0) {
-        rc = h_raise_brk(new_brk);
-    }
-    // reducing brk
-    else {
-        rc = h_lower_brk(new_brk);
-    }
-
-    return rc;
-}
-
-int copy_page_contents(unsigned int source_page, unsigned int target_page) {
-
-    memcpy((void *)(target_page << PAGESHIFT), (void *)(source_page << PAGESHIFT), PAGESIZE);
-
-    return SUCCESS;
-}
-
-KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
-    // Copy the kernel context of old process into the new process
-    pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
-    new_pcb->kctxt = *kc_in;
-
-    unsigned int page_below_kstack = g_len_pagetable - g_num_kernel_stack_pages;
-
-    // Copy contents of current kernel stack (g_r0_ptable) into frames allocated for the new process's
-    // kernel stack
-    for (int i = 0; i < g_num_kernel_stack_pages; i++) {
-
-        // Map page below kernel stack to allocated free frame for new kernel stack. This is a hack for
-        // copying pages into unmapped frames (unmapped frames for new kernel stack).
-        g_reg0_ptable[page_below_kstack].valid = 1;
-        g_reg0_ptable[page_below_kstack].prot = PROT_READ | PROT_WRITE;
-        g_reg0_ptable[page_below_kstack].pfn = new_pcb->kstack_frame_idxs[i];
-
-        // Copy page contents
-        unsigned int source_page = g_len_pagetable - 1 - i;
-        unsigned int target_page = page_below_kstack;
-        int rc = copy_page_contents(source_page, target_page);
-
-        if (rc != 0) {
-            TracePrintf(1, "Error occurred in copy_page_contents in KCCopy()\n");
-            return NULL;
-        }
-    }
-
-    // Make redzone page invalid again
-    g_reg0_ptable[page_below_kstack].valid = 0;
-    g_reg0_ptable[page_below_kstack].prot = PROT_NONE;
-
-    return kc_in;
+    g_running_pcb = init_pcb;
 }

@@ -7,6 +7,7 @@
 #include "queue.h"
 #include "ykernel.h"
 
+typedef struct ProcessControlBlock pcb_t;
 typedef struct ProcessControlBlock {
     unsigned int pid;
     // --- userland
@@ -24,5 +25,6 @@ typedef struct ProcessControlBlock {
 } pcb_t;
 
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p);
+int find_free_frame(unsigned int *frametable);
 
 #endif  // __KERNEL_DATA_STRUCTS_H
