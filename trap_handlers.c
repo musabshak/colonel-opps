@@ -103,7 +103,7 @@ int TrapClock(UserContext *user_context) {
     //         - Change R0 kernel stack mappings to those for the new_process_pcb
     //         - Return a pointer to the KernelContext in the new_process_pcb
 
-    TracePrintf(1, "Clock trap happening!\n");
+    TracePrintf(1, "Entering TrapClock\n");
 
     // Copy current UserContext into PCB of running process
     g_running_pcb->uctxt = *user_context;
@@ -134,6 +134,7 @@ int TrapClock(UserContext *user_context) {
 
     // Set global current process to new process
     g_running_pcb = new_pcb;
+    TracePrintf(1, "Exiting TrapClock\n");
 }
 
 /*

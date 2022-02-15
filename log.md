@@ -2,6 +2,9 @@
 ### Checkpoint 3
 - u_long type not found (used in load_info.h, included in load_program.c)
     - Include hardware.h in load_program.c
+- load_program page numbers were already relative
+    - Needed to take out the "... - MAX_PT_LEN" 
+    - While flushing specific region 1 pages, need to add MAX_PT_LEN to addresses
 ### Checkpoint 2
 - Segfault as soon as virtual memory turned on
     - We were getting a segfault right as we enabled virtual memory with WriteRegister(ENABLE_VM, 1)

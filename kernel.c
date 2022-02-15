@@ -180,11 +180,15 @@ int copy_page_contents(unsigned int source_page, unsigned int target_page) {
 }
 
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
-    // Copy the kernel context of old process into the new process
+    TracePrintf(1, "Entering KCCopy\n");
+    print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+
     pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
+
+    // Copy the current kernel context into the new process
     new_pcb->kctxt = *kc_in;
 
-    unsigned int page_below_kstack = g_len_pagetable - g_num_kernel_stack_pages;
+    unsigned int page_below_kstack = g_len_pagetable - g_num_kernel_stack_pages - 1;
 
     // Copy contents of current kernel stack (g_r0_ptable) into frames allocated for the new process's
     // kernel stack
@@ -211,6 +215,8 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     g_reg0_ptable[page_below_kstack].valid = 0;
     g_reg0_ptable[page_below_kstack].prot = PROT_NONE;
 
+    TracePrintf(1, "Exiting KCCopy\n");
+    print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
     return kc_in;
 }
 
@@ -377,8 +383,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Debugging
     // Print ptables after populating
-    print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
-    print_r1_page_table(init_r1_ptable, g_len_pagetable);
+    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+    // print_r1_page_table(init_r1_ptable, g_len_pagetable);
 
     /* S=================== ENABLE VIRTUAL MEMORY ==================== */
 
@@ -407,18 +413,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     init_pcb->kstack_frame_idxs[0] = g_len_pagetable - 1;
     init_pcb->kstack_frame_idxs[1] = g_len_pagetable - 2;
 
-    // Get free frames for init's kernel stack
-    // for (int i = 0; i < g_num_kernel_stack_pages; i++) {
-    //     int idx = find_free_frame(g_frametable);
-
-    //     if (idx != 0) {
-    //         TracePrintf(1, "find_free_frame() failed\n");
-    //         return;
-    //     }
-    //     init_pcb->kstack_frame_idxs[i] = idx;
-    //     g_frametable[idx] = 1;
-    // }
-
     /* Parse cmd_args to figure out which process to init with */
     unsigned int num_args = 0;
 
@@ -443,6 +437,9 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     TracePrintf(1, "first process name: %s\n", first_process_name);
 
     LoadProgram(first_process_name, cmd_args, init_pcb);
+
+    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+    // print_r1_page_table(init_r1_ptable, g_len_pagetable);
 
     /* S=================== SETUP IVT ==================== */
 
@@ -494,6 +491,18 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_idle_pcb->r1_ptable = idle_r1_ptable;
     g_idle_pcb->uctxt = *uctxt;
     g_idle_pcb->pid = helper_new_pid(idle_r1_ptable);  // hardware defined function for generating PID
+
+    // Get free frames for idle's kernel stack
+    for (int i = 0; i < g_num_kernel_stack_pages; i++) {
+        int idx = find_free_frame(g_frametable);
+
+        if (idx != 0) {
+            TracePrintf(1, "find_free_frame() failed\n");
+            return;
+        }
+        g_idle_pcb->kstack_frame_idxs[i] = idx;
+        g_frametable[idx] = 1;
+    }
 
     int rc = KernelContextSwitch(KCCopy, g_idle_pcb, NULL);
     /* E=================== SETUP IDLE PROCESS ==================== */
