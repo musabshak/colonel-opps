@@ -181,7 +181,7 @@ int copy_page_contents(unsigned int source_page, unsigned int target_page) {
 
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     TracePrintf(1, "Entering KCCopy\n");
-    print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
 
     pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
 
@@ -215,8 +215,13 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     g_reg0_ptable[page_below_kstack].valid = 0;
     g_reg0_ptable[page_below_kstack].prot = PROT_NONE;
 
+    unsigned int page_below_kstack_addr = page_below_kstack << PAGESHIFT;
+
+    // Flush temporarily used page?
+    WriteRegister(REG_TLB_FLUSH, page_below_kstack_addr);
+
     TracePrintf(1, "Exiting KCCopy\n");
-    print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
     return kc_in;
 }
 
@@ -260,6 +265,7 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
  */
 void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // Parse arguments
+    TracePrintf(1, "Entering KernelStart\n");
 
     g_len_frametable = pmem_size / PAGESIZE;
     g_kernel_brk = _kernel_orig_brk;  // _k_orig_brk is populated by hardware
@@ -523,4 +529,5 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     /* S=================== PREPARE TO RETURN CONTROL TO USERLAND ==================== */
 
     g_running_pcb = init_pcb;
+    TracePrintf(1, "Exiting KernelStart\n");
 }
