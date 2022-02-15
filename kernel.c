@@ -190,25 +190,33 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
 
     unsigned int page_below_kstack = g_len_pagetable - g_num_kernel_stack_pages - 1;
 
+    // Map page below kernel stack to allocated free frame for new kernel stack. This is a hack for
+    // copying pages into unmapped frames (unmapped frames for new kernel stack).
+    g_reg0_ptable[page_below_kstack].valid = 1;
+    g_reg0_ptable[page_below_kstack].prot = PROT_READ | PROT_WRITE;
+
     // Copy contents of current kernel stack (g_r0_ptable) into frames allocated for the new process's
     // kernel stack
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
 
-        // Map page below kernel stack to allocated free frame for new kernel stack. This is a hack for
-        // copying pages into unmapped frames (unmapped frames for new kernel stack).
-        g_reg0_ptable[page_below_kstack].valid = 1;
-        g_reg0_ptable[page_below_kstack].prot = PROT_READ | PROT_WRITE;
         g_reg0_ptable[page_below_kstack].pfn = new_pcb->kstack_frame_idxs[i];
 
         // Copy page contents
         unsigned int source_page = g_len_pagetable - 1 - i;
         unsigned int target_page = page_below_kstack;
-        int rc = copy_page_contents(source_page, target_page);
+        char *c_source = (char *)(source_page << PAGESHIFT);
+        char *c_target = (char *)(target_page << PAGESHIFT);
 
-        if (rc != 0) {
-            TracePrintf(1, "Error occurred in copy_page_contents in KCCopy()\n");
-            return NULL;
-        }
+        // int rc = copy_page_contents(source_page, target_page);
+        // if (rc != 0) {
+        //     TracePrintf(1, "Error occurred in copy_page_contents in KCCopy()\n");
+        //     return NULL;
+        // }
+
+        // // Need to do copying within KCCopy (can't use memcpy call or copy_page_contents function)
+        // for (int i = 0; i < PAGESIZE; i++) {
+        //     c_target[i] = c_source[i];
+        // }
     }
 
     // Make redzone page invalid again
