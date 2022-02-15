@@ -26,8 +26,8 @@ extern pte_t *g_reg0_ptable;
 
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p) {
     TracePrintf(1, "Entering KCSwitch\n");
+    pcb_t *curr_pcb = ((pcb_t *)curr_pcb_p);
     pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
-    pcb_t *curr_pcb = ((pcb_t *)curr_pcb);
 
     // Save current kernel context in current process's pcb (saving current state of
     // current process in it's pcb so we can return to it later).
@@ -37,6 +37,8 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
         g_reg0_ptable[g_len_pagetable - 1 - i].pfn = new_pcb->kstack_frame_idxs[i];
     }
+
+    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_KSTACK);
 
     TracePrintf(1, "Leaving KCSwitch\n");
 

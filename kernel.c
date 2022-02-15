@@ -51,7 +51,7 @@ queue_t *g_ready_procs_queue;
 // Imitate a userland program for checkpoint 2.
 void doIdle(void) {
     while (1) {
-        TracePrintf(1, "DoIdle\n");
+        TracePrintf(1, "DOIDLE RUNNING!\n");
         Pause();
     }
 }
@@ -513,6 +513,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     }
 
     int rc = KernelContextSwitch(KCCopy, g_idle_pcb, NULL);
+
+    g_ready_procs_queue = qopen();
     /* E=================== SETUP IDLE PROCESS ==================== */
 
     /* S=================== PREPARE TO RETURN CONTROL TO USERLAND ==================== */
