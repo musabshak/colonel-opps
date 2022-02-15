@@ -6,7 +6,7 @@
     - Needed to take out the "... - MAX_PT_LEN" 
     - While flushing specific region 1 pages, need to add MAX_PT_LEN to addresses
 - Needed to flush kernel stack contents INSIDE KCSwitch call (it didn't work to flush r0 kstack entries right after the KCSwitch call)
-- Forgot to flush r0 tlb entry for red zone page temporarily used while copying old kernel stack frame contents into new kernel stack frames
+- Forgot to flush R0 tlb entry for red zone page temporarily used while copying old kernel stack frame contents into new kernel stack frames
 - *strong suspicion* (need to replace memcpy with own code inside KCCopy)
 
 
@@ -53,6 +53,7 @@
 - Bring SetKernelBrk tests into main code
     - Write some thoughtful, SetKernelBrk-specific macros?
 - CLARIFY C header/extern/linking concepts
+- Write test_KCCopy function
 
 ### Todo cp3
 - Write userland init program source (init.c)

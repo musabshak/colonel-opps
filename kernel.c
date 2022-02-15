@@ -213,10 +213,12 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
         //     return NULL;
         // }
 
-        // // Need to do copying within KCCopy (can't use memcpy call or copy_page_contents function)
-        // for (int i = 0; i < PAGESIZE; i++) {
-        //     c_target[i] = c_source[i];
-        // }
+        // Need to do copying within KCCopy (can't use memcpy call or copy_page_contents function)
+        for (int j = 0; j < PAGESIZE; j++) {
+            c_target[j] = c_source[j];
+            TracePrintf(1, "%d %d, %dth byte: %c %c\n", (int)c_source >> PAGESHIFT,
+                        (int)c_target >> PAGESHIFT, j, c_source[j], c_target[j]);
+        }
     }
 
     // Make redzone page invalid again

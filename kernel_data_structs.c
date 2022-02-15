@@ -33,6 +33,10 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
     // current process in it's pcb so we can return to it later).
     curr_pcb->kctxt = *kc_in;
 
+    // TEMPORARY
+    // new_pcb->kstack_frame_idxs[0] = 127;
+    // new_pcb->kstack_frame_idxs[1] = 126;
+
     // Update mapping of kernel stack in R0 ptable to reflect new kernel's stack frames
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
         g_reg0_ptable[g_len_pagetable - 1 - i].pfn = new_pcb->kstack_frame_idxs[i];
@@ -42,7 +46,7 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
 
     TracePrintf(1, "Leaving KCSwitch\n");
 
-    // At the end of switching, return kernel context (previously) saved in new_pcb'
+    // At the end of switching, return pointer to kernel context (previously) saved in new_pcb
     return &(new_pcb->kctxt);
 }
 
