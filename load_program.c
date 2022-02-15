@@ -48,6 +48,8 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     long segment_size;
     char *argbuf;
 
+    TracePrintf(1, "Entering LoadProgram\n");
+
     /*
      * Open the executable file
      */
@@ -176,7 +178,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
      * DONE
      */
     pte_t *r1_ptable = proc->r1_ptable;
-    for (int i = 0; i < PAGESIZE; i++) {
+    for (int i = 0; i < MAX_PT_LEN; i++) {
         if (r1_ptable[i].valid == 0) {
             continue;
         }
@@ -206,9 +208,9 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
             return ERROR;
         }
 
-        r1_ptable[text_pg1 + i - MAX_PT_LEN].valid = 1;
-        r1_ptable[text_pg1 + i - MAX_PT_LEN].prot = PROT_READ | PROT_WRITE;
-        r1_ptable[text_pg1 + i - MAX_PT_LEN].pfn = frame_idx;
+        r1_ptable[text_pg1 + i].valid = 1;
+        r1_ptable[text_pg1 + i].prot = PROT_READ | PROT_WRITE;
+        r1_ptable[text_pg1 + i].pfn = frame_idx;
         g_frametable[frame_idx] = 1;
     }
 
@@ -227,9 +229,9 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
             return ERROR;
         }
 
-        r1_ptable[data_pg1 + i - MAX_PT_LEN].valid = 1;
-        r1_ptable[data_pg1 + i - MAX_PT_LEN].prot = PROT_READ | PROT_WRITE;
-        r1_ptable[data_pg1 + i - MAX_PT_LEN].pfn = frame_idx;
+        r1_ptable[data_pg1 + i].valid = 1;
+        r1_ptable[data_pg1 + i].prot = PROT_READ | PROT_WRITE;
+        r1_ptable[data_pg1 + i].pfn = frame_idx;
         g_frametable[frame_idx] = 1;
     }
 
@@ -303,9 +305,9 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
      */
 
     for (int i = 0; i < li.t_npg; i++) {
-        r1_ptable[text_pg1 + i - MAX_PT_LEN].prot = PROT_READ | PROT_EXEC;
+        r1_ptable[text_pg1 + i].prot = PROT_READ | PROT_EXEC;
 
-        unsigned int page_address = (text_pg1 + i) << PAGESHIFT;
+        unsigned int page_address = (text_pg1 + i + MAX_PT_LEN) << PAGESHIFT;
         WriteRegister(REG_TLB_FLUSH, page_address);
     }
 
@@ -343,5 +345,6 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     *cpp++ = NULL; /* the last argv is a NULL pointer */
     *cpp++ = NULL; /* a NULL pointer for an empty envp */
 
+    TracePrintf(1, "Exiting LoadProgram\n");
     return SUCCESS;
 }

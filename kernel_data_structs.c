@@ -55,3 +55,27 @@ int find_free_frame(unsigned int *frametable) {
     }
     return -1;
 }
+
+void print_r0_page_table(pte_t *ptable, int size, int *frametable) {
+
+    TracePrintf(1, "Printing R0 page table\n\n");
+
+    TracePrintf(1, "%3s  %2s    %s|%s|%s\t  F used?\n", "Idx", "P#", "Valid", "Prot", "PFN#");
+    for (int i = size - 1; i >= 0; i--) {
+        TracePrintf(1, "%3d  %2x -->%5x|%4d|%4x\t  %d\n", i, i, ptable[i].valid, ptable[i].prot,
+                    ptable[i].pfn, frametable[i]);
+    }
+    TracePrintf(1, "\n");
+}
+
+void print_r1_page_table(pte_t *ptable, int size) {
+
+    TracePrintf(1, "Printing R1 page table\n\n");
+
+    TracePrintf(1, "%3s  %2s    %s|%s|%s\n", "Idx", "P#", "Valid", "Prot", "PFN#");
+    for (int i = size - 1; i >= 0; i--) {
+        TracePrintf(1, "%3d  %2x -->%5x|%4d|%4x\n", i, i + size, ptable[i].valid, ptable[i].prot,
+                    ptable[i].pfn);
+    }
+    TracePrintf(1, "\n");
+}
