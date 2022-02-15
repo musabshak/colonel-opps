@@ -492,12 +492,14 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_idle_pcb->uctxt = *uctxt;
     g_idle_pcb->pid = helper_new_pid(idle_r1_ptable);  // hardware defined function for generating PID
 
+    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+
     // Get free frames for idle's kernel stack
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
         int idx = find_free_frame(g_frametable);
 
-        if (idx != 0) {
-            TracePrintf(1, "find_free_frame() failed\n");
+        if (idx == -1) {
+            TracePrintf(1, "find_free_frame() failed while allocating frames for idle's kernel_stack\n");
             return;
         }
         g_idle_pcb->kstack_frame_idxs[i] = idx;
