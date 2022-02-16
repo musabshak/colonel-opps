@@ -31,7 +31,8 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
 
     // Save current kernel context in current process's pcb (saving current state of
     // current process in it's pcb so we can return to it later).
-    curr_pcb->kctxt = *kc_in;
+    // curr_pcb->kctxt = *kc_in;
+    memcpy(&(curr_pcb->kctxt), kc_in, sizeof(KernelContext));
 
     // TEMPORARY
     // new_pcb->kstack_frame_idxs[0] = 127;
@@ -44,9 +45,14 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
 
     WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_KSTACK);
 
+    // Tell MMU to look at new process' R1 page table
+    WriteRegister(REG_PTBR1, (unsigned int)(new_pcb->r1_ptable));
+    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+
     TracePrintf(1, "Leaving KCSwitch\n");
 
     // At the end of switching, return pointer to kernel context (previously) saved in new_pcb
+    // return &(new_pcb->kctxt);
     return &(new_pcb->kctxt);
 }
 

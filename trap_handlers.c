@@ -114,10 +114,8 @@ int TrapClock(UserContext *user_context) {
         new_pcb = g_idle_pcb;
     }
 
-    // Set global current process to new process
-    g_running_pcb = new_pcb;
-
     int rc;
+
     // Put currently running process into ready queue
     rc = qput(g_ready_procs_queue, (void *)g_running_pcb);
     if (rc != 0) {
@@ -125,19 +123,17 @@ int TrapClock(UserContext *user_context) {
         return ERROR;
     }
 
-    // Tell MMU to look at new process' R1 page table
-    WriteRegister(REG_PTBR1, (unsigned int)(new_pcb->r1_ptable));
-    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
-
     // Invoke KCSwitch()
     rc = KernelContextSwitch(KCSwitch, g_running_pcb, new_pcb);
     if (rc != 0) {
-        TracePrintf(2, "Failed to switch kernel context.\n");
+        TracePrintf(1, "Failed to switch kernel context.\n");
         return ERROR;
     }
 
     // Restore newly running processes user context
     user_context = &(new_pcb->uctxt);
+
+    g_running_pcb = new_pcb;
 
     // Flush both R1 (whole pagetable has changed) and R0 TLBs (only kernel stack contents have changed)
     // WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_ALL);

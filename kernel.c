@@ -186,7 +186,8 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
 
     // Copy the current kernel context into the new process
-    new_pcb->kctxt = *kc_in;
+    // new_pcb->kctxt = *kc_in;
+    memcpy(&(new_pcb->kctxt), kc_in, sizeof(KernelContext));
 
     unsigned int page_below_kstack = g_len_pagetable - g_num_kernel_stack_pages - 1;
 
@@ -204,31 +205,35 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
         // Copy page contents
         unsigned int source_page = g_len_pagetable - 1 - i;
         unsigned int target_page = page_below_kstack;
+
         char *c_source = (char *)(source_page << PAGESHIFT);
         char *c_target = (char *)(target_page << PAGESHIFT);
 
-        // int rc = copy_page_contents(source_page, target_page);
-        // if (rc != 0) {
-        //     TracePrintf(1, "Error occurred in copy_page_contents in KCCopy()\n");
-        //     return NULL;
-        // }
+        int rc = copy_page_contents(source_page, target_page);
 
-        // Need to do copying within KCCopy (can't use memcpy call or copy_page_contents function)
-        for (int j = 0; j < PAGESIZE; j++) {
-            c_target[j] = c_source[j];
-            TracePrintf(1, "%d %d, %dth byte: %c %c\n", (int)c_source >> PAGESHIFT,
-                        (int)c_target >> PAGESHIFT, j, c_source[j], c_target[j]);
+        TracePrintf(1, "kstack_frame_idxs[%d] = %d\n", i, new_pcb->kstack_frame_idxs[i]);
+        TracePrintf(1, "source page: %d target page: %d\n", source_page, target_page);
+
+        if (rc != 0) {
+            TracePrintf(1, "Error occurred in copy_page_contents in KCCopy()\n");
+            return NULL;
         }
+
+        for (int j = 0; j < PAGESIZE; j++) {
+            if (c_target[j] != c_source[j]) {
+                TracePrintf(1, "ERRRROR IN COPYING!\n");
+            }
+        }
+
+        unsigned int page_below_kstack_addr = page_below_kstack << PAGESHIFT;
+
+        // !!!!!!!! Flush temporarily used page
+        WriteRegister(REG_TLB_FLUSH, page_below_kstack_addr);
     }
 
     // Make redzone page invalid again
     g_reg0_ptable[page_below_kstack].valid = 0;
     g_reg0_ptable[page_below_kstack].prot = PROT_NONE;
-
-    unsigned int page_below_kstack_addr = page_below_kstack << PAGESHIFT;
-
-    // Flush temporarily used page?
-    WriteRegister(REG_TLB_FLUSH, page_below_kstack_addr);
 
     TracePrintf(1, "Exiting KCCopy\n");
     // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
