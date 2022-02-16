@@ -513,7 +513,22 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_idle_pcb->uctxt = *uctxt;
     g_idle_pcb->pid = helper_new_pid(idle_r1_ptable);  // hardware defined function for generating PID
 
-    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+    // // Stack values increment in 4 bytes. Intel is little-endian; sp needs to point to
+    // // 0x1ffffc (and not 0x1fffff)
+    g_idle_pcb->uctxt.sp = (void *)(VMEM_LIMIT - 4);
+    g_idle_pcb->uctxt.pc = doIdle;
+
+    int idx = find_free_frame(g_frametable);
+    if (idx == -1) {
+        TracePrintf(1, "find_free_frame() failed while allocating frames for idle's user_stack\n");
+        return;
+    }
+
+    // Allocate user stack for idle's r1 ptable
+    idle_r1_ptable[g_len_pagetable - 1].valid = 1;
+    idle_r1_ptable[g_len_pagetable - 1].prot = PROT_READ | PROT_WRITE;
+    idle_r1_ptable[g_len_pagetable - 1].pfn = idx;
+    g_frametable[idx] = 1;
 
     // Get free frames for idle's kernel stack
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
@@ -538,10 +553,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     uctxt->pc = init_pcb->uctxt.pc;
     uctxt->sp = init_pcb->uctxt.sp;
-
-    // // Stack values increment in 4 bytes. Intel is little-endian; sp needs to point to
-    // // 0x1ffffc (and not 0x1fffff)
-    // uctxt->sp = (void *)(VMEM_LIMIT - 4);
 
     /* S=================== PREPARE TO RETURN CONTROL TO USERLAND ==================== */
 
