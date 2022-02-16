@@ -432,7 +432,9 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     init_pcb->pid = helper_new_pid(init_r1_ptable);
     init_pcb->r1_ptable = init_r1_ptable;
     // init_pcb->uctxt = *uctxt;
-    memcpy(&(init_pcb->uctxt), uctxt, sizeof(UserContext));
+    memcpy(&(init_pcb->uctxt), uctxt,
+           sizeof(UserContext));  // !!!! On the way into a handler (Transition 5), copy the current
+                                  // UserContext into the PCB of the current proceess.
     init_pcb->kstack_frame_idxs[0] = g_len_pagetable - 1;
     init_pcb->kstack_frame_idxs[1] = g_len_pagetable - 2;
 
@@ -465,6 +467,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // print_r1_page_table(init_r1_ptable, g_len_pagetable);
 
     /* S=================== SETUP IVT ==================== */
+    TracePrintf(1, "Setting up IVT\n");
 
     // Setup interrupt vector table (IVT). IVT is an array of function pointers. Each function
     // takes in a UserContext *, and returns an int
@@ -496,6 +499,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     /* E=================== SETUP IVT ==================== */
 
     /* S=================== SETUP IDLE PROCESS ==================== */
+    TracePrintf(1, "Setting up idle process\n");
 
     // Allocate an idlePCB for idle process. Returns virtual address in kernel heap
     g_idle_pcb = malloc(sizeof(*g_idle_pcb));
@@ -518,8 +522,12 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // Populate idlePCB
     g_idle_pcb->r1_ptable = idle_r1_ptable;
     // g_idle_pcb->uctxt = *uctxt;
-    memcpy(&(g_idle_pcb->uctxt), uctxt, sizeof(UserContext));
+    memcpy(&(g_idle_pcb->uctxt), uctxt,
+           sizeof(UserContext));  // !!!! On the way into a handler (Transition 5), copy the current
+                                  // UserContext into the PCB of the current proceess.
     g_idle_pcb->pid = helper_new_pid(idle_r1_ptable);  // hardware defined function for generating PID
+
+    TracePrintf(1, "Just populated idle's uctxt\n");
 
     int idx = find_free_frame(g_frametable);
     if (idx == -1) {
@@ -547,23 +555,23 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // // Stack values increment in 4 bytes. Intel is little-endian; sp needs to point to
     // // 0x1ffffc (and not 0x1fffff)
-    g_idle_pcb->uctxt.sp = (void *)(VMEM_LIMIT - 4);
-    g_idle_pcb->uctxt.pc = doIdle;
+    g_idle_pcb->uctxt.sp = (void *)(VMEM_LIMIT - 4);  // !!!!!!!!!!
+    g_idle_pcb->uctxt.pc = doIdle;                    // !!!!!!!!!!
 
     // print_r1_page_table(idle_r1_ptable, g_len_pagetable);
 
-    int rc = KernelContextSwitch(KCCopy, g_idle_pcb, NULL);
-
     g_ready_procs_queue = qopen();
+
+    TracePrintf(1, "Just finished KCCopy\n");
+
     /* E=================== SETUP IDLE PROCESS ==================== */
 
-    /* S=================== PREPARE TO RETURN CONTROL TO USERLAND ==================== */
-
-    uctxt->pc = init_pcb->uctxt.pc;
-    uctxt->sp = init_pcb->uctxt.sp;
-
     g_running_pcb = init_pcb;
-    /* S=================== PREPARE TO RETURN CONTROL TO USERLAND ==================== */
+
+    int rc = KernelContextSwitch(KCCopy, g_idle_pcb, NULL);
+
+    uctxt->pc = g_running_pcb->uctxt.pc;  // !!!!!!!!!!
+    uctxt->sp = g_running_pcb->uctxt.sp;  // !!!!!!!!!!
 
     TracePrintf(1, "g_running_pcb's pid: %d\n", g_running_pcb->pid);
     TracePrintf(1, "Exiting KernelStart\n");

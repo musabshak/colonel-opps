@@ -107,7 +107,7 @@ int TrapClock(UserContext *user_context) {
 
     // Copy current UserContext into PCB of running process
     // g_running_pcb->uctxt = *user_context;
-    memcpy(&(g_running_pcb->uctxt), user_context, sizeof(UserContext));
+    // memcpy(&(g_running_pcb->uctxt), user_context, sizeof(UserContext));
 
     // Get a new process from ready queue
     pcb_t *new_pcb = (pcb_t *)qget(g_ready_procs_queue);
@@ -124,8 +124,10 @@ int TrapClock(UserContext *user_context) {
         return ERROR;
     }
 
-    // Restore newly running processes user context
+    // Restore newly running processes user context [NEEDS TO HAPPEN OUTSIDE TRAP HANDLER]
     // user_context = &(new_pcb->uctxt);
+    // user_context->pc = 0;
+    // user_context->sp = 0;
 
     // Invoke KCSwitch()
     rc = KernelContextSwitch(KCSwitch, g_running_pcb, new_pcb);
