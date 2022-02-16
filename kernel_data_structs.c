@@ -19,6 +19,7 @@
 //     pte_t *r1_ptable;
 // } pcb_t;
 
+extern pcb_t *g_running_pcb;
 extern unsigned int g_len_pagetable;
 extern unsigned int g_len_frametable;
 extern unsigned int g_num_kernel_stack_pages;
@@ -50,6 +51,9 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
     WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
     TracePrintf(1, "Leaving KCSwitch\n");
+
+    g_running_pcb = new_pcb;
+    TracePrintf(1, "g_running_pcb's pid: %d\n", g_running_pcb->pid);
 
     // At the end of switching, return pointer to kernel context (previously) saved in new_pcb
     // return &(new_pcb->kctxt);

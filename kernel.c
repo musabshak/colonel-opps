@@ -190,6 +190,7 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     memcpy(&(new_pcb->kctxt), kc_in, sizeof(KernelContext));
 
     unsigned int page_below_kstack = g_len_pagetable - g_num_kernel_stack_pages - 1;
+    unsigned int page_below_kstack_addr = page_below_kstack << PAGESHIFT;
 
     // Map page below kernel stack to allocated free frame for new kernel stack. This is a hack for
     // copying pages into unmapped frames (unmapped frames for new kernel stack).
@@ -201,6 +202,9 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
 
         g_reg0_ptable[page_below_kstack].pfn = new_pcb->kstack_frame_idxs[i];
+
+        // !!!!!!!! Flush temporarily used page
+        WriteRegister(REG_TLB_FLUSH, page_below_kstack_addr);
 
         // Copy page contents
         unsigned int source_page = g_len_pagetable - 1 - i;
@@ -224,16 +228,13 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
                 TracePrintf(1, "ERRRROR IN COPYING!\n");
             }
         }
-
-        unsigned int page_below_kstack_addr = page_below_kstack << PAGESHIFT;
-
-        // !!!!!!!! Flush temporarily used page
-        WriteRegister(REG_TLB_FLUSH, page_below_kstack_addr);
     }
 
     // Make redzone page invalid again
     g_reg0_ptable[page_below_kstack].valid = 0;
     g_reg0_ptable[page_below_kstack].prot = PROT_NONE;
+
+    WriteRegister(REG_TLB_FLUSH, page_below_kstack_addr);
 
     TracePrintf(1, "Exiting KCCopy\n");
     // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
@@ -430,7 +431,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     init_pcb->pid = helper_new_pid(init_r1_ptable);
     init_pcb->r1_ptable = init_r1_ptable;
-    init_pcb->uctxt = *uctxt;
+    // init_pcb->uctxt = *uctxt;
+    memcpy(&(init_pcb->uctxt), uctxt, sizeof(UserContext));
     init_pcb->kstack_frame_idxs[0] = g_len_pagetable - 1;
     init_pcb->kstack_frame_idxs[1] = g_len_pagetable - 2;
 
@@ -508,15 +510,16 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         return;
     }
 
+    // Initialize idle's r1 ptable to all zeros
+    for (int i = 0; i < g_len_pagetable; i++) {
+        idle_r1_ptable[i] = empty_pte;
+    }
+
     // Populate idlePCB
     g_idle_pcb->r1_ptable = idle_r1_ptable;
-    g_idle_pcb->uctxt = *uctxt;
+    // g_idle_pcb->uctxt = *uctxt;
+    memcpy(&(g_idle_pcb->uctxt), uctxt, sizeof(UserContext));
     g_idle_pcb->pid = helper_new_pid(idle_r1_ptable);  // hardware defined function for generating PID
-
-    // // Stack values increment in 4 bytes. Intel is little-endian; sp needs to point to
-    // // 0x1ffffc (and not 0x1fffff)
-    g_idle_pcb->uctxt.sp = (void *)(VMEM_LIMIT - 4);
-    g_idle_pcb->uctxt.pc = doIdle;
 
     int idx = find_free_frame(g_frametable);
     if (idx == -1) {
@@ -542,6 +545,13 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         g_frametable[idx] = 1;
     }
 
+    // // Stack values increment in 4 bytes. Intel is little-endian; sp needs to point to
+    // // 0x1ffffc (and not 0x1fffff)
+    g_idle_pcb->uctxt.sp = (void *)(VMEM_LIMIT - 4);
+    g_idle_pcb->uctxt.pc = doIdle;
+
+    // print_r1_page_table(idle_r1_ptable, g_len_pagetable);
+
     int rc = KernelContextSwitch(KCCopy, g_idle_pcb, NULL);
 
     g_ready_procs_queue = qopen();
@@ -549,13 +559,12 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     /* S=================== PREPARE TO RETURN CONTROL TO USERLAND ==================== */
 
-    /* Modify UserContext to point pc to doIdle, and sp to point to top of user stack */
-
     uctxt->pc = init_pcb->uctxt.pc;
     uctxt->sp = init_pcb->uctxt.sp;
 
+    g_running_pcb = init_pcb;
     /* S=================== PREPARE TO RETURN CONTROL TO USERLAND ==================== */
 
-    g_running_pcb = init_pcb;
+    TracePrintf(1, "g_running_pcb's pid: %d\n", g_running_pcb->pid);
     TracePrintf(1, "Exiting KernelStart\n");
 }

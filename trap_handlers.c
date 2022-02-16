@@ -106,7 +106,8 @@ int TrapClock(UserContext *user_context) {
     TracePrintf(1, "Entering TrapClock\n");
 
     // Copy current UserContext into PCB of running process
-    g_running_pcb->uctxt = *user_context;
+    // g_running_pcb->uctxt = *user_context;
+    memcpy(&(g_running_pcb->uctxt), user_context, sizeof(UserContext));
 
     // Get a new process from ready queue
     pcb_t *new_pcb = (pcb_t *)qget(g_ready_procs_queue);
@@ -123,20 +124,15 @@ int TrapClock(UserContext *user_context) {
         return ERROR;
     }
 
+    // Restore newly running processes user context
+    // user_context = &(new_pcb->uctxt);
+
     // Invoke KCSwitch()
     rc = KernelContextSwitch(KCSwitch, g_running_pcb, new_pcb);
     if (rc != 0) {
         TracePrintf(1, "Failed to switch kernel context.\n");
         return ERROR;
     }
-
-    // Restore newly running processes user context
-    user_context = &(new_pcb->uctxt);
-
-    g_running_pcb = new_pcb;
-
-    // Flush both R1 (whole pagetable has changed) and R0 TLBs (only kernel stack contents have changed)
-    // WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_ALL);
 
     TracePrintf(1, "Exiting TrapClock\n");
 }
