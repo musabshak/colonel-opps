@@ -13,8 +13,8 @@ typedef struct ProcessControlBlock {
     // --- userland
     UserContext uctxt;
     void *user_brk;
-    void *user_data;
-    void *user_text;
+    unsigned int user_text_pg0;
+    unsigned int user_data_pg0;
     // --- kernelland
     KernelContext kctxt;
     unsigned int kstack_frame_idxs[KERNEL_STACK_MAXSIZE / PAGESIZE];

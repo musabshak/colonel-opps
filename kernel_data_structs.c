@@ -55,6 +55,8 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
     g_running_pcb = new_pcb;
     TracePrintf(1, "g_running_pcb's pid: %d\n", g_running_pcb->pid);
 
+    // WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_ALL);
+
     // At the end of switching, return pointer to kernel context (previously) saved in new_pcb
     // return &(new_pcb->kctxt);
     return &(new_pcb->kctxt);

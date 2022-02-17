@@ -58,4 +58,13 @@ int kDelay(int clock_ticks) {
     if (clock_ticks == 0) {
         return 0;
     }
+
+    int curr_num_ticks = 0;
+
+    while (curr_num_ticks < clock_ticks) {
+        Pause();
+        curr_num_ticks += 1;
+    }
+
+    return 0;
 }
