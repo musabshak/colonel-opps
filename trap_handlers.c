@@ -1,5 +1,6 @@
 #include "kernel_data_structs.h"
 #include "queue.h"
+#include "syscalls.h"
 #include "ykernel.h"
 
 extern pcb_t *g_running_pcb;
@@ -35,42 +36,29 @@ Trap handlers are functions pointed to by pointers in the interrupt vector table
  */
 
 int TrapKernelHandler(UserContext *user_context) {
+    TracePrintf(1, "Entering TrapKernelHandler\n");
     int syscall_code = user_context->code;
 
     TracePrintf(1, "syscall code is: %d\n", syscall_code);
 
-    // void **args = user_context->regs;
+    int rc;
+    switch (syscall_code) {
 
-    // // TrapKernelHandler: work out how to get the args to the syscall handlers...and
-    // the return value back
-
-    // // for syscall functions that need arguments, look for args in
-    // user_context->regs[0...] switch (syscall_code) {
-
-    //     case 1:
-    //         kFork();
-    //         break;
-    //     case 2:
-    //         kExec();
-    //         break;
-    //     case 3:
-    //         kExit();
-    //         break;
-    //     case 4:
-    //         kWait();
-    //         break;
-    //     case 5:
-    //         kGetPid();
-    //         break;
-    //     case 6:
-    //         kBrk();
-    //         break;
-    //     case 7:
-    //         kDelay();
-    //         break;
-
-    //         // ... and so on
-    // }
+        case YALNIX_GETPID:
+            int pid = kGetPid();
+            user_context->regs[0] = pid;
+            break;
+        case YALNIX_BRK:
+            void *addr = user_context->regs[0];
+            rc = kBrk(addr);
+            user_context->regs[0] = rc;
+            break;
+        case YALNIX_DELAY:
+            int clock_ticks = user_context->regs[0];
+            rc = kDelay(clock_ticks);
+            break;
+    }
+    TracePrintf(1, "Exiting TrapKernelHandler\n");
 }
 
 /*
