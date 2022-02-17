@@ -13,7 +13,7 @@ int kGetPid() {
 }
 
 int kBrk(void *new_brk) {
-    TracePrintf(1, "Calling Brk w/ arg: %x\n", new_brk);
+    TracePrintf(1, "Calling Brk w/ arg: 0x%x (page: %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
 
     pte_t *ptable = g_running_pcb->r1_ptable;
     void *user_brk = g_running_pcb->user_brk;
@@ -23,11 +23,14 @@ int kBrk(void *new_brk) {
     unsigned int new_brk_int = (unsigned int)new_brk;
     unsigned int last_addr_above_data = (unsigned int)(user_data_end);
 
+    TracePrintf(1, "user_stack_base_page: %d\n", user_stack_base >> PAGESHIFT);
+    TracePrintf(1, "user_brk_page: %d\n", (unsigned int)user_brk >> PAGESHIFT);
+
     // Fail if new_brk lies anywhere but the region above kernel data and below kernel stack.
     // Leave 1 page between kernel heap and stack (red zone!)
     if (!(new_brk_int <= (user_stack_base - PAGESIZE) && new_brk_int >= last_addr_above_data)) {
         TracePrintf(1,
-                    "oh no .. trying to extend user brk into user stack (or kernel "
+                    "oh no .. trying to extend user brk into user stack (or user "
                     "data/text)\n");
         return ERROR;
     }

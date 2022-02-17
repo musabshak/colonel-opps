@@ -332,7 +332,13 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
      * custom code: store r1 ptable information (user_brk, user_text_pg0, user_data_pg0) in pcb
      */
 
-    unsigned int last_data_page = data_pg1 + data_npg - 1;
+    // Note that the page numbers are not relative in the following lines of code
+
+    TracePrintf(1, "proc num data pages: %d\n", data_npg);
+    TracePrintf(1, "proc data_pg1: %d\n", data_pg1);
+    TracePrintf(1, "proc text_pg1: %d\n", text_pg1);
+
+    unsigned int last_data_page = (data_pg1 + data_npg - 1) + MAX_PT_LEN;
     unsigned int first_heap_page = last_data_page + 1;
     void *first_heap_page_addr = (void *)((first_heap_page) << PAGESHIFT);
 
@@ -340,7 +346,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     proc->user_data_pg0 = data_pg1;
     proc->user_data_end = (void *)((last_data_page + 1) << PAGESHIFT);
     proc->user_text_pg0 = text_pg1;
-    proc->user_stack_base = (void *)((MAX_PT_LEN - stack_npg) << PAGESHIFT);
+    proc->user_stack_base = (void *)((NUM_VPN - stack_npg) << PAGESHIFT);
 
     /*
      * Now, finally, build the argument list on the new stack.

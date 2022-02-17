@@ -411,7 +411,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // TODO: check argument name length
 
     // If no arguments specified, load default ./init program
-    char *first_process_name = num_args == 0 ? "init" : cmd_args[0];
+    char *first_process_name = num_args == 0 ? "test/init" : cmd_args[0];
     TracePrintf(1, "first process name: %s\n", first_process_name);
 
     LoadProgram(first_process_name, cmd_args, init_pcb);

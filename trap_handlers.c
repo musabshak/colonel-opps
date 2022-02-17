@@ -39,8 +39,6 @@ int TrapKernelHandler(UserContext *user_context) {
     TracePrintf(1, "Entering TrapKernelHandler\n");
     int syscall_code = user_context->code;
 
-    TracePrintf(1, "syscall code is: %d\n", syscall_code);
-
     int rc;
     switch (syscall_code) {
         int pid;
