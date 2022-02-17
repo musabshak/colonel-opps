@@ -338,7 +338,9 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
 
     proc->user_brk = first_heap_page_addr;
     proc->user_data_pg0 = data_pg1;
+    proc->user_data_end = (void *)((last_data_page + 1) << PAGESHIFT);
     proc->user_text_pg0 = text_pg1;
+    proc->user_stack_base = (void *)((MAX_PT_LEN - stack_npg) << PAGESHIFT);
 
     /*
      * Now, finally, build the argument list on the new stack.

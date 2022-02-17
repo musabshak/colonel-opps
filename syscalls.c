@@ -12,32 +12,44 @@ int kGetPid() {
     return g_running_pcb->pid;
 }
 
-int kBrk(void *addr) {
-    // //  --- Calculate the extra memory the user is asking for
-    // pcb_t *calling_proc = running_process_p;
-    // int amount_mem_requested = addr - calling_proc->user_heap->limit;
+int kBrk(void *new_brk) {
+    TracePrintf(1, "Calling Brk w/ arg: %x\n", new_brk);
 
-    // //  --- Get enough frames
-    // int num_frames_needed = amount_mem_requested / frame_size + 1;
+    pte_t *ptable = g_running_pcb->r1_ptable;
+    void *user_brk = g_running_pcb->user_brk;
+    void *user_data_end = g_running_pcb->user_data_end;
+    unsigned int user_stack_base = (unsigned int)(g_running_pcb->user_stack_base);
 
-    // int new_frames[num_frames_needed];
-    // int frames_acquired = 0;
-    // for (int i = 0; j < frametable->size; i++) {
-    //     if (frametable->frames[i].ref_count != 0) {
-    //         continue;
-    //     }
+    unsigned int new_brk_int = (unsigned int)new_brk;
+    unsigned int last_addr_above_data = (unsigned int)(user_data_end);
 
-    //     new_frames[frames_acquired] = frametable->frames[i].id;
-    // }
+    // Fail if new_brk lies anywhere but the region above kernel data and below kernel stack.
+    // Leave 1 page between kernel heap and stack (red zone!)
+    if (!(new_brk_int <= (user_stack_base - PAGESIZE) && new_brk_int >= last_addr_above_data)) {
+        TracePrintf(1,
+                    "oh no .. trying to extend user brk into user stack (or kernel "
+                    "data/text)\n");
+        return ERROR;
+    }
 
-    // //  --- Update caller's pagetable
-    // pagetable_t *callers_pagetable = calling_proc->pagetable;
-    // // calculate which pages correspond to the requested heap area, update those
-    // // page table entries to point to the frames in new_frames[], change bit to
-    // // valid
+    // Determine whether raising brk or lowering brk
+    int bytes_to_raise = new_brk - user_brk;
 
-    // // Change user heap limit to addr
-    // calling_proc->user_heap->limit = addr;
+    int rc = ERROR;
+
+    if (bytes_to_raise == 0) {
+        rc = 0;
+    }
+    // raising brk
+    else if (bytes_to_raise > 0) {
+        rc = h_raise_brk(new_brk, &user_brk, ptable);
+    }
+    // reducing brk
+    else {
+        rc = h_lower_brk(new_brk, &user_brk, ptable);
+    }
+
+    return rc;
 }
 
 /**  =============

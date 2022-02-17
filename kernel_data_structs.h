@@ -10,14 +10,19 @@
 typedef struct ProcessControlBlock pcb_t;
 typedef struct ProcessControlBlock {
     unsigned int pid;
+
     // --- userland
     UserContext uctxt;
     void *user_brk;
     unsigned int user_text_pg0;
     unsigned int user_data_pg0;
+    void *user_data_end;
+    void *user_stack_base;
+
     // --- kernelland
     KernelContext kctxt;
     unsigned int kstack_frame_idxs[KERNEL_STACK_MAXSIZE / PAGESIZE];
+
     // --- metadata
     pcb_t *parent;
     queue_t *children_procs;
