@@ -327,6 +327,19 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
 
     proc->uctxt.pc = (caddr_t)(li.entry);
 
+    /**
+     *
+     * custom code: store r1 ptable information (user_brk, user_text_pg0, user_data_pg0) in pcb
+     */
+
+    unsigned int last_data_page = data_pg1 + data_npg - 1;
+    unsigned int first_heap_page = last_data_page + 1;
+    void *first_heap_page_addr = (void *)((first_heap_page) << PAGESHIFT);
+
+    proc->user_brk = first_heap_page_addr;
+    proc->user_data_pg0 = data_pg1;
+    proc->user_text_pg0 = text_pg1;
+
     /*
      * Now, finally, build the argument list on the new stack.
      */

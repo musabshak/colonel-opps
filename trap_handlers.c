@@ -43,18 +43,21 @@ int TrapKernelHandler(UserContext *user_context) {
 
     int rc;
     switch (syscall_code) {
+        int pid;
+        int clock_ticks;
+        void *addr;
 
         case YALNIX_GETPID:
-            int pid = kGetPid();
+            pid = kGetPid();
             user_context->regs[0] = pid;
             break;
         case YALNIX_BRK:
-            void *addr = user_context->regs[0];
+            addr = (void *)user_context->regs[0];
             rc = kBrk(addr);
             user_context->regs[0] = rc;
             break;
         case YALNIX_DELAY:
-            int clock_ticks = user_context->regs[0];
+            clock_ticks = user_context->regs[0];
             rc = kDelay(clock_ticks);
             break;
     }
