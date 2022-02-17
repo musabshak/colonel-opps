@@ -96,7 +96,7 @@ void print_r1_page_table(pte_t *ptable, int size) {
  *      - `*curr_brk`
  */
 int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
-    // TracePrintf(1, "Calling h_raise_brk\n");
+    TracePrintf(1, "Calling h_raise_brk\n");
 
     unsigned int current_page = (unsigned int)curr_brk >> PAGESHIFT;
     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
