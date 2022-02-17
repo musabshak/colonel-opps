@@ -68,7 +68,16 @@ int h_raise_brk(void *new_brk) {
 
     unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+
     unsigned int num_pages_to_raise = new_page - current_page;
+    unsigned int new_brk_int = (unsigned int)new_brk;
+
+    // Check if `new_brk` is not 0th byte of page. Then, since we are rounding the
+    // brk up to the next page we want to allocate the page the new_brk is
+    // on.
+    if (new_brk_int != (new_brk_int & PAGEMASK)) {
+        num_pages_to_raise += 1;
+    }
 
     // Allocate new pages in R0 ptable (find free frames for each page etc.)
     for (int i = 0; i < num_pages_to_raise; i++) {
@@ -87,7 +96,7 @@ int h_raise_brk(void *new_brk) {
         g_reg0_ptable[next_page].pfn = free_frame_idx;
     }
 
-    g_kernel_brk = new_brk;
+    g_kernel_brk = (void *)(UP_TO_PAGE(new_brk_int));
 
     return 0;
 }
@@ -104,7 +113,13 @@ int h_lower_brk(void *new_brk) {
 
     unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+
     unsigned int num_pages_to_lower = current_page - new_page;
+    unsigned int new_brk_int = (unsigned int)new_brk;
+
+    if (new_brk_int != (new_brk_int & PAGEMASK)) {
+        num_pages_to_lower -= 1;
+    }
 
     // "Frees" pages from R0 pagetable (marks those frames as unused, etc.)
     for (int i = 0; i < num_pages_to_lower; i++) {
@@ -117,7 +132,7 @@ int h_lower_brk(void *new_brk) {
         g_reg0_ptable[prev_page].pfn = 0;  // should never be touched
     }
 
-    g_kernel_brk = new_brk;
+    g_kernel_brk = (void *)(UP_TO_PAGE(new_brk_int));
 
     return 0;
 }
@@ -138,7 +153,7 @@ int SetKernelBrk(void *new_brk) {
 
     // Fail if new_brk lies anywhere but the region above kernel data and below kernel stack.
     // Leave 1 page between kernel heap and stack (red zone!)
-    if (!(new_brk_int < (KERNEL_STACK_BASE - PAGESIZE) && new_brk_int >= last_addr_above_data)) {
+    if (!(new_brk_int <= (KERNEL_STACK_BASE - PAGESIZE) && new_brk_int >= last_addr_above_data)) {
         TracePrintf(1,
                     "oh no .. trying to extend kernel brk into kernel stack (or kernel "
                     "data/text)\n");
@@ -339,10 +354,10 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     /* S=================== POPULATE PAGETABLES ==================== */
 
-    // NOTE: If kernel brk is on 0th byte of new page initially, we allocate that page too.
+    // NO LONGER TRUE: If kernel brk is on 0th byte of new page initially, we allocate that page too.
 
-    // the frame that kernel brk is on in physical memory.
-    unsigned int last_used_reg0_frame = (unsigned int)g_kernel_brk >> PAGESHIFT;
+    // the frame below the one kernel brk is on in physical memory.
+    unsigned int last_used_reg0_frame = ((unsigned int)g_kernel_brk >> PAGESHIFT) - 1;
 
     unsigned int last_text_page = ((unsigned int)(_kernel_data_start) >> PAGESHIFT) - 1;
     unsigned int last_data_page = (unsigned int)(_kernel_data_end - 1) >> PAGESHIFT;
@@ -405,7 +420,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Debugging
     // Print ptables after populating
-    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+    print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+    TracePrintf(1, "original brk: %x\n", (unsigned int)g_kernel_brk >> PAGESHIFT);
     // print_r1_page_table(init_r1_ptable, g_len_pagetable);
 
     /* S=================== ENABLE VIRTUAL MEMORY ==================== */
