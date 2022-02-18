@@ -90,7 +90,8 @@ int h_raise_brk(void *new_brk) {
             return ERROR;
         }
 
-        // (current_page + i + 1) => assumes current_page has already been allocated
+        // !!! Fixed bug: (current_page + i + 1) => assumes current_page has already been allocated
+        // But we no longer make that assumption
         unsigned int next_page = current_page + i;
         g_reg0_ptable[next_page].valid = 1;
         g_reg0_ptable[next_page].prot = PROT_READ | PROT_WRITE;
@@ -123,6 +124,7 @@ int h_lower_brk(void *new_brk) {
     }
 
     // "Frees" pages from R0 pagetable (marks those frames as unused, etc.)
+    // Need to start deallocating a page below current brk page
     for (int i = 0; i < num_pages_to_lower; i++) {
         unsigned int prev_page = current_page - i - 1;
         unsigned int idx_to_free = g_reg0_ptable[prev_page].pfn;
@@ -460,7 +462,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // TODO: check argument name length
 
     // If no arguments specified, load default ./init program
-    char *first_process_name = num_args == 0 ? "test/init" : cmd_args[0];
+    char *first_process_name = num_args == 0 ? "tests/init" : cmd_args[0];
     TracePrintf(1, "first process name: %s\n", first_process_name);
 
     LoadProgram(first_process_name, cmd_args, init_pcb);

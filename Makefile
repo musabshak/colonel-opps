@@ -14,7 +14,7 @@ K_SRCS =  kernel.c trap_handlers.c kernel_data_structs.c queue.c load_program.c 
 K_INCS = 
 
 # Where's your user source?
-U_SRC_DIR = test
+U_SRC_DIR = tests
 
 # What are the user c and include files?
 U_SRCS = init.c cp3_tests.c

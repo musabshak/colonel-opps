@@ -1,3 +1,18 @@
+### Outstanding Questions
+- Why are initial malloc calls not trigerring SetKernelBrk?
+    - Why is malloc allocating in the user data section?
+- TODO: Varun's question on Delay/Clock ticks
+
+### Todo other
+- Bring SetKernelBrk tests into main code
+    - Write some thoughtful, SetKernelBrk-specific macros?
+- CLARIFY C header/extern/linking concepts
+- Write test_KCCopy function
+- Rigorously test SetKernelBrk, Brk functions
+- Clean code
+- Refactor h_raise_brk/h_lower_brk and raise_brk_user/lower_brk_user into same function
+- Properly write code for updating clock ticks in blocked processes queue 
+
 ## Bugs
 ### Checkpoint 3
 - u_long type not found (used in load_info.h, included in load_program.c)
@@ -9,6 +24,11 @@
 - Forgot to flush R0 tlb entry for red zone page temporarily used while copying old kernel stack frame contents into new kernel stack frames
 - Needed to flush TLB for redzone page used to copy contents of kernel stack frames into new stack frames
     - SO FRUSTRATING
+- NEED TO BE REALLY CAREFUL WITH PAGE NUMBERS FOR R1 PTABLE ENTRIES
+    - Need to account for MAX_PT_LEN offset if dealing with absolute R1 pagetable indexes
+- Our previous invariant was: if the brk is on the zeroth byte of a page then that page is already allocated in the pagetable
+    - We realized this a little late but this invariant does not make *any* sense. Brk is the first *unallocated* byte -- if we allocate the page that the brk is on, the brk is no longer the brk - ugh!
+    - Fixing this invariant led to some pesky bugs - because of the invariant, when we started allocating pages in the pagetable, we would start one page above the current page (because we assumed that the current page was already allocaetd); we needed to start *on* the current page. Similarly, when deallocating, we started at the current page (needed to start one below the current page).
 
 
 ### Checkpoint 2
@@ -31,6 +51,19 @@
 
 ## Challenges
 ### Checkpoint 3
+- Figuring out expected behavior for the Delay syscall
+    - What does it mean to delay by "clock ticks"?
+        - Turns out need to delay by clock interrupts
+    - How do you prevent kDelay() from returning control to TrapKernelHandler that called kDelay()?
+        - KernelContextSwitch!
+- Order of doing things in the TrapClockHandler
+    - Do we save user_context in TrapClockHandler?
+        - No! Do it "on the way into" handler i.e. in Kernel Start
+- Key, key reminder
+    - In kernel mode, there are no interrupts. That is, KernelStart() will not be interrupted by a clock
+    trap. Clock trap will wait for KernelStart() to finish.
+- Understanding how to think things from the perspective of starting as init vs idle
+    - The manual lists description from the perspective of starting as idle cloning into init
 
 
 ### Checkpoint 2
@@ -50,12 +83,6 @@
 
 
 ## Todos
-### Todo other
-- Bring SetKernelBrk tests into main code
-    - Write some thoughtful, SetKernelBrk-specific macros?
-- CLARIFY C header/extern/linking concepts
-- Write test_KCCopy function
-
 ### Todo cp3
 - Write userland init program source (init.c)
 - Parse KernelStart arguments

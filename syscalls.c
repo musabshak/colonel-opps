@@ -3,6 +3,8 @@
 
 extern pcb_t *g_running_pcb;
 extern queue_t *g_delay_blocked_procs_queue;
+extern queue_t *g_ready_procs_queue;
+extern pcb_t *g_idle_pcb;
 
 int kGetPid() {
     // Confirm that there is a process that is currently running
@@ -77,11 +79,28 @@ int kDelay(int clock_ticks) {
         return 0;
     }
 
+    int rc;
+
     g_running_pcb->elapsed_clock_ticks = 0;
     g_running_pcb->delay_clock_ticks = clock_ticks;
 
     // Put current process in blocked processes queue
     qput(g_delay_blocked_procs_queue, (void *)g_running_pcb);
+
+    // // Get a new process from ready queue
+    // pcb_t *new_pcb = (pcb_t *)qget(g_ready_procs_queue);
+
+    // // If there are no runnable processes, dispatch idle
+    // if (new_pcb == NULL) {
+    //     new_pcb = g_idle_pcb;
+    // }
+
+    // Invoke KCSwitch()
+    rc = KernelContextSwitch(KCSwitch, g_running_pcb, g_idle_pcb);
+    if (rc != 0) {
+        TracePrintf(1, "Failed to switch kernel context.\n");
+        return ERROR;
+    }
 
     return 0;
 }
