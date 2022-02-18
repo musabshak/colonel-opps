@@ -6,6 +6,7 @@
 extern pcb_t *g_running_pcb;
 extern pcb_t *g_idle_pcb;
 extern queue_t *g_ready_procs_queue;
+exter queue_t *g_delay_blocked_procs_queue;
 
 /*
 Trap handlers are functions pointed to by pointers in the interrupt vector table
@@ -78,33 +79,18 @@ int TrapKernelHandler(UserContext *user_context) {
 
 int TrapClock(UserContext *user_context) {
 
-    // - Edit TrapClock(UserContext *user_context)
-    //     - At the start of TrapClock, copy current user_context into PCB of old running process
-    //     (running_process_pcb) (old_process_pcb)
-    //     - Get new process from g_ready_processes: new_process_pcb
-    //     - At the end of TrapClock, make sure hardware is using r1_ptable of the new_process_pcb
-    //     (new_process_pcb->r1_ptable)
-    //     - Copy the user_context of the new process (new_process_pcb->user_context) into the uctxt
-    //     address passed to TrapClock
-    //     - Invoke KCSwitch()
-    //         - Changes kernel stack contents from old_process to new_process
-    //         - Copy current KernelContext into old_process_pcb
-    //         - Change R0 kernel stack mappings to those for the new_process_pcb
-    //         - Return a pointer to the KernelContext in the new_process_pcb
-
     TracePrintf(1, "Entering TrapClock\n");
+    int rc;
 
-    // Copy current UserContext into PCB of running process
-    // g_running_pcb->uctxt = *user_context;
-    // memcpy(&(g_running_pcb->uctxt), user_context, sizeof(UserContext));
+    // Check that blocked processes associated with Delay to see if any should go on ready queue
 
     // Get a new process from ready queue
     pcb_t *new_pcb = (pcb_t *)qget(g_ready_procs_queue);
+
+    // If there are no runnable processes, dispatch idle
     if (new_pcb == NULL) {
         new_pcb = g_idle_pcb;
     }
-
-    int rc;
 
     // Put currently running process into ready queue
     rc = qput(g_ready_procs_queue, (void *)g_running_pcb);
@@ -112,11 +98,6 @@ int TrapClock(UserContext *user_context) {
         TracePrintf(2, "Failed to return running process to ready queue.\n");
         return ERROR;
     }
-
-    // Restore newly running processes user context [NEEDS TO HAPPEN OUTSIDE TRAP HANDLER]
-    // user_context = &(new_pcb->uctxt);
-    // user_context->pc = 0;
-    // user_context->sp = 0;
 
     // Invoke KCSwitch()
     rc = KernelContextSwitch(KCSwitch, g_running_pcb, new_pcb);

@@ -27,6 +27,9 @@ typedef struct ProcessControlBlock {
     pcb_t *parent;
     queue_t *children_procs;
     pte_t *r1_ptable;
+
+    int elapsed_clock_ticks;
+    int delay_clock_ticks;
 } pcb_t;
 
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p);

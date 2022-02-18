@@ -39,6 +39,7 @@ pcb_t *g_idle_pcb;
 unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
 
 queue_t *g_ready_procs_queue;
+queue_t *g_delay_blocked_procs_queue;
 
 /* E=== GLOBALS === */
 
@@ -564,6 +565,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // print_r1_page_table(idle_r1_ptable, g_len_pagetable);
 
     g_ready_procs_queue = qopen();
+    g_delay_blocked_procs_queue = qopen();
 
     TracePrintf(1, "Just finished KCCopy\n");
 

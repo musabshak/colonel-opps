@@ -2,6 +2,7 @@
 #include "ykernel.h"
 
 extern pcb_t *g_running_pcb;
+extern queue_t *g_delay_blocked_procs_queue;
 
 int kGetPid() {
     // Confirm that there is a process that is currently running
@@ -76,12 +77,11 @@ int kDelay(int clock_ticks) {
         return 0;
     }
 
-    int curr_num_ticks = 0;
+    g_running_pcb->elapsed_clock_ticks = 0;
+    g_running_pcb->delay_clock_ticks = clock_ticks;
 
-    while (curr_num_ticks < clock_ticks) {
-        Pause();
-        curr_num_ticks += 1;
-    }
+    // Put current process in blocked processes queue
+    qput(g_delay_blocked_procs_queue, (void *)g_running_pcb);
 
     return 0;
 }
