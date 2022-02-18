@@ -35,7 +35,10 @@ int find_free_frame(unsigned int *frametable);
 void print_r0_page_table(pte_t *ptable, int size, int *frametable);
 void print_r1_page_table(pte_t *ptable, int size);
 
-int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable);
-int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable);
+int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable);
+int lower_brk_user(void *new_brk, void *current_brk, pte_t *ptable);
+
+// int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable);
+// int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable);
 
 #endif  // __KERNEL_DATA_STRUCTS_H

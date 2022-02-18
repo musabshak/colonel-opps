@@ -57,6 +57,87 @@ void doIdle(void) {
 }
 
 /**
+ * Helper function called by SetKernelBrk(void *addr) in the case that addr > g_kernel_brk.
+ *
+ * Modifies (if need be)
+ *      - The global R0 pagetable (allocates new pages)
+ *      - g_kernel_brk
+ */
+int h_raise_brk(void *new_brk) {
+    TracePrintf(1, "Calling h_raise_brk w/ arg: %x (page %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
+
+    unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+    unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+
+    unsigned int num_pages_to_raise = new_page - current_page;
+    unsigned int new_brk_int = (unsigned int)new_brk;
+
+    // Check if `new_brk` is not 0th byte of page. Then, since we are rounding the
+    // brk up to the next page we want to allocate the page the new_brk is
+    // on.
+    if (new_brk_int != (new_brk_int & PAGEMASK)) {
+        num_pages_to_raise += 1;
+    }
+
+    // Allocate new pages in R0 ptable (find free frames for each page etc.)
+    for (int i = 0; i < num_pages_to_raise; i++) {
+        int free_frame_idx = find_free_frame(g_frametable);
+        g_frametable[free_frame_idx] = 1;  // mark frame as used
+
+        // no free frames were found
+        if (free_frame_idx < 0) {
+            return ERROR;
+        }
+
+        // (current_page + i + 1) => assumes current_page has already been allocated
+        unsigned int next_page = current_page + i;
+        g_reg0_ptable[next_page].valid = 1;
+        g_reg0_ptable[next_page].prot = PROT_READ | PROT_WRITE;
+        g_reg0_ptable[next_page].pfn = free_frame_idx;
+    }
+
+    g_kernel_brk = (void *)(UP_TO_PAGE(new_brk_int));
+
+    return 0;
+}
+
+/**
+ * Helper function called by SetKernelBrk(void *addr) in the case that addr < g_kernel_brk.
+ *
+ * Modifies (if need be)
+ *      - The global R0 pagetable (allocates new pages)
+ *      - g_kernel_brk
+ */
+int h_lower_brk(void *new_brk) {
+    TracePrintf(1, "Calling h_lower_brk\n");
+
+    unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
+    unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+
+    unsigned int num_pages_to_lower = current_page - new_page;
+    unsigned int new_brk_int = (unsigned int)new_brk;
+
+    if (new_brk_int != (new_brk_int & PAGEMASK)) {
+        num_pages_to_lower -= 1;
+    }
+
+    // "Frees" pages from R0 pagetable (marks those frames as unused, etc.)
+    for (int i = 0; i < num_pages_to_lower; i++) {
+        unsigned int prev_page = current_page - i - 1;
+        unsigned int idx_to_free = g_reg0_ptable[prev_page].pfn;
+        g_frametable[idx_to_free] = 0;  // mark frame as un-used
+
+        g_reg0_ptable[prev_page].valid = 0;
+        g_reg0_ptable[prev_page].prot = PROT_NONE;
+        g_reg0_ptable[prev_page].pfn = 0;  // should never be touched
+    }
+
+    g_kernel_brk = (void *)(UP_TO_PAGE(new_brk_int));
+
+    return 0;
+}
+
+/**
  *  Changes g_kernel_brk to new_brk. Handles case when virtual memory is not
  *  enabled and also the case when it is enabled. Also does associated tasks,
  *  such as allocating frames, updating R0 pagetable, etc.
@@ -65,7 +146,7 @@ void doIdle(void) {
  */
 int SetKernelBrk(void *new_brk) {
 
-    TracePrintf(1, "Calling SetKernelBrk w/ arg: 0x%x (page %d)\n", new_brk,
+    TracePrintf(1, "Calling SetKernelBrk w/ arg: %x (page %d)\n", new_brk,
                 (unsigned int)new_brk >> PAGESHIFT);
 
     unsigned int new_brk_int = (unsigned int)new_brk;
@@ -97,11 +178,11 @@ int SetKernelBrk(void *new_brk) {
     }
     // raising brk
     else if (bytes_to_raise > 0) {
-        rc = h_raise_brk(new_brk, &g_kernel_brk, g_reg0_ptable);
+        rc = h_raise_brk(new_brk);
     }
     // reducing brk
     else {
-        rc = h_lower_brk(new_brk, &g_kernel_brk, g_reg0_ptable);
+        rc = h_lower_brk(new_brk);
     }
 
     return rc;
@@ -326,12 +407,15 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     /* S=================== TEST SetKernelBrk ==================== */
 
-    // Quick test
     TracePrintf(1, "current brk: %x (p#: %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
 
-    print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
-    void *my_p = malloc(PAGESIZE * 4);
-    print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+    TracePrintf(1, "mallocing\n");
+    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
+    void *my_p = malloc(PAGESIZE * 40);
+
+    TracePrintf(1, "freeing\n");
+    free(my_p);
+    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
 
     TracePrintf(1, "current brk: %x (p#: %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
 

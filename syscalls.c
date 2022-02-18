@@ -45,12 +45,14 @@ int kBrk(void *new_brk) {
     }
     // raising brk
     else if (bytes_to_raise > 0) {
-        rc = h_raise_brk(new_brk, &user_brk, ptable);
+        rc = raise_brk_user(new_brk, user_brk, ptable);
     }
     // reducing brk
     else {
-        rc = h_lower_brk(new_brk, &user_brk, ptable);
+        rc = lower_brk_user(new_brk, user_brk, ptable);
     }
+
+    g_running_pcb->user_brk = (void *)(UP_TO_PAGE(new_brk_int));
 
     return rc;
 }

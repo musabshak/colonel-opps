@@ -23,8 +23,15 @@ int main(void) {
 
     TracePrintf(1, "TEST 1 RUNNING!\n");
 
+    TracePrintf(1, "Getting process pid\n");
+    int pid = GetPid();
+    TracePrintf(1, "My pid is: %d\n", pid);
+
     TracePrintf(1, "Calling malloc!\n");
-    void* myp = malloc(10000);
+    void* myp = malloc(100000);
+
+    TracePrintf(1, "Delaying for 10 clock ticks!\n");
+    Delay(10);
 
     TracePrintf(1, "TEST 1 DONE!\n");
 }

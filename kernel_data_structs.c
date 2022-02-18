@@ -87,19 +87,11 @@ void print_r1_page_table(pte_t *ptable, int size) {
     TracePrintf(1, "\n");
 }
 
-/**
- * Helper function called by SetKernelBrk(void *addr) in the case that addr > g_kernel_brk,
- * also analagously by `Brk()`.
- *
- * Modifies (if need be)
- *      - `ptable` (allocates new pages)
- *      - `*curr_brk`
- */
-int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
-    TracePrintf(1, "Calling h_raise_brk\n");
+int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
+    TracePrintf(1, "Calling h_raise_brk w/ arg: %x (page %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
 
-    unsigned int current_page = (unsigned int)curr_brk >> PAGESHIFT;
-    unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+    unsigned int current_page = ((unsigned int)current_brk >> PAGESHIFT) - MAX_PT_LEN;
+    unsigned int new_page = ((unsigned int)new_brk >> PAGESHIFT) - MAX_PT_LEN;
 
     unsigned int num_pages_to_raise = new_page - current_page;
     unsigned int new_brk_int = (unsigned int)new_brk;
@@ -111,7 +103,7 @@ int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
         num_pages_to_raise += 1;
     }
 
-    // Allocate new pages in ptable (find free frames for each page etc.)
+    // Allocate new pages in R0 ptable (find free frames for each page etc.)
     for (int i = 0; i < num_pages_to_raise; i++) {
         int free_frame_idx = find_free_frame(g_frametable);
         g_frametable[free_frame_idx] = 1;  // mark frame as used
@@ -121,30 +113,21 @@ int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
             return ERROR;
         }
 
-        // !!! (current_page + i + 1) => assumes current_page has already been allocated
+        // (current_page + i + 1) => assumes current_page has already been allocated
         unsigned int next_page = current_page + i;
         ptable[next_page].valid = 1;
         ptable[next_page].prot = PROT_READ | PROT_WRITE;
         ptable[next_page].pfn = free_frame_idx;
     }
 
-    *curr_brk = (void *)(UP_TO_PAGE(new_brk_int));
-
     return 0;
 }
 
-/**
- * Helper function called by SetKernelBrk(void *addr) in the case that addr < g_kernel_brk.
- *
- * Modifies (if need be)
- *      - `ptable` (allocates new pages)
- *      - `*curr_brk`
- */
-int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
-    // TracePrintf(1, "Calling h_lower_brk\n");
+int lower_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
+    TracePrintf(1, "Calling h_lower_brk\n");
 
-    unsigned int current_page = (unsigned int)curr_brk >> PAGESHIFT;
-    unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+    unsigned int current_page = ((unsigned int)current_brk >> PAGESHIFT) - MAX_PT_LEN;
+    unsigned int new_page = ((unsigned int)new_brk >> PAGESHIFT) - MAX_PT_LEN;
 
     unsigned int num_pages_to_lower = current_page - new_page;
     unsigned int new_brk_int = (unsigned int)new_brk;
@@ -153,7 +136,7 @@ int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
         num_pages_to_lower -= 1;
     }
 
-    // !!! "Frees" pages from pagetable (marks those frames as unused, etc.)
+    // "Frees" pages from R0 pagetable (marks those frames as unused, etc.)
     for (int i = 0; i < num_pages_to_lower; i++) {
         unsigned int prev_page = current_page - i - 1;
         unsigned int idx_to_free = g_reg0_ptable[prev_page].pfn;
@@ -164,7 +147,87 @@ int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
         ptable[prev_page].pfn = 0;  // should never be touched
     }
 
-    *curr_brk = (void *)(UP_TO_PAGE(new_brk_int));
-
     return 0;
 }
+
+/**
+ * Helper function called by SetKernelBrk(void *addr) in the case that addr > g_kernel_brk,
+ * also analagously by `Brk()`.
+ *
+ * Modifies (if need be)
+ *      - `ptable` (allocates new pages)
+ *      - `*curr_brk`
+ */
+// int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
+//     TracePrintf(1, "Calling h_raise_brk\n");
+
+//     unsigned int current_page = (unsigned int)curr_brk >> PAGESHIFT;
+//     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+
+//     unsigned int num_pages_to_raise = new_page - current_page;
+//     unsigned int new_brk_int = (unsigned int)new_brk;
+
+//     // Check if `new_brk` is not 0th byte of page. Then, since we are rounding the
+//     // brk up to the next page we want to allocate the page the new_brk is
+//     // on.
+//     if (new_brk_int != (new_brk_int & PAGEMASK)) {
+//         num_pages_to_raise += 1;
+//     }
+
+//     // Allocate new pages in ptable (find free frames for each page etc.)
+//     for (int i = 0; i < num_pages_to_raise; i++) {
+//         int free_frame_idx = find_free_frame(g_frametable);
+//         g_frametable[free_frame_idx] = 1;  // mark frame as used
+
+//         // no free frames were found
+//         if (free_frame_idx < 0) {
+//             return ERROR;
+//         }
+
+//         // !!! (current_page + i + 1) => assumes current_page has already been allocated
+//         unsigned int next_page = current_page + i;
+//         ptable[next_page].valid = 1;
+//         ptable[next_page].prot = PROT_READ | PROT_WRITE;
+//         ptable[next_page].pfn = free_frame_idx;
+//     }
+
+//     *curr_brk = (void *)(UP_TO_PAGE(new_brk_int));
+
+//     return 0;
+// }
+
+// /**
+//  * Helper function called by SetKernelBrk(void *addr) in the case that addr < g_kernel_brk.
+//  *
+//  * Modifies (if need be)
+//  *      - `ptable` (allocates new pages)
+//  *      - `*curr_brk`
+//  */
+// int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
+//     // TracePrintf(1, "Calling h_lower_brk\n");
+
+//     unsigned int current_page = (unsigned int)curr_brk >> PAGESHIFT;
+//     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
+
+//     unsigned int num_pages_to_lower = current_page - new_page;
+//     unsigned int new_brk_int = (unsigned int)new_brk;
+
+//     if (new_brk_int != (new_brk_int & PAGEMASK)) {
+//         num_pages_to_lower -= 1;
+//     }
+
+//     // !!! "Frees" pages from pagetable (marks those frames as unused, etc.)
+//     for (int i = 0; i < num_pages_to_lower; i++) {
+//         unsigned int prev_page = current_page - i - 1;
+//         unsigned int idx_to_free = g_reg0_ptable[prev_page].pfn;
+//         g_frametable[idx_to_free] = 0;  // mark frame as un-used
+
+//         ptable[prev_page].valid = 0;
+//         ptable[prev_page].prot = PROT_NONE;
+//         ptable[prev_page].pfn = 0;  // should never be touched
+//     }
+
+//     *curr_brk = (void *)(UP_TO_PAGE(new_brk_int));
+
+//     return 0;
+// }
