@@ -64,7 +64,8 @@ void doIdle(void) {
  *      - g_kernel_brk
  */
 int h_raise_brk(void *new_brk) {
-    // TracePrintf(1, "Calling h_raise_brk\n");
+    TracePrintf(1, "current brk: %x (page %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
+    TracePrintf(1, "Calling h_raise_brk w/ arg: %x (page %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
 
     unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
@@ -90,7 +91,7 @@ int h_raise_brk(void *new_brk) {
         }
 
         // (current_page + i + 1) => assumes current_page has already been allocated
-        unsigned int next_page = current_page + i + 1;
+        unsigned int next_page = current_page + i;
         g_reg0_ptable[next_page].valid = 1;
         g_reg0_ptable[next_page].prot = PROT_READ | PROT_WRITE;
         g_reg0_ptable[next_page].pfn = free_frame_idx;
@@ -123,7 +124,7 @@ int h_lower_brk(void *new_brk) {
 
     // "Frees" pages from R0 pagetable (marks those frames as unused, etc.)
     for (int i = 0; i < num_pages_to_lower; i++) {
-        unsigned int prev_page = current_page - i;
+        unsigned int prev_page = current_page - i - 1;
         unsigned int idx_to_free = g_reg0_ptable[prev_page].pfn;
         g_frametable[idx_to_free] = 0;  // mark frame as un-used
 
@@ -145,8 +146,10 @@ int h_lower_brk(void *new_brk) {
  *  Returns 0 if successful, ERROR if not.
  */
 int SetKernelBrk(void *new_brk) {
+    TracePrintf(1, "current brk: %x (page %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
 
-    TracePrintf(1, "Calling SetKernelBrk w/ arg: %x\n", new_brk);
+    TracePrintf(1, "Calling SetKernelBrk w/ arg: %x (page %d)\n", new_brk,
+                (unsigned int)new_brk >> PAGESHIFT);
 
     unsigned int new_brk_int = (unsigned int)new_brk;
     unsigned int last_addr_above_data = (unsigned int)(_kernel_data_end);
@@ -402,28 +405,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         g_frametable[idx] = 1;  // mark frame as used
     }
 
-    // /* Populate R1 ptable. */
-
-    // //  Set one valid page in R1 page table for idle's user stack.
-    // init_r1_ptable[g_len_pagetable - 1].valid = 1;
-    // init_r1_ptable[g_len_pagetable - 1].prot = PROT_READ | PROT_WRITE;
-
-    // int free_frame_idx = find_free_frame(g_frametable);
-
-    // if (free_frame_idx == -1) {
-    //     TracePrintf(1, "No free frame found!\n");
-    //     return;
-    // }
-
-    // init_r1_ptable[g_len_pagetable - 1].pfn = free_frame_idx;
-    // g_frametable[free_frame_idx] = 1;  // mark frame as used
-
-    // Debugging
-    // Print ptables after populating
-    print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
-    TracePrintf(1, "original brk: %x\n", (unsigned int)g_kernel_brk >> PAGESHIFT);
-    // print_r1_page_table(init_r1_ptable, g_len_pagetable);
-
     /* S=================== ENABLE VIRTUAL MEMORY ==================== */
 
     // Tell hardware where page tables are stored
@@ -435,6 +416,9 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     //  Enable virtual memory
     g_virtual_mem_enabled = 1;
     WriteRegister(REG_VM_ENABLE, 1);
+
+    TracePrintf(1, "current brk: %x (page %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
+    void *my_p = malloc(PAGESIZE * 3);
 
     /* S=================== SETUP PROCESS FOR FIRST PROGRAM ==================== */
     /**
