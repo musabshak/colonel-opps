@@ -121,8 +121,8 @@ int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
             return ERROR;
         }
 
-        // (current_page + i + 1) => assumes current_page has already been allocated
-        unsigned int next_page = current_page + i + 1;
+        // !!! (current_page + i + 1) => assumes current_page has already been allocated
+        unsigned int next_page = current_page + i;
         ptable[next_page].valid = 1;
         ptable[next_page].prot = PROT_READ | PROT_WRITE;
         ptable[next_page].pfn = free_frame_idx;
@@ -153,9 +153,9 @@ int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
         num_pages_to_lower -= 1;
     }
 
-    // "Frees" pages from pagetable (marks those frames as unused, etc.)
+    // !!! "Frees" pages from pagetable (marks those frames as unused, etc.)
     for (int i = 0; i < num_pages_to_lower; i++) {
-        unsigned int prev_page = current_page - i;
+        unsigned int prev_page = current_page - i - 1;
         unsigned int idx_to_free = g_reg0_ptable[prev_page].pfn;
         g_frametable[idx_to_free] = 0;  // mark frame as un-used
 
