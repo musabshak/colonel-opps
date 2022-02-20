@@ -1,7 +1,7 @@
 # Checkpoint 3 Submission
 
-Code: XYZ
-[commit: XYZ in master branch]
+Code: https://git.dartmouth.edu/f00436k/colonel-opps/-/blob/checkpoint-3/kernel.c
+[commit: 408eefc44d590394349b66f6a6884c0111ca30df in checkpoint-3 branch]
 
 ## Questions and comments
 We made the checkpoint (everything is working as expected).
