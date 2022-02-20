@@ -48,7 +48,12 @@ void* qsearch(queue_t* qp, bool (*searchfn)(void* elementp, const void* keyp), c
  */
 void* qremove(queue_t* qp, bool (*searchfn)(void* elementp, const void* keyp), const void* skeyp);
 
-/* concatenatenates elements of q2 into q1
+/* same as the qremove function except it removes all nodes for which the supplied search
+ * function returns true. returns 0 if everything went successfully.
+ */
+int qremove_all(queue_t* qp, bool (*searchfn)(void* elementp, const void* keyp), const void* skeyp);
+
+/* concatenates elements of q2 into q1
  * q2 is dealocated, closed, and unusable upon completion
  */
 void qconcat(queue_t* q1p, queue_t* q2p);

@@ -19,7 +19,8 @@
 	"settings": {
 		"files.associations": {
 			"queue.h": "c",
-			"kernel_data_structs.h": "c"
+			"kernel_data_structs.h": "c",
+			"stdlib.h": "c"
 		}
 	}
 }
