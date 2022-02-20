@@ -125,6 +125,37 @@ void *qremove(queue_t *qp, bool (*searchfn)(void *elementp, const void *keyp), c
     return NULL;
 }
 
+int qremove_all(queue_t *qp, bool (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
+    node_t *np;
+    node_t *nf;
+
+    for (np = qp->front; np != NULL; np = np->next) {
+        if (searchfn(np->data, skeyp)) {
+            if (qp->front == qp->back) { /* only element */
+                qp->front = NULL;
+                qp->back = NULL;
+            } else if (qp->back == np) { /* element at end */
+                nf->next = NULL;
+                qp->back = nf;
+            } else if (qp->front == np) { /* element at front */
+                qp->front = np->next;
+            } else { /* element in middle */
+                nf->next = np->next;
+            }
+            // save old np's attributes
+            void *tmp = np->data;
+            node_t *tmp2 = np->next;
+            free(np);
+            // restore attributes
+            np->data = tmp;
+            np->next = tmp2;
+        } else {
+            nf = np;
+        }
+    }
+    return 0;
+}
+
 void qconcat(queue_t *q1p, queue_t *q2p) {
     bool first_empty = q1p->front == NULL && q1p->back == NULL;
     bool second_empty = q2p->front == NULL && q2p->back == NULL;
