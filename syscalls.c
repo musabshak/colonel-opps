@@ -1,4 +1,5 @@
 #include "kernel_data_structs.h"
+#include "load_program.h"
 #include "ykernel.h"
 
 extern pcb_t *g_running_pcb;
@@ -8,6 +9,7 @@ extern pcb_t *g_idle_pcb;
 extern unsigned int g_len_pagetable;
 extern unsigned int g_num_kernel_stack_pages;
 extern pte_t *g_reg0_ptable;
+extern int *g_frametable;
 
 int kGetPid() {
     // Confirm that there is a process that is currently running
@@ -114,11 +116,12 @@ int kFork() {
     pcb_t *parent_pcb = g_running_pcb;
 
     // Allocate a PCB for child process. Returns virtual address in kernel heap
-    child_pcb = malloc(sizeof(*g_idle_pcb));
+    pcb_t *child_pcb = malloc(sizeof(*g_idle_pcb));
     if (child_pcb == NULL) {
         TracePrintf(1, "malloc for `kFork()`'s PCB failed.\n");
         return ERROR;
     }
+    memcpy(child_pcb, parent_pcb, sizeof(pcb_t));
 
     pte_t *child_r1_ptable = malloc(sizeof(pte_t) * g_len_pagetable);
     if (child_r1_ptable == NULL) {
@@ -126,80 +129,99 @@ int kFork() {
         return ERROR;
     }
 
-    // Initialize child's r1 pagetable to fully copy (not COW) parent's r1 
+    // Initialize child's r1 pagetable to fully copy (not COW) parent's r1
     // pagetable
+    pte_t *parent_r1_ptable = parent_pcb->r1_ptable;
     for (int i = 0; i < g_len_pagetable; i++) {
+        child_r1_ptable[i] = parent_r1_ptable[i];
+
+        if (parent_r1_ptable[i].valid == 0) {
+            continue;
+        }
+
         int free_frame_idx = find_free_frame(g_frametable);
         if (free_frame_idx == -1) {
             TracePrintf(1, "Couldn't find free frame while forking.\n");
             return ERROR;
         }
+        g_frametable[free_frame_idx] = 1;
 
         // Write to this new frame by assigning it to the page below kernel stack
         // and writing to that page
-        page_below_kstack = MAX_PT_LEN - g_num_kernel_stack_pages - 1;
-        g
+        unsigned int page_below_kstack = MAX_PT_LEN - g_num_kernel_stack_pages - 1;
+        g_reg0_ptable[page_below_kstack].valid = 1;
+        g_reg0_ptable[page_below_kstack].prot = PROT_READ | PROT_WRITE;
+        g_reg0_ptable[page_below_kstack].pfn = free_frame_idx;
 
-        memcpy(child_r1_ptable[i], parent_pcb->r1_ptable[i], size);
+        memcpy(page_below_kstack << PAGESHIFT, (MAX_PT_LEN + i) << PAGESHIFT, PAGESIZE);
+
+        g_reg0_ptable[page_below_kstack].valid = 0;
+
+        // Assign this new frame to the new pagetable
+        child_r1_ptable[i].pfn = free_frame_idx;
     }
 
-    // Populate idlePCB
-    g_idle_pcb->r1_ptable = idle_r1_ptable;
-    // g_idle_pcb->uctxt = *uctxt;
-    memcpy(&(g_idle_pcb->uctxt), uctxt,
+    // Populate child PCB
+    child_pcb->r1_ptable = child_r1_ptable;
+
+    memcpy(&(child_pcb->uctxt), &(parent_pcb->uctxt),
            sizeof(UserContext));  // !!!! On the way into a handler (Transition 5), copy the current
                                   // UserContext into the PCB of the current proceess.
-    g_idle_pcb->pid = helper_new_pid(idle_r1_ptable);  // hardware defined function for generating PID
-    g_idle_pcb->user_text_pg0 = 0;
-    g_idle_pcb->user_data_pg0 = 0;
+    g_idle_pcb->pid = helper_new_pid(child_r1_ptable);  // hardware defined function for generating PID
 
-    TracePrintf(1, "Just populated idle's uctxt\n");
+    // int idx = find_free_frame(g_frametable);
+    // if (idx == -1) {
+    //     TracePrintf(1, "find_free_frame() failed while allocating frames for idle's user_stack\n");
+    //     return;
+    // }
 
-    int idx = find_free_frame(g_frametable);
-    if (idx == -1) {
-        TracePrintf(1, "find_free_frame() failed while allocating frames for idle's user_stack\n");
-        return;
-    }
-
-    // Allocate user stack for idle's r1 ptable
-    idle_r1_ptable[g_len_pagetable - 1].valid = 1;
-    idle_r1_ptable[g_len_pagetable - 1].prot = PROT_READ | PROT_WRITE;
-    idle_r1_ptable[g_len_pagetable - 1].pfn = idx;
-    g_frametable[idx] = 1;
+    // // Allocate user stack for idle's r1 ptable
+    // idle_r1_ptable[g_len_pagetable - 1].valid = 1;
+    // idle_r1_ptable[g_len_pagetable - 1].prot = PROT_READ | PROT_WRITE;
+    // idle_r1_ptable[g_len_pagetable - 1].pfn = idx;
+    // g_frametable[idx] = 1;
 
     // Get free frames for idle's kernel stack
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
         int idx = find_free_frame(g_frametable);
-
         if (idx == -1) {
-            TracePrintf(1, "find_free_frame() failed while allocating frames for idle's kernel_stack\n");
+            TracePrintf(
+                1, "In `kFork()`, `find_free_frame()` failed while allocating frames for kernel_stack\n");
             return;
         }
-        g_idle_pcb->kstack_frame_idxs[i] = idx;
         g_frametable[idx] = 1;
+
+        child_pcb->kstack_frame_idxs[i] = idx;
     }
 
-    // // Stack values increment in 4 bytes. Intel is little-endian; sp needs to point to
-    // // 0x1ffffc (and not 0x1fffff)
-    g_idle_pcb->uctxt.sp = (void *)(VMEM_LIMIT - 4);  // !!!!!!!!!!
-    g_idle_pcb->uctxt.pc = doIdle;                    // !!!!!!!!!!
+    // // // Stack values increment in 4 bytes. Intel is little-endian; sp needs to point to
+    // // // 0x1ffffc (and not 0x1fffff)
+    // g_idle_pcb->uctxt.sp = (void *)(VMEM_LIMIT - 4);  // !!!!!!!!!!
+    // g_idle_pcb->uctxt.pc = doIdle;                    // !!!!!!!!!!
 
     // print_r1_page_table(idle_r1_ptable, g_len_pagetable);
 
-    g_ready_procs_queue = qopen();
-    g_delay_blocked_procs_queue = qopen();
+    int rc = KernelContextSwitch(KCCopy, child_pcb, NULL);
 
-    TracePrintf(1, "Just finished KCCopy\n");
+    // uctxt->pc = g_running_pcb->uctxt.pc;  // !!!!!!!!!!
+    // uctxt->sp = g_running_pcb->uctxt.sp;  // !!!!!!!!!!
 
-    /* E=================== SETUP IDLE PROCESS ==================== */
+    return SUCCESS;
+}
 
-    g_running_pcb = init_pcb;
+int kExec(char *filename, char **argvec) {
+    // Clear out current r1 pagetable, as LoadProgram will rebuild it
+    pte_t *r1_ptable = g_running_pcb->r1_ptable;
+    for (int i = 0; i < MAX_PT_LEN; i++) {
+        if (r1_ptable[i].valid == 0) {
+            continue;
+        }
 
-    int rc = KernelContextSwitch(KCCopy, g_idle_pcb, NULL);
+        int pfn_idx = r1_ptable[i].pfn;
+        g_frametable[pfn_idx] = 0;
 
-    uctxt->pc = g_running_pcb->uctxt.pc;  // !!!!!!!!!!
-    uctxt->sp = g_running_pcb->uctxt.sp;  // !!!!!!!!!!
+        r1_ptable[i].valid = 0;
+    }
 
-    TracePrintf(1, "g_running_pcb's pid: %d\n", g_running_pcb->pid);
-    TracePrintf(1, "Exiting KernelStart\n");
+    LoadProgram(filename, argvec, g_running_pcb);
 }
