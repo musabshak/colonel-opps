@@ -153,7 +153,7 @@ int kFork() {
         g_reg0_ptable[page_below_kstack].prot = PROT_READ | PROT_WRITE;
         g_reg0_ptable[page_below_kstack].pfn = free_frame_idx;
 
-        memcpy(page_below_kstack << PAGESHIFT, (MAX_PT_LEN + i) << PAGESHIFT, PAGESIZE);
+        memcpy((void *)(page_below_kstack << PAGESHIFT), (void *)((MAX_PT_LEN + i) << PAGESHIFT), PAGESIZE);
 
         g_reg0_ptable[page_below_kstack].valid = 0;
 
@@ -167,7 +167,7 @@ int kFork() {
     memcpy(&(child_pcb->uctxt), &(parent_pcb->uctxt),
            sizeof(UserContext));  // !!!! On the way into a handler (Transition 5), copy the current
                                   // UserContext into the PCB of the current proceess.
-    g_idle_pcb->pid = helper_new_pid(child_r1_ptable);  // hardware defined function for generating PID
+    child_pcb->pid = helper_new_pid(child_r1_ptable);  // hardware defined function for generating PID
 
     // int idx = find_free_frame(g_frametable);
     // if (idx == -1) {
@@ -187,7 +187,7 @@ int kFork() {
         if (idx == -1) {
             TracePrintf(
                 1, "In `kFork()`, `find_free_frame()` failed while allocating frames for kernel_stack\n");
-            return;
+            return ERROR;
         }
         g_frametable[idx] = 1;
 
@@ -205,6 +205,10 @@ int kFork() {
 
     // uctxt->pc = g_running_pcb->uctxt.pc;  // !!!!!!!!!!
     // uctxt->sp = g_running_pcb->uctxt.sp;  // !!!!!!!!!!
+
+    // Return value of 0 for the child, parent receives pid of child
+    child_pcb->uctxt.regs[0] = 0;
+    parent_pcb->uctxt.regs[0] = child_pcb->pid;;
 
     return SUCCESS;
 }

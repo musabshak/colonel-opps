@@ -46,6 +46,11 @@ int TrapKernelHandler(UserContext *user_context) {
         int clock_ticks;
         void *addr;
 
+        // `kExec()` args
+        char *filename;
+        char **argvec;
+
+
         case YALNIX_GETPID:
             pid = kGetPid();
             user_context->regs[0] = pid;
@@ -58,6 +63,11 @@ int TrapKernelHandler(UserContext *user_context) {
         case YALNIX_DELAY:
             clock_ticks = user_context->regs[0];
             rc = kDelay(clock_ticks);
+            break;
+        case YALNIX_EXEC:
+            filename = (char *)user_context->regs[0];
+            argvec = (char **)user_context->regs[1];
+            rc = kExec(filename, argvec);
             break;
     }
     TracePrintf(1, "Exiting TrapKernelHandler\n");

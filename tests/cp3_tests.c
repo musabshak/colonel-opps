@@ -7,7 +7,7 @@
 
 #include <yuser.h>
 
-int main(void) {
+int main(int argc, char **argv) {
 
     int clock_ticks = 2;
     TracePrintf(1, "TEST PROG RUNNING!\n");
@@ -29,5 +29,11 @@ int main(void) {
     while (1) {
         TracePrintf(1, "TEST PROG RUNNING!\n");
         Pause();
+        break;
     }
+
+    TracePrintf(1, "About to exec:\n");
+    char **args_vec = argv;
+    args_vec[argc-1] = NULL;
+    Exec("tests/init", args_vec);
 }
