@@ -42,6 +42,8 @@ void print_r1_page_table(pte_t *ptable, int size);
 int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable);
 int lower_brk_user(void *new_brk, void *current_brk, pte_t *ptable);
 
+void print_pcb(void *elementp);
+
 // int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable);
 // int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable);
 

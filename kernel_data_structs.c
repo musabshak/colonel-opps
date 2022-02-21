@@ -18,6 +18,11 @@ int copy_page_contents(unsigned int source_page, unsigned int target_page) {
     return SUCCESS;
 }
 
+void print_pcb(void *elementp) {
+    pcb_t *my_pcb = (pcb_t *)elementp;
+    TracePrintf(1, "pid: %d \n", my_pcb->pid);
+}
+
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     TracePrintf(1, "Entering KCCopy\n");
     // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
@@ -105,15 +110,12 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
     WriteRegister(REG_PTBR1, (unsigned int)(new_pcb->r1_ptable));
     WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
 
+    g_running_pcb = new_pcb;
+
+    TracePrintf(1, "g_running_pcb's pid: %d\n", g_running_pcb->pid);
     TracePrintf(1, "Leaving KCSwitch\n");
 
-    g_running_pcb = new_pcb;
-    TracePrintf(1, "g_running_pcb's pid: %d\n", g_running_pcb->pid);
-
-    // WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_ALL);
-
     // At the end of switching, return pointer to kernel context (previously) saved in new_pcb
-    // return &(new_pcb->kctxt);
     return &(new_pcb->kctxt);
 }
 

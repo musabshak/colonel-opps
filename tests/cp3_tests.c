@@ -7,9 +7,9 @@
 
 #include <yuser.h>
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
 
-    int clock_ticks = 2;
+    int clock_ticks = 4;
     TracePrintf(1, "TEST PROG RUNNING!\n");
     TracePrintf(1, "Getting process pid\n");
     int pid = GetPid();
@@ -29,11 +29,11 @@ int main(int argc, char **argv) {
     while (1) {
         TracePrintf(1, "TEST PROG RUNNING!\n");
         Pause();
-        break;
+        // break;
     }
 
-    TracePrintf(1, "About to exec:\n");
-    char **args_vec = argv;
-    args_vec[argc-1] = NULL;
-    Exec("tests/init", args_vec);
+    // TracePrintf(1, "About to exec:\n");
+    // char **args_vec = argv;
+    // args_vec[argc-1] = NULL;
+    // Exec("tests/init", args_vec);
 }

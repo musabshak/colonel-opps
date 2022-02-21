@@ -8,6 +8,8 @@ extern pcb_t *g_idle_pcb;
 extern queue_t *g_ready_procs_queue;
 extern queue_t *g_delay_blocked_procs_queue;
 
+int schedule(int is_caller_clocktrap);
+
 /*
 Trap handlers are functions pointed to by pointers in the interrupt vector table
 */
@@ -50,7 +52,6 @@ int TrapKernelHandler(UserContext *user_context) {
         char *filename;
         char **argvec;
 
-
         case YALNIX_GETPID:
             pid = kGetPid();
             user_context->regs[0] = pid;
@@ -87,65 +88,15 @@ int TrapKernelHandler(UserContext *user_context) {
  *
  */
 
-void print_pcb(void *elementp) {
-    pcb_t *my_pcb = (pcb_t *)elementp;
-    TracePrintf(1, "pid: %d \n", my_pcb->pid);
-}
-
 int TrapClock(UserContext *user_context) {
 
     TracePrintf(1, "Entering TrapClock\n");
-    int rc;
 
-    // Iterate through blocked processes associated with Delay and increment
-    // each process' pcb->elapsed_clock_ticks. If pcb->elapsed_clock_ticks >=
-    // pcb->delay_clock_ticks, remove process from blocked queue and instead
-    // add to the ready queue.
-    pcb_t *proc = qget(g_delay_blocked_procs_queue);
-
-    if (proc != NULL) {
-        proc->elapsed_clock_ticks += 1;
-
-        if (proc->elapsed_clock_ticks < proc->delay_clock_ticks) {
-            qput(g_delay_blocked_procs_queue, proc);
-        } else {
-            qput(g_ready_procs_queue, proc);
-        }
-    }
-
-    TracePrintf(1, "ready queue: \n");
-    qapply(g_ready_procs_queue, print_pcb);
-    TracePrintf(1, "\n");
-
-    TracePrintf(1, "blocked queue: \n");
-    qapply(g_delay_blocked_procs_queue, print_pcb);
-    TracePrintf(1, "\n");
-
-    // Get a new process from ready queue
-    pcb_t *new_pcb = (pcb_t *)qget(g_ready_procs_queue);
-
-    // If there are no runnable processes, dispatch idle
-    if (new_pcb == NULL) {
-        new_pcb = g_idle_pcb;
-    }
-
-    // Put currently running process into ready queue
-    if (g_running_pcb->pid != g_idle_pcb->pid) {
-        rc = qput(g_ready_procs_queue, (void *)g_running_pcb);
-        if (rc != 0) {
-            TracePrintf(2, "Failed to return running process to ready queue.\n");
-            return ERROR;
-        }
-    }
-
-    // Invoke KCSwitch()
-    rc = KernelContextSwitch(KCSwitch, g_running_pcb, new_pcb);
-    if (rc != 0) {
-        TracePrintf(1, "Failed to switch kernel context.\n");
-        return ERROR;
-    }
+    int rc = schedule(1);
 
     TracePrintf(1, "Exiting TrapClock\n");
+
+    return rc;
 }
 
 /*
