@@ -6,7 +6,7 @@
  *
  */
 
-#include <stdbool.h>
+// #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,7 +90,7 @@ void qapply(queue_t *qp, void (*fn)(void *elementp)) {
     }
 }
 
-void *qsearch(queue_t *qp, bool (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
+void *qsearch(queue_t *qp, int (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
     node_t *np;
     for (np = qp->front; np != NULL; np = np->next) {
         if (searchfn(np->data, skeyp)) {
@@ -100,7 +100,7 @@ void *qsearch(queue_t *qp, bool (*searchfn)(void *elementp, const void *keyp), c
     return NULL;
 }
 
-void *qremove(queue_t *qp, bool (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
+void *qremove(queue_t *qp, int (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
     node_t *np;
     node_t *nf;
     for (np = qp->front; np != NULL; np = np->next) {
@@ -125,7 +125,7 @@ void *qremove(queue_t *qp, bool (*searchfn)(void *elementp, const void *keyp), c
     return NULL;
 }
 
-int qremove_all(queue_t *qp, bool (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
+int qremove_all(queue_t *qp, int (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
     node_t *np;
     node_t *nf;
 
@@ -157,8 +157,8 @@ int qremove_all(queue_t *qp, bool (*searchfn)(void *elementp, const void *keyp),
 }
 
 void qconcat(queue_t *q1p, queue_t *q2p) {
-    bool first_empty = q1p->front == NULL && q1p->back == NULL;
-    bool second_empty = q2p->front == NULL && q2p->back == NULL;
+    int first_empty = q1p->front == NULL && q1p->back == NULL;
+    int second_empty = q2p->front == NULL && q2p->back == NULL;
 
     if (first_empty && second_empty) { /* both empty */
         ;
