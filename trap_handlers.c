@@ -38,12 +38,14 @@ Trap handlers are functions pointed to by pointers in the interrupt vector table
  *
  */
 
-int TrapKernelHandler(UserContext *user_context) {
+int TrapKernelHandler(UserContext *user_context)
+{
     TracePrintf(1, "Entering TrapKernelHandler\n");
     int syscall_code = user_context->code;
 
     int rc;
-    switch (syscall_code) {
+    switch (syscall_code)
+    {
         int pid;
         int clock_ticks;
         void *addr;
@@ -52,24 +54,24 @@ int TrapKernelHandler(UserContext *user_context) {
         char *filename;
         char **argvec;
 
-        case YALNIX_GETPID:
-            pid = kGetPid();
-            user_context->regs[0] = pid;
-            break;
-        case YALNIX_BRK:
-            addr = (void *)user_context->regs[0];
-            rc = kBrk(addr);
-            user_context->regs[0] = rc;
-            break;
-        case YALNIX_DELAY:
-            clock_ticks = user_context->regs[0];
-            rc = kDelay(clock_ticks);
-            break;
-        case YALNIX_EXEC:
-            filename = (char *)user_context->regs[0];
-            argvec = (char **)user_context->regs[1];
-            rc = kExec(filename, argvec);
-            break;
+    case YALNIX_GETPID:
+        pid = kGetPid();
+        user_context->regs[0] = pid;
+        break;
+    case YALNIX_BRK:
+        addr = (void *)user_context->regs[0];
+        rc = kBrk(addr);
+        user_context->regs[0] = rc;
+        break;
+    case YALNIX_DELAY:
+        clock_ticks = user_context->regs[0];
+        rc = kDelay(clock_ticks);
+        break;
+    case YALNIX_EXEC:
+        filename = (char *)user_context->regs[0];
+        argvec = (char **)user_context->regs[1];
+        rc = kExec(filename, argvec);
+        break;
     }
     TracePrintf(1, "Exiting TrapKernelHandler\n");
 }
@@ -88,7 +90,8 @@ int TrapKernelHandler(UserContext *user_context) {
  *
  */
 
-int TrapClock(UserContext *user_context) {
+int TrapClock(UserContext *user_context)
+{
 
     TracePrintf(1, "Entering TrapClock\n");
 
@@ -150,7 +153,8 @@ int TrapIllegal(UserContext *user_context) { ; }
  *
  */
 
-int TrapMemory(UserContext *user_context) {
+int TrapMemory(UserContext *user_context)
+{
     TracePrintf(1, "CALLING MEMORY TRAP HANDLER!!\n");
 
     // TracePrintf(1, "Address of user context: %p; page: %x\n", user_context->addr,

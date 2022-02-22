@@ -29,12 +29,12 @@ int main(int argc, char** argv) {
     while (1) {
         TracePrintf(1, "TEST PROG RUNNING!\n");
         Pause();
-        // break;
+        break;
     }
 
     TracePrintf(1, "About to exec:\n");
     char **args_vec = (char *[]){"hello", "world"};
-    args_vec[argc-1] = NULL;
+    args_vec[1] = NULL;
     Exec("tests/init", args_vec);
 
     while (1) {
