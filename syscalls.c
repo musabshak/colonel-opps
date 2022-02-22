@@ -12,6 +12,9 @@ extern pte_t *g_reg0_ptable;
 extern int *g_frametable;
 
 int schedule(int is_caller_clocktrap);
+int is_r0_addr(void *addr);
+int r1ptable_buf_is_valid(pte_t *r1_ptable, void *buf, int buf_len, int prot);
+int r1ptable_string_is_readable(pte_t *r1_ptable, char *str);
 
 int kGetPid() {
     // Confirm that there is a process that is currently running
@@ -216,9 +219,63 @@ int kFork() {
 
 int kExec(char *filename, char **argvec) {
 
-    // TODO: verify that pointers passed by userland Exec call are legit
+    /* Verify that pointers passed by userland Exec call are legit */
 
-    LoadProgram(filename, argvec, g_running_pcb);
+    // Do we need to check that the pointer is valid, or just that it doesn't point
+    // to kernel memory?
+
+    // Validate `filename`
+    // for (char *addr = filename; *addr != '\0'; addr++) {
+    //     if (is_r0_addr((void *)addr) == 1) {
+    //         TracePrintf(1, "Caller to `kExec()` tried to access kernel memory!\n");
+    //         return ERROR;
+    //     }
+    // }
+    if (r1ptable_string_is_readable(g_running_pcb->r1_ptable, filename) == 0) {
+        TracePrintf(1, "`filename` passed to `kExec()` was invalid.\n");
+        return ERROR;
+    }
+
+    // Validate `argvec` and each `char *` it points to
+    // for (char **argi = argvec; argi != NULL; argi++) {
+    //     if (is_r0_addr((void *)argi) == 1) {
+    //         TracePrintf(1, "Caller to `kExec()` tried to access kernel memory!\n");
+    //         return ERROR;
+    //     }
+
+    //     // Check if this is the last argument
+    //     if (*argi == NULL) {
+    //         break;
+    //     }
+
+    //     for (char *argi_addr = *argi; *argi_addr != '\0'; argi_addr++) {
+    //         if (is_r0_addr((void *)argi_addr) == 1) {
+    //             TracePrintf(1, "Caller to `kExec()` tried to access kernel memory!\n");
+    //             return ERROR;
+    //         }
+    //     }
+    // }
+    int num_args = 0;
+    for (char **argi = argvec; *argi != NULL; argi++) {
+        num_args++;
+    }
+
+    if (r1ptable_buf_is_valid(g_running_pcb->r1_ptable, (void *)argvec, num_args, PROT_READ) == 0) {
+        TracePrintf(1, "Invalid `argvec` passed to `kExec()`.\n");
+        return ERROR;
+    }
+
+    for (int i = 0; i < num_args; i++) {
+        if (r1ptable_string_is_readable(g_running_pcb->r1_ptable, argvec[i]) == 0) {
+            TracePrintf(1, "In `kExec()`, `argvec` contains invalid string.\n");
+            return ERROR;
+        }
+    }
+
+    int rc = LoadProgram(filename, argvec, g_running_pcb);
+    if (rc != SUCCESS) {
+        // We need to decide what to do here-- the caller pcb has been destroyed
+    }
 
     return SUCCESS;
 }
@@ -230,3 +287,72 @@ int kWait(int *status_ptr) {
 }
 
 void kExit(int status) {}
+
+int is_r0_addr(void *addr) {
+    unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
+    if (addr_page < g_len_pagetable) {
+        // the address points to region 0 (kernel) memory
+        return 1;
+    }
+
+    return 0;
+}
+
+int addr_is_in_r1(void *addr) {
+    unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
+    if (addr_page < g_len_pagetable || addr_page >= 2 * MAX_PT_LEN) {
+        // the address points to r0 (kernel) memory, or past r1 memory
+        return 0;
+    }
+
+    return 1;
+}
+
+/**
+ * 0 is invalid, 1 is valid
+ */
+int r1ptable_buf_is_valid(pte_t *r1_ptable, void *buf, int buf_len, int prot) {
+    for (int i = 0; i < buf_len; i++) {
+        void *addr = buf + i;
+        if (addr_is_in_r1(addr) == 0) {
+            // address is not in region 1
+            return 0;
+        }
+
+        unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
+        // It is safe to do this because we know the address in in region 1
+        addr_page = addr_page % g_len_pagetable;
+
+        // See if the pagetable has the same protections the user is asking the kernel to
+        // to utilize. We do this by checking if adding the protections in `prot` to the
+        // existing one in the pagetable will result in the same protection that the pagetable
+        // originally had. If it is the same, then that page must have already included
+        // `prot` (potentially it may have included more permissions).
+        if (r1_ptable[addr_page].prot & prot != prot) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+/**
+ * Similar to `r1ptable_buf_is_valid()`, but for strings.
+ */
+int r1ptable_string_is_readable(pte_t *r1_ptable, char *str) {
+    for (char *pointer_to_char = str; *pointer_to_char != '\0'; pointer_to_char++) {
+        if (addr_is_in_r1((void *)pointer_to_char) == 0) {
+            return 0;
+        }
+
+        unsigned int addr_page = ((unsigned int)(str) >> PAGESHIFT);
+        addr_page = addr_page % g_len_pagetable;
+
+        if (r1_ptable[addr_page].prot & PROT_READ != PROT_READ) {
+            return 0;
+        }
+    }
+    // still check the last '\0'?
+
+    return 1;
+}
