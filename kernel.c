@@ -500,13 +500,15 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_ready_procs_queue = qopen();
     g_delay_blocked_procs_queue = qopen();
 
-        /* E=================== SETUP IDLE PROCESS ==================== */
+    /* E=================== SETUP IDLE PROCESS ==================== */
 
     g_running_pcb = init_pcb;
 
     int rc = KernelContextSwitch(KCCopy, g_idle_pcb, NULL);
     TracePrintf(1, "Just finished KCCopy\n");
 
+    // Should the following copy the entire saved user_context (and not just the pc and sp pointers?)
+    // I think it doesn't matter here because the context-switching is between init and idle
     uctxt->pc = g_running_pcb->uctxt.pc;  // !!!!!!!!!!
     uctxt->sp = g_running_pcb->uctxt.sp;  // !!!!!!!!!!
 
