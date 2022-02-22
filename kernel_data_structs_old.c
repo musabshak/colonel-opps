@@ -30,7 +30,7 @@ typedef struct ProcessControlBlock {
     KernelContext kctxt;
     // --- metadata
     pcb_t *parent;
-    queue_t *children_procs;
+    queue_t *children_processess;
     pagetable_t *ptable;
 } pcb_t;
 
@@ -63,8 +63,7 @@ typedef struct KernelShared {
     void *data_start;  // text end
 } kershared_t;
 
-kershared_t *kershared_init(void *data_start,
-                            void *data_end, void *orig_brk) {
+kershared_t *kershared_init(void *data_start, void *data_end, void *orig_brk) {
     kershared_t *kershared = malloc(1 * sizeof(kershared_t));
 
     kershared->brk = orig_brk;
@@ -204,8 +203,7 @@ frametable_t *frametable_init(unsigned int hardware_mem_size) {
  * Find free frame in the bit vector representing physical memory. Return index of
  * the free frame.
  */
-int find_free_frame() {
-}
+int find_free_frame() {}
 
 /** ====================
  * === KERNEL STACK ===

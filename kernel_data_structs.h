@@ -23,11 +23,17 @@ typedef struct ProcessControlBlock {
     KernelContext kctxt;
     unsigned int kstack_frame_idxs[KERNEL_STACK_MAXSIZE / PAGESIZE];
 
-    // --- metadata
+    // ---- metadata
     pcb_t *parent;
-    queue_t *children_procs;
     pte_t *r1_ptable;
 
+    // --- for kWait/kExit
+    queue_t *zombie_processes;
+    queue_t *children_processes;
+    int is_orphan;
+    int is_wait_blocked;
+
+    // --- for kDelay
     int elapsed_clock_ticks;
     int delay_clock_ticks;
 } pcb_t;

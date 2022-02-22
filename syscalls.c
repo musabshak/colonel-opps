@@ -174,15 +174,15 @@ int kFork() {
      *      - pid
      *      - parent
      *      - r1_ptable
-     *      - children_procs
+     *      - children_processes
      */
     child_pcb->pid = helper_new_pid(child_r1_ptable);  // hardware defined function for generating PID
     child_pcb->parent = parent_pcb;
     child_pcb->r1_ptable = child_r1_ptable;
-    child_pcb->children_procs = NULL;
+    child_pcb->children_processes = NULL;
 
     // Indicate in the parent PCB that a child has been born
-    // qput(parent_pcb->children_procs, child_pcb);
+    // qput(parent_pcb->children_processes, child_pcb);
 
     // Get free frames for idle's kernel stack
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
@@ -222,3 +222,11 @@ int kExec(char *filename, char **argvec) {
 
     return SUCCESS;
 }
+
+int kWait(int *status_ptr) {
+
+    // Verify that user-given pointer is valid (user has permissions to write
+    // to what the pointer is pointint to
+}
+
+void kExit(int status) {}
