@@ -13,19 +13,16 @@ extern int *g_frametable;
 
 int schedule(int is_caller_clocktrap);
 
-int kGetPid()
-{
+int kGetPid() {
     // Confirm that there is a process that is currently running
-    if (g_running_pcb == NULL)
-    {
+    if (g_running_pcb == NULL) {
         return ERROR;
     }
 
     return g_running_pcb->pid;
 }
 
-int kBrk(void *new_brk)
-{
+int kBrk(void *new_brk) {
     TracePrintf(1, "Calling Brk w/ arg: 0x%x (page: %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
 
     pte_t *ptable = g_running_pcb->r1_ptable;
@@ -41,8 +38,7 @@ int kBrk(void *new_brk)
 
     // Fail if new_brk lies anywhere but the region above kernel data and below kernel stack.
     // Leave 1 page between kernel heap and stack (red zone!)
-    if (!(new_brk_int <= (user_stack_base - PAGESIZE) && new_brk_int >= last_addr_above_data))
-    {
+    if (!(new_brk_int <= (user_stack_base - PAGESIZE) && new_brk_int >= last_addr_above_data)) {
         TracePrintf(1,
                     "oh no .. trying to extend user brk into user stack (or user "
                     "data/text)\n");
@@ -54,18 +50,15 @@ int kBrk(void *new_brk)
 
     int rc = ERROR;
 
-    if (bytes_to_raise == 0)
-    {
+    if (bytes_to_raise == 0) {
         rc = 0;
     }
     // raising brk
-    else if (bytes_to_raise > 0)
-    {
+    else if (bytes_to_raise > 0) {
         rc = raise_brk_user(new_brk, user_brk, ptable);
     }
     // reducing brk
-    else
-    {
+    else {
         rc = lower_brk_user(new_brk, user_brk, ptable);
     }
 
@@ -85,14 +78,11 @@ int kBrk(void *new_brk)
  *      If clock ticks is 0, return is immediate. If clock ticks is less than 0,
  *      time travel is not carried out, and ERROR is returned instead.
  */
-int kDelay(int clock_ticks)
-{
-    if (clock_ticks < 0)
-    {
+int kDelay(int clock_ticks) {
+    if (clock_ticks < 0) {
         return ERROR;
     }
-    if (clock_ticks == 0)
-    {
+    if (clock_ticks == 0) {
         return 0;
     }
 
@@ -107,24 +97,21 @@ int kDelay(int clock_ticks)
     return rc;
 }
 
-int kFork()
-{
+int kFork() {
     TracePrintf(1, "Forking.\n");
 
     pcb_t *parent_pcb = g_running_pcb;
 
     // Allocate a PCB for child process. Returns virtual address in kernel heap
     pcb_t *child_pcb = malloc(sizeof(*g_idle_pcb));
-    if (child_pcb == NULL)
-    {
+    if (child_pcb == NULL) {
         TracePrintf(1, "malloc for `kFork()`'s PCB failed.\n");
         return ERROR;
     }
     memcpy(child_pcb, parent_pcb, sizeof(pcb_t));
 
     pte_t *child_r1_ptable = malloc(sizeof(pte_t) * g_len_pagetable);
-    if (child_r1_ptable == NULL)
-    {
+    if (child_r1_ptable == NULL) {
         TracePrintf(1, "Malloc failed for `kFork()`'s pagetable.\n");
         return ERROR;
     }
@@ -132,18 +119,15 @@ int kFork()
     // Initialize child's r1 pagetable to fully copy (not COW) parent's r1
     // pagetable
     pte_t *parent_r1_ptable = parent_pcb->r1_ptable;
-    for (int i = 0; i < g_len_pagetable; i++)
-    {
+    for (int i = 0; i < g_len_pagetable; i++) {
         child_r1_ptable[i] = parent_r1_ptable[i];
 
-        if (parent_r1_ptable[i].valid == 0)
-        {
+        if (parent_r1_ptable[i].valid == 0) {
             continue;
         }
 
         int free_frame_idx = find_free_frame(g_frametable);
-        if (free_frame_idx == -1)
-        {
+        if (free_frame_idx == -1) {
             TracePrintf(1, "Couldn't find free frame while forking.\n");
             return ERROR;
         }
@@ -168,9 +152,9 @@ int kFork()
     child_pcb->r1_ptable = child_r1_ptable;
 
     memcpy(&(child_pcb->uctxt), &(parent_pcb->uctxt),
-           sizeof(UserContext));                      // !!!! On the way into a handler (Transition 5), copy the current
-                                                      // UserContext into the PCB of the current proceess.
-    child_pcb->pid = helper_new_pid(child_r1_ptable); // hardware defined function for generating PID
+           sizeof(UserContext));  // !!!! On the way into a handler (Transition 5), copy the current
+                                  // UserContext into the PCB of the current proceess.
+    child_pcb->pid = helper_new_pid(child_r1_ptable);  // hardware defined function for generating PID
 
     // int idx = find_free_frame(g_frametable);
     // if (idx == -1) {
@@ -185,11 +169,9 @@ int kFork()
     // g_frametable[idx] = 1;
 
     // Get free frames for idle's kernel stack
-    for (int i = 0; i < g_num_kernel_stack_pages; i++)
-    {
+    for (int i = 0; i < g_num_kernel_stack_pages; i++) {
         int idx = find_free_frame(g_frametable);
-        if (idx == -1)
-        {
+        if (idx == -1) {
             TracePrintf(
                 1, "In `kFork()`, `find_free_frame()` failed while allocating frames for kernel_stack\n");
             return ERROR;
@@ -219,8 +201,7 @@ int kFork()
     return SUCCESS;
 }
 
-int kExec(char *filename, char **argvec)
-{
+int kExec(char *filename, char **argvec) {
     // Clear out current r1 pagetable, as LoadProgram will rebuild it
     // pte_t *r1_ptable = g_running_pcb->r1_ptable;
     // for (int i = 0; i < MAX_PT_LEN; i++) {
@@ -238,15 +219,13 @@ int kExec(char *filename, char **argvec)
 
     // Copy args
     int num_args = 0;
-    while (argvec[num_args] != NULL)
-    {
+    while (argvec[num_args] != NULL) {
         num_args++;
     }
 
     // extra space in array is for a NULL argument
     char **argvec_cpy = malloc(num_args * sizeof(char *) + 1);
-    for (int i = 0; i < num_args; i++)
-    {
+    for (int i = 0; i < num_args; i++) {
         // not `strnlen`, should check this is null-terminated
         int length_of_arg = strlen(argvec[i]);
         argvec_cpy[i] = malloc((length_of_arg + 1) * sizeof(char));

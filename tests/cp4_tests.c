@@ -8,6 +8,7 @@
 #include <yuser.h>
 
 int main(int argc, char **argv) {
+    TracePrintf(1, "CP4_TEST RUNNING!\n");
 
     TracePrintf(1, "About to exec:\n");
     char *args_vec[] = {"my_arg1", "my_arg2", NULL};

@@ -84,12 +84,12 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
      */
     size = 0;
     for (i = 0; args[i] != NULL; i++) {
-        TracePrintf(3, "counting arg %d = '%s'\n", i, args[i]);
+        TracePrintf(1, "counting arg %d = '%s'\n", i, args[i]);
         size += strlen(args[i]) + 1;
     }
     argcount = i;
 
-    TracePrintf(2, "LoadProgram: argsize %d, argcount %d\n", size, argcount);
+    TracePrintf(1, "LoadProgram: argsize %d, argcount %d\n", size, argcount);
 
     /*
      *  The arguments will get copied starting at "cp", and the argv
@@ -155,7 +155,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
      * DONE
      */
     if (cp2 == NULL) {
-        TracePrintf(3, "Malloc failed.\n");
+        TracePrintf(1, "Malloc failed.\n");
         return ERROR;
     }
 
@@ -204,7 +204,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     for (int i = 0; i < li.t_npg; i++) {
         int frame_idx = find_free_frame(g_frametable);
         if (frame_idx < 0) {
-            TracePrintf(3, "No free frames.\n");
+            TracePrintf(1, "No free frames.\n");
             return ERROR;
         }
 
@@ -225,7 +225,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     for (int i = 0; i < data_npg; i++) {
         int frame_idx = find_free_frame(g_frametable);
         if (frame_idx < 0) {
-            TracePrintf(3, "No free frames.\n");
+            TracePrintf(1, "No free frames.\n");
             return ERROR;
         }
 
@@ -246,7 +246,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     for (int i = 0; i < stack_npg; i++) {
         int frame_idx = find_free_frame(g_frametable);
         if (frame_idx < 0) {
-            TracePrintf(3, "No free frames.\n");
+            TracePrintf(1, "No free frames.\n");
             return ERROR;
         }
 
