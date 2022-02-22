@@ -11,6 +11,8 @@ extern unsigned int g_num_kernel_stack_pages;
 extern pte_t *g_reg0_ptable;
 extern int *g_frametable;
 
+int schedule(int is_caller_clocktrap);
+
 int kGetPid() {
     // Confirm that there is a process that is currently running
     if (g_running_pcb == NULL) {
@@ -89,25 +91,10 @@ int kDelay(int clock_ticks) {
     g_running_pcb->elapsed_clock_ticks = 0;
     g_running_pcb->delay_clock_ticks = clock_ticks;
 
-    // Put current process in blocked processes queue
-    qput(g_delay_blocked_procs_queue, (void *)g_running_pcb);
+       // Call the scheduler
+    rc = schedule(0);
 
-    // // Get a new process from ready queue
-    // pcb_t *new_pcb = (pcb_t *)qget(g_ready_procs_queue);
-
-    // // If there are no runnable processes, dispatch idle
-    // if (new_pcb == NULL) {
-    //     new_pcb = g_idle_pcb;
-    // }
-
-    // Invoke KCSwitch()
-    rc = KernelContextSwitch(KCSwitch, g_running_pcb, g_idle_pcb);
-    if (rc != 0) {
-        TracePrintf(1, "Failed to switch kernel context.\n");
-        return ERROR;
-    }
-
-    return 0;
+    return rc;
 }
 
 int kFork() {
@@ -208,7 +195,8 @@ int kFork() {
 
     // Return value of 0 for the child, parent receives pid of child
     child_pcb->uctxt.regs[0] = 0;
-    parent_pcb->uctxt.regs[0] = child_pcb->pid;;
+    parent_pcb->uctxt.regs[0] = child_pcb->pid;
+    ;
 
     return SUCCESS;
 }
