@@ -215,17 +215,41 @@ int kFork() {
 
 int kExec(char *filename, char **argvec) {
     // Clear out current r1 pagetable, as LoadProgram will rebuild it
-    pte_t *r1_ptable = g_running_pcb->r1_ptable;
-    for (int i = 0; i < MAX_PT_LEN; i++) {
-        if (r1_ptable[i].valid == 0) {
-            continue;
-        }
+    // pte_t *r1_ptable = g_running_pcb->r1_ptable;
+    // for (int i = 0; i < MAX_PT_LEN; i++) {
+    //     if (r1_ptable[i].valid == 0) {
+    //         continue;
+    //     }
 
-        int pfn_idx = r1_ptable[i].pfn;
-        g_frametable[pfn_idx] = 0;
+    //     int pfn_idx = r1_ptable[i].pfn;
+    //     g_frametable[pfn_idx] = 0;
 
-        r1_ptable[i].valid = 0;
+    //     r1_ptable[i].valid = 0;
+    // }
+
+    // Verify pointers?
+
+    // Copy args
+    int num_args = 0;
+    while (argvec[num_args] != NULL) {
+        num_args++;
     }
 
-    LoadProgram(filename, argvec, g_running_pcb);
+    // extra space in array is for a NULL argument
+    char **argvec_cpy = malloc(num_args * sizeof(char*) + 1);
+    for (int i=0; i<num_args; i++) {
+        // not `strnlen`, should check this is null-terminated
+        int length_of_arg = strlen(argvec[i]);
+        argvec_cpy[i] = malloc((length_of_arg + 1) * sizeof(char));
+        strncpy(argvec_cpy[i], argvec[i], length_of_arg);
+    }
+    argvec_cpy[num_args] = NULL;
+
+    int filename_len = strlen(filename);
+    char *filename_cpy = malloc(filename_len * sizeof(char) + 1);
+    strcpy(filename_cpy, filename);
+
+    LoadProgram(filename_cpy, argvec_cpy, g_running_pcb);
+
+    return SUCCESS;
 }

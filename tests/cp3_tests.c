@@ -33,7 +33,12 @@ int main(int argc, char **argv) {
     }
 
     TracePrintf(1, "About to exec:\n");
-    char **args_vec = argv;
+    char **args_vec = (char *[]){"hello", "world"};
     args_vec[argc-1] = NULL;
     Exec("tests/init", args_vec);
+
+    while (1) {
+        TracePrintf(1, "INIT RUNNING!\n");
+        Pause();
+    }
 }
