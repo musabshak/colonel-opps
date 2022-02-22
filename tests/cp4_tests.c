@@ -8,6 +8,7 @@
 #include <yuser.h>
 
 int main(int argc, char **argv) {
+    TracePrintf(1, "CP4_TEST RUNNING!\n");
     // TracePrintf(1, "About to fork:\n");
     // int pid = Fork();
     // if (pid == 0)
@@ -28,24 +29,11 @@ int main(int argc, char **argv) {
     // }
 
     TracePrintf(1, "About to exec:\n");
-    char **args_vec = (char *[]){"hello", "world"};
-    args_vec[1] = NULL;
+    char *args_vec[] = {"hello", "world", NULL};
+
     Exec("tests/init", args_vec);
 
     while (1) {
-        TracePrintf(1, "INIT RUNNING!\n");
+        TracePrintf(1, "CP4_TEST RUNNING! (should never be printed b/c exec)\n");
     }
 }
-
-// int main(int argc, char **argv) {
-
-//     TracePrintf(1, "About to exec:\n");
-//     char *args_vec[] = {"my_arg1", "my_arg2", NULL};
-
-//     Exec("tests/init", args_vec);
-
-//     while (1) {
-//         TracePrintf(1, "CP4_TESTS RUNNING! (should never be printed b/c exec\n");
-//         Pause();
-//     }
-// }
