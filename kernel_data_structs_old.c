@@ -30,7 +30,7 @@ typedef struct ProcessControlBlock {
     KernelContext kctxt;
     // --- metadata
     pcb_t *parent;
-    queue_t *children_processess;
+    queue_t *children_procs;
     pagetable_t *ptable;
 } pcb_t;
 

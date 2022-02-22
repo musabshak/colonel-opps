@@ -177,15 +177,15 @@ int kFork() {
      *      - pid
      *      - parent
      *      - r1_ptable
-     *      - children_processes
+     *      - children_procs
      */
     child_pcb->pid = helper_new_pid(child_r1_ptable);  // hardware defined function for generating PID
     child_pcb->parent = parent_pcb;
     child_pcb->r1_ptable = child_r1_ptable;
-    child_pcb->children_processes = NULL;
+    child_pcb->children_procs = NULL;
 
     // Indicate in the parent PCB that a child has been born
-    // qput(parent_pcb->children_processes, child_pcb);
+    // qput(parent_pcb->children_procs, child_pcb);
 
     // Get free frames for idle's kernel stack
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
@@ -282,11 +282,71 @@ int kExec(char *filename, char **argvec) {
 
 int kWait(int *status_ptr) {
 
-    // Verify that user-given pointer is valid (user has permissions to write
-    // to what the pointer is pointint to
+    /**
+     * Verify that user-given pointer is valid (user has permissions to write
+     * to what the pointer is pointing to
+     */
+
+    /**
+     * "If the caller has an exited child whose information has not yet been collected via Wait, then this
+     * call will return immediately with that information".
+     *
+     * Check if g_running_pcb->zombie_procs is empty. If it is not empty (that is, there exists and exited
+     * child whose information has not yet been collected), then return information of first child process
+     * from zombie_procs. Also destroy the pcb of the child process completely.
+     */
+
+    /**
+     * "If the caller has no remaining child processes (exited or running) then return ERROR".
+     *
+     * If len(g_running_pcb->zombie_procs) == 0 and len(g_running_pcb->children_procs) == 0:
+     *      return ERROR
+     */
+
+    /**
+     * "Otherwise the calling process blocks until its next child calls exit or is aborted; then the call
+     * returns with the exit information of the child".
+     *
+     * - Move g_running_pcb into g_wait_blocked_procs_queue;
+     * - Mark g_running_pcb->is_wait_blocked = 1
+     */
+
+    /**
+     * Return
+     *      - pid of child process
+     *      - if status_ptr is not null and is valid, exit status of child is copied to that address
+     */
 }
 
-void kExit(int status) {}
+void kExit(int status) {
+
+    /**
+     * For every child pcb in g_running_pcb->children_procs, mark child_pcb->parent = NULL.
+     */
+
+    /**
+     * If g_running_pcb->parent == NULL (orphan process), do not need to save or report exit status.
+     * Proceed to freeing all resources associated with process.
+     */
+
+    /**
+     * If g_running_pcb->parent->is_wait_blocked == 0:
+     *      - Put g_running_pcb into parent->zombie_procs
+     *      - Free all resources other than pcb->exit_status and pcb->pid
+     *      - The remaining pcb resources are freed when parent calls kWait eventually
+     */
+
+    /**
+     * If g_running_pcb->parent->is_wait_blocked == 1:
+     *      - (parent is actively waiting to hear news about child dying)
+     *      - (doesn't make sense to put child in zombie queue)
+     *      - Somehow need to wake up parent and tell parent the pid and the exit status
+     *          - Populate parent->last_dying_child_pid, parent->last_dying_child_status
+     *          - Remove parent from g_wait_blocked_queue
+     *          - Put parent into g_ready_procs_queue
+     *      - Free all resources associated with g_running_pcb
+     */
+}
 
 int is_r0_addr(void *addr) {
     unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);

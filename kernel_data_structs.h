@@ -28,10 +28,10 @@ typedef struct ProcessControlBlock {
     pte_t *r1_ptable;
 
     // --- for kWait/kExit
-    queue_t *zombie_processes;
-    queue_t *children_processes;
-    int is_orphan;
+    queue_t *zombie_procs;
+    queue_t *children_procs;
     int is_wait_blocked;
+    int exit_status;
 
     // --- for kDelay
     int elapsed_clock_ticks;

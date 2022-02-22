@@ -123,7 +123,7 @@ void kExit(int status) {
     // Go to kernelland
     // Deallocate frames associated with pages
     // If parent == NULL (the exiting process is an orphan): return
-    // Else, add process to zombie_processes array
+    // Else, add process to zombie_procs array
 }
 
 /**
@@ -229,5 +229,4 @@ int kBrk(void *addr) {
  *      If clock ticks is 0, return is immediate. If clock ticks is less than 0,
  *      time travel is not carried out, and ERROR is returned instead.
  */
-int kDelay(int clock_ticks) {
-}
+int kDelay(int clock_ticks) {}
