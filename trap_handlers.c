@@ -73,8 +73,14 @@ int TrapKernelHandler(UserContext *user_context) {
             filename = (char *)user_context->regs[0];
             argvec = (char **)user_context->regs[1];
             rc = kExec(filename, argvec);
-            *user_context = g_running_pcb->uctxt;
-            break;
+
+            if (rc == ERROR) {
+                user_context->regs[0] = ERROR;
+                break;
+            } else {
+                *user_context = g_running_pcb->uctxt;
+                break;
+            }
     }
     TracePrintf(1, "Exiting TrapKernelHandler\n");
 }
