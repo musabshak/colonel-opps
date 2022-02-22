@@ -98,34 +98,35 @@ int kDelay(int clock_ticks) {
 }
 
 int kFork() {
-    TracePrintf(1, "Forking.\n");
+    TracePrintf(1, "Entering kFork\n");
 
     pcb_t *parent_pcb = g_running_pcb;
+    pte_t *parent_r1_ptable = parent_pcb->r1_ptable;
 
-    // Allocate a PCB for child process. Returns virtual address in kernel heap
+    // Allocate a PCB for child process. Returns virtual address in kernel heap.
     pcb_t *child_pcb = malloc(sizeof(*g_idle_pcb));
     if (child_pcb == NULL) {
-        TracePrintf(1, "malloc for `kFork()`'s PCB failed.\n");
+        TracePrintf(1, "malloc for kFork()'s PCB failed.\n");
         return ERROR;
     }
-    memcpy(child_pcb, parent_pcb, sizeof(pcb_t));
 
+    // Allocate a new R1 ptable for child process. Will later copy contents of parent's R1 pable
+    // into this ptable.
     pte_t *child_r1_ptable = malloc(sizeof(pte_t) * g_len_pagetable);
     if (child_r1_ptable == NULL) {
         TracePrintf(1, "Malloc failed for `kFork()`'s pagetable.\n");
         return ERROR;
     }
 
-    // Initialize child's r1 pagetable to fully copy (not COW) parent's r1
-    // pagetable
-    pte_t *parent_r1_ptable = parent_pcb->r1_ptable;
+    // Initialize child's r1 pagetable to fully copy (not COW) parent's R1 pagetable.
     for (int i = 0; i < g_len_pagetable; i++) {
-        child_r1_ptable[i] = parent_r1_ptable[i];
+        child_r1_ptable[i] = parent_r1_ptable[i];  // COW but ...
 
         if (parent_r1_ptable[i].valid == 0) {
             continue;
         }
 
+        // Allocate new frame for the child's R1 page
         int free_frame_idx = find_free_frame(g_frametable);
         if (free_frame_idx == -1) {
             TracePrintf(1, "Couldn't find free frame while forking.\n");
@@ -133,8 +134,21 @@ int kFork() {
         }
         g_frametable[free_frame_idx] = 1;
 
-        // Write to this new frame by assigning it to the page below kernel stack
-        // and writing to that page
+        /**
+         * Note that the child's R1 ptable, although allocated, has not been "mounted". That is,
+         * the child's R1 ptable is not active (we haven't written the address of the new ptable in
+         * the registers).
+         *
+         * This means that for copying the contents of the parent's R1 page, we need to utilize the
+         * trick of temporarily mapping the page under the kernel stack to the newly allocated frame,
+         * and then copying into this special page.
+         *
+         * Remember to flush the TLB for this special page, and also to set this special page as invalid
+         * after use!
+         */
+
+        // Write to newly allocated frame by mapping it to the page below kernel stack and writing to that
+        // page.
         unsigned int page_below_kstack = MAX_PT_LEN - g_num_kernel_stack_pages - 1;
         g_reg0_ptable[page_below_kstack].valid = 1;
         g_reg0_ptable[page_below_kstack].prot = PROT_READ | PROT_WRITE;
@@ -150,32 +164,25 @@ int kFork() {
         child_r1_ptable[i].pfn = free_frame_idx;
     }
 
-    // Is this necessary?
-    unsigned int page_below_kstack = MAX_PT_LEN - g_num_kernel_stack_pages - 1;
-    WriteRegister(REG_TLB_FLUSH, page_below_kstack << PAGESHIFT);
+    // Now clone parent pcb into the child pcb allocated at the top. Note that the user context of the parent
+    // is copied into the child's PCB with this memcpy call (since we're storing the user context as a struct
+    // and not as a pointer to a struct).
+    memcpy(child_pcb, parent_pcb, sizeof(pcb_t));
 
-    // Populate child PCB
-    child_pcb->r1_ptable = child_r1_ptable;
-    memcpy(&(child_pcb->uctxt), &(parent_pcb->uctxt),
-           sizeof(UserContext));  // !!!! On the way into a handler (Transition 5), copy the current
-                                  // UserContext into the PCB of the current proceess.
+    /**
+     * After cloning parent_pcb into child_pcb, need to change the following pcb->*:
+     *      - pid
+     *      - parent
+     *      - r1_ptable
+     *      - children_procs
+     */
     child_pcb->pid = helper_new_pid(child_r1_ptable);  // hardware defined function for generating PID
     child_pcb->parent = parent_pcb;
+    child_pcb->r1_ptable = child_r1_ptable;
+    child_pcb->children_procs = NULL;
 
-    // Update parent PCB
+    // Indicate in the parent PCB that a child has been born
     // qput(parent_pcb->children_procs, child_pcb);
-
-    // int idx = find_free_frame(g_frametable);
-    // if (idx == -1) {
-    //     TracePrintf(1, "find_free_frame() failed while allocating frames for idle's user_stack\n");
-    //     return;
-    // }
-
-    // // Allocate user stack for idle's r1 ptable
-    // idle_r1_ptable[g_len_pagetable - 1].valid = 1;
-    // idle_r1_ptable[g_len_pagetable - 1].prot = PROT_READ | PROT_WRITE;
-    // idle_r1_ptable[g_len_pagetable - 1].pfn = idx;
-    // g_frametable[idx] = 1;
 
     // Get free frames for idle's kernel stack
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
@@ -190,13 +197,6 @@ int kFork() {
         child_pcb->kstack_frame_idxs[i] = idx;
     }
 
-    // // // Stack values increment in 4 bytes. Intel is little-endian; sp needs to point to
-    // // // 0x1ffffc (and not 0x1fffff)
-    // g_idle_pcb->uctxt.sp = (void *)(VMEM_LIMIT - 4);  // !!!!!!!!!!
-    // g_idle_pcb->uctxt.pc = doIdle;                    // !!!!!!!!!!
-
-    // print_r1_page_table(idle_r1_ptable, g_len_pagetable);
-
     // uctxt->pc = g_running_pcb->uctxt.pc;  // !!!!!!!!!!
     // uctxt->sp = g_running_pcb->uctxt.sp;  // !!!!!!!!!!
 
@@ -207,50 +207,16 @@ int kFork() {
     // Put child on ready queue
     qput(g_ready_procs_queue, (void *)child_pcb);
 
+    // Copy current kernel stack contents into child pcb's kernel stack frames
     int rc = KernelContextSwitch(KCCopy, child_pcb, NULL);
 
-    // debugging
-    // print_r1_page_table(parent_pcb->r1_ptable, g_len_pagetable);
-    // print_r1_page_table(child_pcb->r1_ptable, g_len_pagetable);
-
+    TracePrintf(1, "Exiting kFork\n");
     return SUCCESS;
 }
 
 int kExec(char *filename, char **argvec) {
-    // Clear out current r1 pagetable, as LoadProgram will rebuild it
-    // pte_t *r1_ptable = g_running_pcb->r1_ptable;
-    // for (int i = 0; i < MAX_PT_LEN; i++) {
-    //     if (r1_ptable[i].valid == 0) {
-    //         continue;
-    //     }
 
-    //     int pfn_idx = r1_ptable[i].pfn;
-    //     g_frametable[pfn_idx] = 0;
-
-    //     r1_ptable[i].valid = 0;
-    // }
-
-    // Verify pointers?
-
-    // Copy args
-    int num_args = 0;
-    while (argvec[num_args] != NULL) {
-        num_args++;
-    }
-
-    // extra space in array is for a NULL argument
-    char **argvec_cpy = malloc(num_args * sizeof(char *) + 1);
-    for (int i = 0; i < num_args; i++) {
-        // not `strnlen`, should check this is null-terminated
-        int length_of_arg = strlen(argvec[i]);
-        argvec_cpy[i] = malloc((length_of_arg + 1) * sizeof(char));
-        strncpy(argvec_cpy[i], argvec[i], length_of_arg);
-    }
-    argvec_cpy[num_args] = NULL;
-
-    int filename_len = strlen(filename);
-    char *filename_cpy = malloc(filename_len * sizeof(char) + 1);
-    strcpy(filename_cpy, filename);
+    // TODO: verify that pointers passed by userland Exec call are legit
 
     LoadProgram(filename, argvec, g_running_pcb);
 
