@@ -10,6 +10,7 @@
 int main(int argc, char** argv) {
 
     int clock_ticks = 4;
+
     TracePrintf(1, "TEST PROG RUNNING!\n");
     TracePrintf(1, "Getting process pid\n");
     int pid = GetPid();
@@ -18,6 +19,7 @@ int main(int argc, char** argv) {
     TracePrintf(1, "TEST PROG RUNNING!\n");
     TracePrintf(1, "Calling malloc!\n");
     void* myp = malloc(100000);
+
     TracePrintf(1, "Calling malloc with too many bytes:\n");
     void* too_many = malloc(2147483646);  // 1 less than max possible value of int
 
@@ -28,17 +30,6 @@ int main(int argc, char** argv) {
 
     while (1) {
         TracePrintf(1, "TEST PROG RUNNING!\n");
-        Pause();
-        break;
-    }
-
-    TracePrintf(1, "About to exec:\n");
-    char **args_vec = (char *[]){"hello", "world"};
-    args_vec[1] = NULL;
-    Exec("tests/init", args_vec);
-
-    while (1) {
-        TracePrintf(1, "INIT RUNNING!\n");
         Pause();
     }
 }

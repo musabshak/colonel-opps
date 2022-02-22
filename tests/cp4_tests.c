@@ -36,6 +36,18 @@ int main(int argc, char **argv)
     while (1)
     {
         TracePrintf(1, "INIT RUNNING!\n");
-        Pause();
     }
 }
+
+// int main(int argc, char **argv) {
+
+//     TracePrintf(1, "About to exec:\n");
+//     char *args_vec[] = {"my_arg1", "my_arg2", NULL};
+
+//     Exec("tests/init", args_vec);
+
+//     while (1) {
+//         TracePrintf(1, "CP4_TESTS RUNNING! (should never be printed b/c exec\n");
+//         Pause();
+//     }
+// }
