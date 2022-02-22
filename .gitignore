@@ -8,3 +8,6 @@ yalnix
 DISK
 core
 .nfs*
+tests/init
+tests/cp3_tests
+tests/cp4_tests
