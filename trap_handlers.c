@@ -67,10 +67,15 @@ int TrapKernelHandler(UserContext *user_context)
         clock_ticks = user_context->regs[0];
         rc = kDelay(clock_ticks);
         break;
+    case YALNIX_FORK:
+        kFork();
+        user_context->regs[0] = g_running_pcb->uctxt.regs[0];
+        break;
     case YALNIX_EXEC:
         filename = (char *)user_context->regs[0];
         argvec = (char **)user_context->regs[1];
         rc = kExec(filename, argvec);
+        *user_context = g_running_pcb->uctxt;
         break;
     }
     TracePrintf(1, "Exiting TrapKernelHandler\n");

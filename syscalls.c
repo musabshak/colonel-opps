@@ -156,6 +156,8 @@ int kFork()
         g_reg0_ptable[page_below_kstack].prot = PROT_READ | PROT_WRITE;
         g_reg0_ptable[page_below_kstack].pfn = free_frame_idx;
 
+        WriteRegister(REG_TLB_FLUSH, page_below_kstack << PAGESHIFT);
+
         memcpy((void *)(page_below_kstack << PAGESHIFT), (void *)((MAX_PT_LEN + i) << PAGESHIFT), PAGESIZE);
 
         g_reg0_ptable[page_below_kstack].valid = 0;
@@ -164,13 +166,20 @@ int kFork()
         child_r1_ptable[i].pfn = free_frame_idx;
     }
 
+    // Is this necessary?
+    unsigned int page_below_kstack = MAX_PT_LEN - g_num_kernel_stack_pages - 1;
+    WriteRegister(REG_TLB_FLUSH, page_below_kstack << PAGESHIFT);
+
     // Populate child PCB
     child_pcb->r1_ptable = child_r1_ptable;
-
     memcpy(&(child_pcb->uctxt), &(parent_pcb->uctxt),
            sizeof(UserContext));                      // !!!! On the way into a handler (Transition 5), copy the current
                                                       // UserContext into the PCB of the current proceess.
     child_pcb->pid = helper_new_pid(child_r1_ptable); // hardware defined function for generating PID
+    child_pcb->parent = parent_pcb;
+
+    // Update parent PCB
+    // qput(parent_pcb->children_procs, child_pcb);
 
     // int idx = find_free_frame(g_frametable);
     // if (idx == -1) {
@@ -206,15 +215,21 @@ int kFork()
 
     // print_r1_page_table(idle_r1_ptable, g_len_pagetable);
 
-    int rc = KernelContextSwitch(KCCopy, child_pcb, NULL);
-
     // uctxt->pc = g_running_pcb->uctxt.pc;  // !!!!!!!!!!
     // uctxt->sp = g_running_pcb->uctxt.sp;  // !!!!!!!!!!
 
     // Return value of 0 for the child, parent receives pid of child
     child_pcb->uctxt.regs[0] = 0;
     parent_pcb->uctxt.regs[0] = child_pcb->pid;
-    ;
+
+    // Put child on ready queue
+    qput(g_ready_procs_queue, (void *)child_pcb);
+
+    int rc = KernelContextSwitch(KCCopy, child_pcb, NULL);
+
+    // debugging
+    // print_r1_page_table(parent_pcb->r1_ptable, g_len_pagetable);
+    // print_r1_page_table(child_pcb->r1_ptable, g_len_pagetable);
 
     return SUCCESS;
 }
