@@ -500,13 +500,12 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_ready_procs_queue = qopen();
     g_delay_blocked_procs_queue = qopen();
 
-    TracePrintf(1, "Just finished KCCopy\n");
-
-    /* E=================== SETUP IDLE PROCESS ==================== */
+        /* E=================== SETUP IDLE PROCESS ==================== */
 
     g_running_pcb = init_pcb;
 
     int rc = KernelContextSwitch(KCCopy, g_idle_pcb, NULL);
+    TracePrintf(1, "Just finished KCCopy\n");
 
     uctxt->pc = g_running_pcb->uctxt.pc;  // !!!!!!!!!!
     uctxt->sp = g_running_pcb->uctxt.sp;  // !!!!!!!!!!
