@@ -104,7 +104,9 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
     // Save current kernel context in current process's pcb (saving current state of
     // current process in it's pcb so we can return to it later).
     // curr_pcb->kctxt = *kc_in;
-    memcpy(&(curr_pcb->kctxt), kc_in, sizeof(KernelContext));
+    if (curr_pcb_p != NULL) {
+        memcpy(&(curr_pcb->kctxt), kc_in, sizeof(KernelContext));
+    }
 
     // TEMPORARY
     // new_pcb->kstack_frame_idxs[0] = 127;
@@ -237,10 +239,13 @@ int lower_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
  * in the parent's zombie queue.
  */
 int destroy_pcb(pcb_t *pcb, int exit_status) {
+    /* Retire pid */
+    helper_retire_pid(pcb->pid);
+
     /* Free r1 pagetable */
     pte_t *r1_ptable = pcb->r1_ptable;
 
-    for (int i = 0; i < g_len_frametable; i++) {
+    for (int i = 0; i < g_len_pagetable; i++) {
         if (r1_ptable[i].valid == 1) {
             // Mark physical frame as available
             int frame_idx = r1_ptable[i].pfn;
@@ -277,11 +282,13 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
         zombie->pid = pcb->pid;
         zombie->exit_status = exit_status;
 
+        // Allocate zombie queue to parent if necessary
+        if (pcb->parent->zombie_procs == NULL) {
+            pcb->parent->zombie_procs = qopen();
+        }
+
         qput(pcb->parent->zombie_procs, (void *)zombie);
     }
-
-    /* Retire pid */
-    helper_retire_pid(pcb->pid);
 
     /* Finally, free pcb struct */
     free(pcb);

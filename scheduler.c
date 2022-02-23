@@ -114,6 +114,11 @@ int schedule(enum CallerFunc caller_id) {
         ;
     }
 
+    // Caller is kExit
+    if (caller_id == F_kExit) {
+        rc = KernelContextSwitch(KCSwitch, NULL, new_pcb);
+    }
+
     // Invoke KCSwitch()
     rc = KernelContextSwitch(KCSwitch, g_running_pcb, new_pcb);
     if (rc != 0) {

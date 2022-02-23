@@ -342,6 +342,12 @@ void kExit(int status) {
     pcb_t *caller = g_running_pcb;
     pcb_t *parent = caller->parent;
 
+    // int rc = KernelContextSwitch(KCSwitch, g_running_pcb, g_idle_pcb);
+    // if (rc != 0) {
+    //     TracePrintf(1, "Failed to switch kernel context.\n");
+    //     return;
+    // }
+
     TracePrintf(1, "PID %d exiting with status %d.\n", caller->pid, status);
 
     // destroy child pcb (and associated resources) and put pid/exit_status in zombie queue as a
@@ -360,8 +366,7 @@ void kExit(int status) {
         qput(g_ready_procs_queue, parent);
     }
 
-    g_running_pcb = g_idle_pcb;
-    schedule(F_kWait);
+    schedule(F_kExit);
 
     /**
      * For every child pcb in g_running_pcb->children_procs, mark child_pcb->parent = NULL.
