@@ -15,13 +15,13 @@ void print_person(void *elementp) {
     printf("name: %s, age: %d\n", person->name, person->age);
 }
 
-bool search_by_age(void *elementp, const void *keyp) {
+int search_by_age(void *elementp, const void *keyp) {
     person_t *person = (person_t *)elementp;
 
     if (person->age == (uintptr_t)keyp) {
-        return true;
+        return 1;
     } else {
-        return false;
+        return 0;
     }
 }
 
@@ -29,6 +29,7 @@ int main(void) {
 
     // Create queue
     queue_t *qp = qopen();
+    queue_t *empty_qp = qopen();
 
     // Create people
     person_t person_1 = {.name = "musab", .age = 23};
@@ -39,6 +40,10 @@ int main(void) {
     qput(qp, &person_1);
     qput(qp, &person_2);
     qput(qp, &person_3);
+
+    // Check queue length
+    printf("length of 3-item queue: %d\n", qlen(qp));
+    printf("length of empty queue: %d\n", qlen(empty_qp));
 
     // Check that people are in queue
     qapply(qp, print_person);

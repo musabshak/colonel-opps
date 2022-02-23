@@ -52,6 +52,32 @@ void qclose(queue_t *qp) {
     free(qp);
 }
 
+// cs58 addition
+int qis_empty(queue_t *qp) {
+    if (qp->front == qp->back && qp->back == NULL) {
+        return 1;
+    }
+
+    return 0;
+}
+
+// cs58 addition
+int qlen(queue_t *qp) {
+
+    int len = 0;
+
+    if (qis_empty(qp)) {
+        return 0;
+    }
+
+    node_t *np;
+    for (np = qp->front; np != NULL; np = np->next) {
+        len += 1;
+    }
+
+    return len;
+}
+
 int32_t qput(queue_t *qp, void *elementp) {
     node_t *nodep = data_to_node(elementp);
     if (nodep == NULL) {
@@ -125,6 +151,7 @@ void *qremove(queue_t *qp, int (*searchfn)(void *elementp, const void *keyp), co
     return NULL;
 }
 
+// cs58 addition
 int qremove_all(queue_t *qp, int (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
     node_t *np;
     node_t *nf;

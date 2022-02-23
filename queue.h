@@ -17,8 +17,14 @@ typedef void queue_t;
 /* create an empty queue */
 queue_t* qopen(void);
 
-/* deallocate a queue, frees everything in it */
+/* deallocate a queue, frees all the nodes but not the data in the nodes */
 void qclose(queue_t* qp);
+
+/* cs58 addition */
+int qis_empty(queue_t* qp);
+
+/* cs58 addition */
+int qlen(queue_t* qp);
 
 /* put element at the end of the queue
  * returns 0 is successful; nonzero otherwise
@@ -48,7 +54,8 @@ void* qsearch(queue_t* qp, int (*searchfn)(void* elementp, const void* keyp), co
  */
 void* qremove(queue_t* qp, int (*searchfn)(void* elementp, const void* keyp), const void* skeyp);
 
-/* same as the qremove function except it removes all nodes for which the supplied search
+/* cs58 addition
+ * same as the qremove function except it removes all nodes for which the supplied search
  * function returns true. returns 0 if everything went successfully.
  */
 int qremove_all(queue_t* qp, int (*searchfn)(void* elementp, const void* keyp), const void* skeyp);
