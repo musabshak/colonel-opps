@@ -245,10 +245,12 @@ int lower_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
  * in the parent's zombie queue.
  */
 int destroy_pcb(pcb_t *pcb, int exit_status) {
+    /* Retire pid */
+    helper_retire_pid(pcb->pid);
+
     /* Free r1 pagetable */
     pte_t *r1_ptable = pcb->r1_ptable;
 
-    print_r1_page_table(r1_ptable, MAX_PT_LEN);
     for (int i = 0; i < g_len_pagetable; i++) {
         if (r1_ptable[i].valid == 1) {
             // Mark physical frame as available
@@ -291,6 +293,11 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
         zombie_pcb_t *zombie = malloc(sizeof(zombie_pcb_t));
         zombie->pid = pcb->pid;
         zombie->exit_status = exit_status;
+
+        // Allocate zombie queue to parent if necessary
+        if (pcb->parent->zombie_procs == NULL) {
+            pcb->parent->zombie_procs = qopen();
+        }
 
         qput(pcb->parent->zombie_procs, (void *)zombie);
         qapply(pcb->parent->zombie_procs, print_zombie_pcb);

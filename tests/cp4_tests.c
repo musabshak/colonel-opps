@@ -67,6 +67,29 @@ void test_exit() {
     }
 }
 
+void test_wait() {
+    int pid = Fork();
+    if (pid == 0) {
+        for (int i = 0; i < 5; i++) {
+            TracePrintf(1, "CP4_TEST_CHILD RUNNING!\n");
+            Pause();
+        }
+        TracePrintf(1, "CP4_TEST child about to exit...\n");
+        Exit(0);
+    } else {
+        TracePrintf(1, "CP4_TEST waiting on child.\n");
+        int exit_status;
+        int exit_pid = Wait(&exit_status);
+
+        TracePrintf(1, "CP4_TEST received exit status %d from PID %d.\n", exit_status, exit_pid);
+
+        while (1) {
+            TracePrintf(1, "CP4_TEST RUNNING!\n");
+            Pause();
+        }
+    }
+}
+
 void test_exec_with_kernel_addr() {
     // TracePrintf(1, "About to exec with a kernel address:\n");
 
@@ -79,6 +102,30 @@ void test_exec_with_kernel_addr() {
     //     TracePrintf(1, "CP4_TEST RUNNING! (should never be printed b/c exec)\n");
     //     Pause();
     // }
+}
+
+void test_exec_with_bad_prog() {
+    int pid = Fork();
+    if (pid == 0) {
+        TracePrintf(1, "CP4_TEST_CHILD about to exec a nonsense file...\n");
+        Pause();
+        char *args_vec[] = {"hello", "world", NULL};
+        Exec("tests/cp4_tests.c", args_vec);
+    } else {
+        TracePrintf(1, "CP4_TEST waiting on child to exit...\n");
+        for (int i = 0; i < 5; i++) {
+            Pause();
+        }
+
+        int status;
+        int pid = Wait(&status);
+        TracePrintf(1, "CP4_TEST received exit status %d from PID %d.\n", status, pid);
+    }
+
+    while (1) {
+        TracePrintf(1, "CP4_TEST RUNNING!\n");
+        Pause();
+    }
 }
 
 int main(int argc, char **argv) {
@@ -97,6 +144,12 @@ int main(int argc, char **argv) {
             break;
         case 4:
             test_exit();
+            break;
+        case 5:
+            test_wait();
+            break;
+        case 6:
+            test_exec_with_bad_prog();
             break;
         default:
             while (1) {

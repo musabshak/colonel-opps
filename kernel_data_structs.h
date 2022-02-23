@@ -49,6 +49,7 @@ enum CallerFunc {
     F_kDelay,
     F_clockTrap,
     F_kWait,
+    F_kExit,
 };
 
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used);

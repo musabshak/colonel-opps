@@ -16,6 +16,8 @@ int is_r0_addr(void *addr);
 int r1ptable_buf_is_valid(pte_t *r1_ptable, void *buf, int buf_len, int prot);
 int r1ptable_string_is_readable(pte_t *r1_ptable, char *str);
 
+void kExit(int status);
+
 int kGetPid() {
     // Confirm that there is a process that is currently running
     if (g_running_pcb == NULL) {
@@ -197,7 +199,10 @@ int kFork() {
     child_pcb->is_wait_blocked = 0;
 
     // Indicate in the parent PCB that a child has been born
-    // qput(parent_pcb->children_procs, child_pcb);
+    if (parent_pcb->children_procs == NULL) {
+        parent_pcb->children_procs = qopen();
+    }
+    qput(parent_pcb->children_procs, child_pcb);
 
     // Get free frames for idle's kernel stack
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
@@ -237,36 +242,12 @@ int kExec(char *filename, char **argvec) {
     // to kernel memory?
 
     // Validate `filename`
-    // for (char *addr = filename; *addr != '\0'; addr++) {
-    //     if (is_r0_addr((void *)addr) == 1) {
-    //         TracePrintf(1, "Caller to `kExec()` tried to access kernel memory!\n");
-    //         return ERROR;
-    //     }
-    // }
     if (r1ptable_string_is_readable(g_running_pcb->r1_ptable, filename) == 0) {
         TracePrintf(1, "`filename` passed to `kExec()` was invalid.\n");
         return ERROR;
     }
 
     // Validate `argvec` and each `char *` it points to
-    // for (char **argi = argvec; argi != NULL; argi++) {
-    //     if (is_r0_addr((void *)argi) == 1) {
-    //         TracePrintf(1, "Caller to `kExec()` tried to access kernel memory!\n");
-    //         return ERROR;
-    //     }
-
-    //     // Check if this is the last argument
-    //     if (*argi == NULL) {
-    //         break;
-    //     }
-
-    //     for (char *argi_addr = *argi; *argi_addr != '\0'; argi_addr++) {
-    //         if (is_r0_addr((void *)argi_addr) == 1) {
-    //             TracePrintf(1, "Caller to `kExec()` tried to access kernel memory!\n");
-    //             return ERROR;
-    //         }
-    //     }
-    // }
     int num_args = 0;
     for (char **argi = argvec; *argi != NULL; argi++) {
         num_args++;
@@ -287,6 +268,11 @@ int kExec(char *filename, char **argvec) {
     int rc = LoadProgram(filename, argvec, g_running_pcb);
     if (rc != SUCCESS) {
         // We need to decide what to do here-- the caller pcb has been destroyed
+
+        // Completely destroy the calling PCB and dispatch
+        TracePrintf(1, "`kExec()` failed! Killing process (PID %d).\n", g_running_pcb->pid);
+        kExit(ERROR);
+        // not reached
     }
 
     return SUCCESS;
@@ -303,6 +289,10 @@ int kWait(int *status_ptr) {
      * Verify that user-given pointer is valid (user has permissions to write
      * to what the pointer is pointing to
      */
+    // if (r1ptable_buf_is_valid(g_running_pcb->r1_ptable, (void *)status_ptr, 1, PROT_WRITE)) {
+    //     TracePrintf(1, "Invalid status pointer.\n");
+    //     return ERROR;
+    // }
 
     /**
      * "If the caller has an exited child whose information has not yet been collected via Wait, then this
@@ -312,6 +302,10 @@ int kWait(int *status_ptr) {
      * child whose information has not yet been collected), then return information of first child process
      * from zombie_procs. Also, destroy the ZombiePCB of the child process.
      */
+
+    if (g_running_pcb->zombie_procs == NULL) {
+        g_running_pcb->zombie_procs = qopen();
+    }
 
     queue_t *zombie_procs = g_running_pcb->zombie_procs;
     queue_t *children_procs = g_running_pcb->children_procs;
@@ -356,8 +350,9 @@ void kExit(int status) {
 
     TracePrintf(1, "PID %d exiting with status %d.\n", caller->pid, status);
 
-    // destroy child pcb (and associated resources) and put pid/exit_status in zombie queue as a
-    // special zombiePCB (has a couple of checks in there). unless parent is NULL.
+    // See `destroy_pcb()` for details. Essentially, this frees all memory associated with the
+    // pcb (except its parent and children). If the parent is not `NULL`, it adds the exit
+    // status and its pid as a zombie to the parent's zombie queue.
     int rc = destroy_pcb(caller, status);
 
     if (parent == NULL) {  // orphan process
@@ -372,8 +367,8 @@ void kExit(int status) {
         qput(g_ready_procs_queue, parent);
     }
 
-    g_running_pcb = NULL;
-    schedule(F_kWait);
+    g_running_pcb = NULL;  // the pcb g_running_pcb was previosuly pointing to, has been destroyed
+    schedule(F_kExit);
 
     /**
      * For every child pcb in g_running_pcb->children_procs, mark child_pcb->parent = NULL.
@@ -403,17 +398,9 @@ void kExit(int status) {
      */
 }
 
-int is_r0_addr(void *addr) {
-
-    unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
-    if (addr_page < g_len_pagetable) {
-        // the address points to region 0 (kernel) memory
-        return 1;
-    }
-
-    return 0;
-}
-
+/**
+ * Checks if the address lies in region 1. (1 means it does, 0 means it doesn't)
+ */
 int addr_is_in_r1(void *addr) {
     unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
     if (addr_page < g_len_pagetable || addr_page >= 2 * MAX_PT_LEN) {
@@ -425,7 +412,13 @@ int addr_is_in_r1(void *addr) {
 }
 
 /**
- * 0 is invalid, 1 is valid
+ * Given a buffer, e.g. an array interpreted as a pointer `buf` with length `buf_len`,
+ * check if each address in the buffer is accessible by the user under protection `prot`.
+ *
+ * For instance, if the user is trying to (just) write to this buffer, we might call this
+ * with `prot = PROT_WRITE`. Note that this just checks if the permissions include `prot`,
+ * not that the permissions are exactly `prot`. In this example, acessing a page with
+ * protection `PROT_READ | PROT_WRITE` would still be valid, as it includes `PROT_WRITE`.
  */
 int r1ptable_buf_is_valid(pte_t *r1_ptable, void *buf, int buf_len, int prot) {
     for (int i = 0; i < buf_len; i++) {
@@ -456,7 +449,13 @@ int r1ptable_buf_is_valid(pte_t *r1_ptable, void *buf, int buf_len, int prot) {
  * Similar to `r1ptable_buf_is_valid()`, but for strings.
  */
 int r1ptable_string_is_readable(pte_t *r1_ptable, char *str) {
-    for (char *pointer_to_char = str; *pointer_to_char != '\0'; pointer_to_char++) {
+    // We iterate in this way so that we even validate the terminating character
+    for (char *pointer_to_char = str;; pointer_to_char++) {
+        int should_break = 0;
+        if (*pointer_to_char == '\0') {
+            should_break = 1;
+        }
+
         if (addr_is_in_r1((void *)pointer_to_char) == 0) {
             return 0;
         }
@@ -467,8 +466,11 @@ int r1ptable_string_is_readable(pte_t *r1_ptable, char *str) {
         if (r1_ptable[addr_page].prot & PROT_READ != PROT_READ) {
             return 0;
         }
+
+        if (should_break == 1) {
+            break;
+        }
     }
-    // still check the last '\0'?
 
     return 1;
 }
