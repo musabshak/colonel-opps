@@ -13,8 +13,8 @@ extern int *g_frametable;
 
 int schedule(enum CallerFunc caller_id);
 int is_r0_addr(void *addr);
-int r1ptable_buf_is_valid(pte_t *r1_ptable, void *buf, int buf_len, int prot);
-int r1ptable_string_is_readable(pte_t *r1_ptable, char *str);
+int is_valid_buf(pte_t *r1_ptable, void *buf, int buf_len, int prot);
+int is_readable_str(pte_t *r1_ptable, char *str);
 
 void kExit(int status);
 
@@ -242,7 +242,7 @@ int kExec(char *filename, char **argvec) {
     // to kernel memory?
 
     // Validate `filename`
-    if (r1ptable_string_is_readable(g_running_pcb->r1_ptable, filename) == 0) {
+    if (is_readable_str(g_running_pcb->r1_ptable, filename) == 0) {
         TracePrintf(1, "`filename` passed to `kExec()` was invalid.\n");
         return ERROR;
     }
@@ -253,13 +253,13 @@ int kExec(char *filename, char **argvec) {
         num_args++;
     }
 
-    if (r1ptable_buf_is_valid(g_running_pcb->r1_ptable, (void *)argvec, num_args, PROT_READ) == 0) {
+    if (is_valid_buf(g_running_pcb->r1_ptable, (void *)argvec, num_args, PROT_READ) == 0) {
         TracePrintf(1, "Invalid `argvec` passed to `kExec()`.\n");
         return ERROR;
     }
 
     for (int i = 0; i < num_args; i++) {
-        if (r1ptable_string_is_readable(g_running_pcb->r1_ptable, argvec[i]) == 0) {
+        if (is_readable_str(g_running_pcb->r1_ptable, argvec[i]) == 0) {
             TracePrintf(1, "In `kExec()`, `argvec` contains invalid string.\n");
             return ERROR;
         }
@@ -289,7 +289,7 @@ int kWait(int *status_ptr) {
      * Verify that user-given pointer is valid (user has permissions to write
      * to what the pointer is pointing to
      */
-    // if (r1ptable_buf_is_valid(g_running_pcb->r1_ptable, (void *)status_ptr, 1, PROT_WRITE)) {
+    // if (is_valid_buf(g_running_pcb->r1_ptable, (void *)status_ptr, 1, PROT_WRITE)) {
     //     TracePrintf(1, "Invalid status pointer.\n");
     //     return ERROR;
     // }
@@ -401,7 +401,7 @@ void kExit(int status) {
 /**
  * Checks if the address lies in region 1. (1 means it does, 0 means it doesn't)
  */
-int addr_is_in_r1(void *addr) {
+int is_r1_addr(void *addr) {
     unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
     if (addr_page < g_len_pagetable || addr_page >= 2 * MAX_PT_LEN) {
         // the address points to r0 (kernel) memory, or past r1 memory
@@ -420,10 +420,10 @@ int addr_is_in_r1(void *addr) {
  * not that the permissions are exactly `prot`. In this example, acessing a page with
  * protection `PROT_READ | PROT_WRITE` would still be valid, as it includes `PROT_WRITE`.
  */
-int r1ptable_buf_is_valid(pte_t *r1_ptable, void *buf, int buf_len, int prot) {
+int is_valid_buf(pte_t *r1_ptable, void *buf, int buf_len, int prot) {
     for (int i = 0; i < buf_len; i++) {
         void *addr = buf + i;
-        if (addr_is_in_r1(addr) == 0) {
+        if (is_r1_addr(addr) == 0) {
             // address is not in region 1
             return 0;
         }
@@ -446,9 +446,9 @@ int r1ptable_buf_is_valid(pte_t *r1_ptable, void *buf, int buf_len, int prot) {
 }
 
 /**
- * Similar to `r1ptable_buf_is_valid()`, but for strings.
+ * Similar to `is_valid_buf()`, but for strings, and for read-only access.
  */
-int r1ptable_string_is_readable(pte_t *r1_ptable, char *str) {
+int is_readable_str(pte_t *r1_ptable, char *str) {
     // We iterate in this way so that we even validate the terminating character
     for (char *pointer_to_char = str;; pointer_to_char++) {
         int should_break = 0;
@@ -456,7 +456,7 @@ int r1ptable_string_is_readable(pte_t *r1_ptable, char *str) {
             should_break = 1;
         }
 
-        if (addr_is_in_r1((void *)pointer_to_char) == 0) {
+        if (is_r1_addr((void *)pointer_to_char) == 0) {
             return 0;
         }
 
