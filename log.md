@@ -13,6 +13,14 @@
 - Refactor h_raise_brk/h_lower_brk and raise_brk_user/lower_brk_user into same function
 - Properly write code for updating clock ticks in blocked processes queue 
 
+### Implementation notes
+- We assume init cloning into idle (init is process 0)
+- We make a separate 
+- We use a generic queue (singly linked list implementation)
+    - For g_delay_blocked_procs_queue, where we need to iterate through the queue to increment the elapsed_ticks for each process, and then potentially remove a PCB* from the queue, we use the qremove_all() generic queue method. qremove_all() takes in a "search" function that is applied to each PCB* in the queue. We write the "search" function cleverly ... 
+- Separate ZombiePCB struct to store in the zombie_queue associated with each process
+
+
 ## Bugs
 ### Checkpoint 3
 - u_long type not found (used in load_info.h, included in load_program.c)
