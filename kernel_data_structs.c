@@ -240,10 +240,12 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
     /* Free r1 pagetable */
     pte_t *r1_ptable = pcb->r1_ptable;
 
-    for (int i = 0; i < g_len_frametable; i++) {
+    print_r1_page_table(r1_ptable, MAX_PT_LEN);
+    for (int i = 0; i < g_len_pagetable; i++) {
         if (r1_ptable[i].valid == 1) {
             // Mark physical frame as available
             int frame_idx = r1_ptable[i].pfn;
+            TracePrintf(1, "i: %d frame_idx: %d\n", i, frame_idx);
             g_frametable[frame_idx] = 0;
         }
     }
