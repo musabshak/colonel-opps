@@ -53,8 +53,8 @@ void test_exec() {
 void test_exit() {
     int pid = Fork();
     if (pid == 0) {
-        for (int i = 0; i < 5; i++) {
-            TracePrintf(1, "CP4_TEST_CHILD RUNNING!\n");
+        for (int i = 0; i < 3; i++) {
+            TracePrintf(1, "CP4_TEST's child RUNNING!\n");
             Pause();
         }
         TracePrintf(1, "CP4_TEST child about to exit...\n");

@@ -34,6 +34,11 @@ void print_pcb(void *elementp) {
     TracePrintf(1, "pid: %d \n", my_pcb->pid);
 }
 
+void print_zombie_pcb(void *elementp) {
+    pcb_t *my_pcb = (pcb_t *)elementp;
+    TracePrintf(1, "zombie pid: %d \n", my_pcb->pid);
+}
+
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     TracePrintf(1, "Entering KCCopy\n");
     // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
@@ -250,6 +255,9 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
         }
     }
 
+    /* Retire pid */
+    helper_retire_pid(pcb->pid);
+
     free(r1_ptable);
 
     /* Free kernel stack frames */
@@ -280,12 +288,10 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
         zombie->exit_status = exit_status;
 
         qput(pcb->parent->zombie_procs, (void *)zombie);
+        qapply(pcb->parent->zombie_procs, print_zombie_pcb);
     }
 
-    /* Retire pid */
-    helper_retire_pid(pcb->pid);
-
-    /* Finally, free pcb struct */
+        /* Finally, free pcb struct */
     free(pcb);
 
     return SUCCESS;
