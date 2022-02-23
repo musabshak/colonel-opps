@@ -10,14 +10,14 @@
 K_SRC_DIR = .
 
 # What are the kernel c and include files?
-K_SRCS =  kernel.c trap_handlers.c kernel_data_structs.c queue.c load_program.c syscalls.c scheduler.c
+K_SRCS =  kernel.c trap_handlers.c kernel_data_structs.c queue.c load_program.c syscalls.c scheduler.c 
 K_INCS = 
 
 # Where's your user source?
 U_SRC_DIR = tests
 
 # What are the user c and include files?
-U_SRCS = init.c cp3_tests.c cp4_tests.c
+U_SRCS = init.c cp3_tests.c cp4_tests.c cp4_wait_test.c
 U_INCS = 
 
 
@@ -73,7 +73,7 @@ LINK_KERNEL = $(LINK.c)
 
 USER_LIBS = $(LIBDIR)/libuser.a
 ASFLAGS = -D__ASM__
-CPPFLAGS= -D_FILE_OFFSET_BITS=64 -m32 -fno-builtin -I. -I$(INCDIR) -g -DLINUX
+CPPFLAGS= -D_FILE_OFFSET_BITS=64 -m32 -fno-builtin -I. -I$(INCDIR) -g -DLINUX -fno-stack-protector
 
 
 ##########################

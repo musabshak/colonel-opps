@@ -11,6 +11,17 @@ extern unsigned int g_len_frametable;
 extern unsigned int g_num_kernel_stack_pages;
 extern pte_t *g_reg0_ptable;
 
+void mark_parent_as_null(void *pcb_p) {
+    pcb_t *pcb = (pcb_t *)pcb_p;
+
+    pcb->parent = NULL;
+}
+
+void free_zombie_pcb(void *zombie_p) {
+    zombie_pcb_t *zombie = (zombie_pcb_t *)zombie;
+    free(zombie);
+}
+
 int copy_page_contents(unsigned int source_page, unsigned int target_page) {
 
     memcpy((void *)(target_page << PAGESHIFT), (void *)(source_page << PAGESHIFT), PAGESIZE);
@@ -219,6 +230,63 @@ int lower_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
     }
 
     return 0;
+}
+
+/*
+ * If the parent is not `NULL`, this will `malloc()` a new `zombie_pcb_t` and place it
+ * in the parent's zombie queue.
+ */
+int destroy_pcb(pcb_t *pcb, int exit_status) {
+    /* Free r1 pagetable */
+    pte_t *r1_ptable = pcb->r1_ptable;
+
+    for (int i = 0; i < g_len_frametable; i++) {
+        if (r1_ptable[i].valid == 1) {
+            // Mark physical frame as available
+            int frame_idx = r1_ptable[i].pfn;
+            g_frametable[frame_idx] = 0;
+        }
+    }
+
+    free(r1_ptable);
+
+    /* Free kernel stack frames */
+    for (int i = 0; i < g_num_kernel_stack_pages; i++) {
+        // Mark physical frames as available
+        int frame_idx = pcb->kstack_frame_idxs[i];
+        g_frametable[frame_idx] = 0;
+    }
+
+    /* Mark all children's parent as `NULL` and free children queue */
+    if (pcb->children_procs != NULL) {
+        pcb_t *child_pcb;
+        qapply(pcb->children_procs, mark_parent_as_null);
+
+        qclose(pcb->children_procs);
+    }
+
+    /* Free zombie queue */
+    if (pcb->zombie_procs != NULL) {
+        qapply(pcb->zombie_procs, free_zombie_pcb);
+        qclose(pcb->zombie_procs);
+    }
+
+    /* Store pid and exit code as zombie, if necessary */
+    if (pcb->parent != NULL) {
+        zombie_pcb_t *zombie = malloc(sizeof(zombie_pcb_t));
+        zombie->pid = pcb->pid;
+        zombie->exit_status = exit_status;
+
+        qput(pcb->parent->zombie_procs, (void *)zombie);
+    }
+
+    /* Retire pid */
+    helper_retire_pid(pcb->pid);
+
+    /* Finally, free pcb struct */
+    free(pcb);
+
+    return SUCCESS;
 }
 
 /**

@@ -11,7 +11,7 @@ extern unsigned int g_num_kernel_stack_pages;
 extern pte_t *g_reg0_ptable;
 extern int *g_frametable;
 
-int schedule(int is_caller_clocktrap);
+int schedule(enum CallerFunc caller_id);
 int is_r0_addr(void *addr);
 int r1ptable_buf_is_valid(pte_t *r1_ptable, void *buf, int buf_len, int prot);
 int r1ptable_string_is_readable(pte_t *r1_ptable, char *str);
@@ -95,7 +95,7 @@ int kDelay(int clock_ticks) {
     g_running_pcb->delay_clock_ticks = clock_ticks;
 
     // Call the scheduler
-    rc = schedule(0);
+    rc = schedule(F_kDelay);
 
     return rc;
 }
@@ -221,7 +221,7 @@ int kExec(char *filename, char **argvec) {
 
     /* Verify that pointers passed by userland Exec call are legit */
 
-    // Do we need to check that the pointer is valid, or just that it doesn't point
+    // TODO: Do we need to check that the pointer is valid, or just that it doesn't point
     // to kernel memory?
 
     // Validate `filename`
@@ -280,6 +280,11 @@ int kExec(char *filename, char **argvec) {
     return SUCCESS;
 }
 
+/**
+ * Returns
+ *      - pid of child process
+ *      - if status_ptr is not null and is valid, exit status of child is copied to that address
+ */
 int kWait(int *status_ptr) {
 
     /**
@@ -291,17 +296,30 @@ int kWait(int *status_ptr) {
      * "If the caller has an exited child whose information has not yet been collected via Wait, then this
      * call will return immediately with that information".
      *
-     * Check if g_running_pcb->zombie_procs is empty. If it is not empty (that is, there exists and exited
+     * Check if g_running_pcb->zombie_procs is empty. If it is not empty (that is, there exists an exited
      * child whose information has not yet been collected), then return information of first child process
-     * from zombie_procs. Also destroy the pcb of the child process completely.
+     * from zombie_procs. Also, destroy the ZombiePCB of the child process.
      */
+
+    queue_t *zombie_procs = g_running_pcb->zombie_procs;
+    queue_t *children_procs = g_running_pcb->children_procs;
+    if (!qis_empty(zombie_procs)) {
+        zombie_pcb_t *child_zombie_pcb = (zombie_pcb_t *)qget(zombie_procs);
+
+        // Destroy zombie PCB
+        free(child_zombie_pcb);
+
+        *status_ptr = child_zombie_pcb->exit_status;
+        return child_zombie_pcb->pid;
+    }
 
     /**
      * "If the caller has no remaining child processes (exited or running) then return ERROR".
-     *
-     * If len(g_running_pcb->zombie_procs) == 0 and len(g_running_pcb->children_procs) == 0:
-     *      return ERROR
      */
+
+    if (qlen(zombie_procs) == 0 && qlen(children_procs) == 0) {
+        return ERROR;
+    }
 
     /**
      * "Otherwise the calling process blocks until its next child calls exit or is aborted; then the call
@@ -311,14 +329,39 @@ int kWait(int *status_ptr) {
      * - Mark g_running_pcb->is_wait_blocked = 1
      */
 
-    /**
-     * Return
-     *      - pid of child process
-     *      - if status_ptr is not null and is valid, exit status of child is copied to that address
-     */
+    g_running_pcb->is_wait_blocked = 1;
+
+    // Parent needs to block
+    schedule(F_kWait);
+
+    *status_ptr = g_running_pcb->last_dying_child_exit_code;
+    return g_running_pcb->last_dying_child_pid;
 }
 
 void kExit(int status) {
+    pcb_t *caller = g_running_pcb;
+    pcb_t *parent = caller->parent;
+
+    TracePrintf(1, "PID %d exiting with status %d.\n", caller->pid, status);
+
+    // destroy child pcb (and associated resources) and put pid/exit_status in zombie queue as a
+    // special zombiePCB (has a couple of checks in there). unless parent is NULL.
+    int rc = destroy_pcb(caller, status);
+
+    if (parent == NULL) {
+        ;
+    } else if (parent->is_wait_blocked == 1) {
+        zombie_pcb_t *exit_info = qget(parent->zombie_procs);
+        parent->last_dying_child_exit_code = exit_info->exit_status;
+        parent->last_dying_child_pid = exit_info->pid;
+        free(exit_info);
+
+        parent->is_wait_blocked = 0;
+        qput(g_ready_procs_queue, parent);
+    }
+
+    g_running_pcb = g_idle_pcb;
+    schedule(F_kWait);
 
     /**
      * For every child pcb in g_running_pcb->children_procs, mark child_pcb->parent = NULL.
@@ -349,6 +392,7 @@ void kExit(int status) {
 }
 
 int is_r0_addr(void *addr) {
+
     unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
     if (addr_page < g_len_pagetable) {
         // the address points to region 0 (kernel) memory

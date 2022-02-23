@@ -20,7 +20,8 @@
 		"files.associations": {
 			"queue.h": "c",
 			"kernel_data_structs.h": "c",
-			"stdlib.h": "c"
+			"stdlib.h": "c",
+			"yuser.h": "c"
 		}
 	}
 }

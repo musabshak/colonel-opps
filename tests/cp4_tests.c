@@ -50,18 +50,35 @@ void test_exec() {
     }
 }
 
-void test_exec_with_kernel_addr() {
-    TracePrintf(1, "About to exec with a kernel address:\n");
-
-    char *sneaky_kernel_addr = (char *)(0x02ab60);
-    char **args_vec = {sneaky_kernel_addr, NULL};
-
-    Exec("tests/init", args_vec);
-
-    while (1) {
-        TracePrintf(1, "CP4_TEST RUNNING! (should never be printed b/c exec)\n");
-        Pause();
+void test_exit() {
+    int pid = Fork();
+    if (pid == 0) {
+        for (int i = 0; i < 5; i++) {
+            TracePrintf(1, "CP4_TEST_CHILD RUNNING!\n");
+            Pause();
+        }
+        TracePrintf(1, "CP4_TEST child about to exit...\n");
+        Exit(0);
+    } else {
+        while (1) {
+            TracePrintf(1, "CP4_TEST RUNNING!\n");
+            Pause();
+        }
     }
+}
+
+void test_exec_with_kernel_addr() {
+    // TracePrintf(1, "About to exec with a kernel address:\n");
+
+    // char *sneaky_kernel_addr = (char *)(0x02ab60);
+    // char **args_vec = {sneaky_kernel_addr, NULL};
+
+    // Exec("tests/init", args_vec);
+
+    // while (1) {
+    //     TracePrintf(1, "CP4_TEST RUNNING! (should never be printed b/c exec)\n");
+    //     Pause();
+    // }
 }
 
 int main(int argc, char **argv) {
@@ -71,10 +88,16 @@ int main(int argc, char **argv) {
     switch (test_case) {
         case 1:
             test_fork();
+            break;
         case 2:
             test_exec();
+            break;
         case 3:
             test_exec_with_kernel_addr();
+            break;
+        case 4:
+            test_exit();
+            break;
         default:
             while (1) {
                 TracePrintf(1, "CP4_TEST RUNNING!\n");

@@ -34,11 +34,16 @@ int pcb_delay_finished(void *elementp, const void *key) {
     return 1;
 }
 
-int schedule(int is_caller_clocktrap) {
+/**
+ *  kDelay - 0
+ *  clocktrap - 1
+ */
+int schedule(enum CallerFunc caller_id) {
+
     TracePrintf(1, "Entering scheduler\n");
 
     int rc;
-    int is_caller_kDelay = !is_caller_clocktrap;
+    // int is_caller_kDelay = !is_caller_clocktrap;
     int is_idle_current_process = g_running_pcb->pid == g_idle_pcb->pid;
 
     /**
@@ -58,7 +63,7 @@ int schedule(int is_caller_clocktrap) {
      * the qremove_all caller to delete the node from the g_delay_blocked_procs_queue.
      */
 
-    if (is_caller_clocktrap == 1) {
+    if (caller_id == F_clockTrap) {
         TracePrintf(1, "calling qremove_all\n");
         qremove_all(g_delay_blocked_procs_queue, pcb_delay_finished, NULL);
     }
@@ -88,19 +93,25 @@ int schedule(int is_caller_clocktrap) {
 
     // Caller is kDelay.
     // Put currently running process in the blocked queue.
-    if (is_caller_kDelay && !is_idle_current_process) {
+    if (caller_id == F_kDelay && !is_idle_current_process) {
         // Put current process in blocked processes queue
         qput(g_delay_blocked_procs_queue, (void *)g_running_pcb);
     }
 
     // Caller is TrapClock handler.
     // Return currently running process into ready queue.
-    if (is_caller_clocktrap && !is_idle_current_process) {
+    if (caller_id == F_clockTrap && !is_idle_current_process) {
         rc = qput(g_ready_procs_queue, (void *)g_running_pcb);
         if (rc != 0) {
             TracePrintf(2, "Failed to return running process to ready queue.\n");
             return ERROR;
         }
+    }
+
+    // Caller is kWait.
+    // Do not put process in blocked queue
+    if (caller_id == F_kWait && !is_idle_current_process) {
+        ;
     }
 
     // Invoke KCSwitch()

@@ -8,7 +8,7 @@ extern pcb_t *g_idle_pcb;
 extern queue_t *g_ready_procs_queue;
 extern queue_t *g_delay_blocked_procs_queue;
 
-int schedule(int is_caller_clocktrap);
+int schedule(enum CallerFunc caller_id);
 
 /*
 Trap handlers are functions pointed to by pointers in the interrupt vector table
@@ -47,6 +47,9 @@ int TrapKernelHandler(UserContext *user_context) {
         int pid;          // for kGetPid()
         int clock_ticks;  // for kDelay()
         void *addr;       // for kBrk()
+        int child_pid;    // for kWait()
+        int *status_ptr;  // for kWait()
+        int exit_code;    // for kExit()
 
         // `kExec()` args
         char *filename;
@@ -81,6 +84,15 @@ int TrapKernelHandler(UserContext *user_context) {
                 *user_context = g_running_pcb->uctxt;
                 break;
             }
+        case YALNIX_WAIT:
+            status_ptr = (int *)(user_context->regs[0]);
+            child_pid = kWait(status_ptr);
+            user_context->regs[1] = child_pid;
+            break;
+        case YALNIX_EXIT:
+            exit_code = user_context->regs[0];
+            kExit(exit_code);
+            break;
     }
     TracePrintf(1, "Exiting TrapKernelHandler\n");
 }
@@ -103,7 +115,7 @@ int TrapClock(UserContext *user_context) {
 
     TracePrintf(1, "Entering TrapClock\n");
 
-    int rc = schedule(1);
+    int rc = schedule(F_clockTrap);
 
     TracePrintf(1, "Exiting TrapClock\n");
 

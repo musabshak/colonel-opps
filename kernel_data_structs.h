@@ -31,12 +31,25 @@ typedef struct ProcessControlBlock {
     queue_t *zombie_procs;
     queue_t *children_procs;
     int is_wait_blocked;
-    int exit_status;
+    int exit_status;  // process's own exit_status
+    int last_dying_child_exit_code;
+    int last_dying_child_pid;
 
     // --- for kDelay
     int elapsed_clock_ticks;
     int delay_clock_ticks;
 } pcb_t;
+
+typedef struct ZombiePCB {
+    int pid;
+    int exit_status;
+} zombie_pcb_t;
+
+enum CallerFunc {
+    F_kDelay,
+    F_clockTrap,
+    F_kWait,
+};
 
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used);
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p);
@@ -49,6 +62,8 @@ int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable);
 int lower_brk_user(void *new_brk, void *current_brk, pte_t *ptable);
 
 void print_pcb(void *elementp);
+
+int destroy_pcb(pcb_t *pcb, int exit_status);
 
 // int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable);
 // int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable);
