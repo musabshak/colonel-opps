@@ -372,7 +372,7 @@ void kExit(int status) {
         qput(g_ready_procs_queue, parent);
     }
 
-    g_running_pcb = g_idle_pcb;
+    g_running_pcb = NULL;
     schedule(F_kWait);
 
     /**

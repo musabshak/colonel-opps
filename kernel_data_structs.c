@@ -102,6 +102,7 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
 }
 
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p) {
+
     TracePrintf(1, "Entering KCSwitch\n");
     pcb_t *curr_pcb = ((pcb_t *)curr_pcb_p);
     pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
@@ -109,7 +110,9 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
     // Save current kernel context in current process's pcb (saving current state of
     // current process in it's pcb so we can return to it later).
     // curr_pcb->kctxt = *kc_in;
-    memcpy(&(curr_pcb->kctxt), kc_in, sizeof(KernelContext));
+    if (curr_pcb_p != NULL) {
+        memcpy(&(curr_pcb->kctxt), kc_in, sizeof(KernelContext));
+    }
 
     // TEMPORARY
     // new_pcb->kstack_frame_idxs[0] = 127;
@@ -257,6 +260,8 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
 
     /* Retire pid */
     helper_retire_pid(pcb->pid);
+    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_KSTACK);
 
     free(r1_ptable);
 
@@ -291,7 +296,7 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
         qapply(pcb->parent->zombie_procs, print_zombie_pcb);
     }
 
-        /* Finally, free pcb struct */
+    /* Finally, free pcb struct */
     free(pcb);
 
     return SUCCESS;

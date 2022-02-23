@@ -44,7 +44,7 @@ int schedule(enum CallerFunc caller_id) {
 
     int rc;
     // int is_caller_kDelay = !is_caller_clocktrap;
-    int is_idle_current_process = g_running_pcb->pid == g_idle_pcb->pid;
+    int is_idle_current_process = (g_running_pcb == NULL) || g_running_pcb->pid == g_idle_pcb->pid;
 
     /**
      * If trap_clock called schedule() (meaning that a clock trap has happened), iterate through the
