@@ -16,6 +16,8 @@ int is_r0_addr(void *addr);
 int r1ptable_buf_is_valid(pte_t *r1_ptable, void *buf, int buf_len, int prot);
 int r1ptable_string_is_readable(pte_t *r1_ptable, char *str);
 
+void kExit(int status);
+
 int kGetPid() {
     // Confirm that there is a process that is currently running
     if (g_running_pcb == NULL) {
@@ -254,6 +256,11 @@ int kExec(char *filename, char **argvec) {
     int rc = LoadProgram(filename, argvec, g_running_pcb);
     if (rc != SUCCESS) {
         // We need to decide what to do here-- the caller pcb has been destroyed
+
+        // Completely destroy the calling PCB and dispatch
+        TracePrintf(1, "`kExec()` failed! Killing process (PID %d).\n", g_running_pcb->pid);
+        kExit(ERROR);
+        // not reached
     }
 
     return SUCCESS;
@@ -270,10 +277,10 @@ int kWait(int *status_ptr) {
      * Verify that user-given pointer is valid (user has permissions to write
      * to what the pointer is pointing to
      */
-    if (r1ptable_buf_is_valid(g_running_pcb->r1_ptable, (void *)status_ptr, 1, PROT_WRITE)) {
-        TracePrintf(1, "Invalid status pointer.\n");
-        return ERROR;
-    }
+    // if (r1ptable_buf_is_valid(g_running_pcb->r1_ptable, (void *)status_ptr, 1, PROT_WRITE)) {
+    //     TracePrintf(1, "Invalid status pointer.\n");
+    //     return ERROR;
+    // }
 
     /**
      * "If the caller has an exited child whose information has not yet been collected via Wait, then this
