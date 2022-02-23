@@ -107,11 +107,24 @@ int kFork() {
     pte_t *parent_r1_ptable = parent_pcb->r1_ptable;
 
     // Allocate a PCB for child process. Returns virtual address in kernel heap.
-    pcb_t *child_pcb = malloc(sizeof(*g_idle_pcb));
+    pcb_t *child_pcb = malloc(sizeof(*child_pcb));
     if (child_pcb == NULL) {
         TracePrintf(1, "malloc for kFork()'s PCB failed.\n");
         return ERROR;
     }
+
+    /**
+     * Need to initialize the following new pcb attributes:
+     *      - zombie_procs
+     *      - children_procs
+     *      - exit_status
+     *      - is_wait_blocked
+     */
+
+    child_pcb->zombie_procs = qopen();
+    child_pcb->children_procs = qopen();
+    child_pcb->exit_status = -1;
+    child_pcb->is_wait_blocked = 0;
 
     // Allocate a new R1 ptable for child process. Will later copy contents of parent's R1 pable
     // into this ptable.
@@ -348,7 +361,7 @@ void kExit(int status) {
     // special zombiePCB (has a couple of checks in there). unless parent is NULL.
     int rc = destroy_pcb(caller, status);
 
-    if (parent == NULL) {
+    if (parent == NULL) {  // orphan process
         ;
     } else if (parent->is_wait_blocked == 1) {
         zombie_pcb_t *exit_info = qget(parent->zombie_procs);

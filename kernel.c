@@ -365,12 +365,27 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     pcb_t *init_pcb = malloc(sizeof(*init_pcb));
 
+    /**
+     * Need to initialize the following new pcb attributes:
+     *      - zombie_procs
+     *      - children_procs
+     *      - exit_status
+     *      - is_wait_blocked
+     */
+
+    init_pcb->zombie_procs = qopen();
+    init_pcb->children_procs = qopen();
+    init_pcb->exit_status = -1;
+    init_pcb->is_wait_blocked = 0;
+
     init_pcb->pid = helper_new_pid(init_r1_ptable);
     init_pcb->r1_ptable = init_r1_ptable;
     // init_pcb->uctxt = *uctxt;
     memcpy(&(init_pcb->uctxt), uctxt,
            sizeof(UserContext));  // !!!! On the way into a handler (Transition 5), copy the current
                                   // UserContext into the PCB of the current proceess.
+
+    // TODO: convert to for loop
     init_pcb->kstack_frame_idxs[0] = g_len_pagetable - 1;
     init_pcb->kstack_frame_idxs[1] = g_len_pagetable - 2;
 
@@ -443,6 +458,19 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         TracePrintf(1, "malloc for idlePCB failed.\n");
         return;
     }
+
+    /**
+     * Need to initialize the following new pcb attributes:
+     *      - zombie_procs
+     *      - children_procs
+     *      - exit_status
+     *      - is_wait_blocked
+     */
+
+    g_idle_pcb->zombie_procs = qopen();
+    g_idle_pcb->children_procs = qopen();
+    g_idle_pcb->exit_status = -1;
+    g_idle_pcb->is_wait_blocked = 0;
 
     pte_t *idle_r1_ptable = malloc(sizeof(pte_t) * g_len_pagetable);
     if (idle_r1_ptable == NULL) {
