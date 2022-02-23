@@ -185,7 +185,10 @@ int kFork() {
     child_pcb->children_procs = NULL;
 
     // Indicate in the parent PCB that a child has been born
-    // qput(parent_pcb->children_procs, child_pcb);
+    if (parent_pcb->children_procs == NULL) {
+        parent_pcb->children_procs = qopen();
+    }
+    qput(parent_pcb->children_procs, child_pcb);
 
     // Get free frames for idle's kernel stack
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
@@ -300,6 +303,10 @@ int kWait(int *status_ptr) {
      * child whose information has not yet been collected), then return information of first child process
      * from zombie_procs. Also, destroy the ZombiePCB of the child process.
      */
+
+    if (g_running_pcb->zombie_procs == NULL) {
+        g_running_pcb->zombie_procs = qopen();
+    }
 
     queue_t *zombie_procs = g_running_pcb->zombie_procs;
     queue_t *children_procs = g_running_pcb->children_procs;

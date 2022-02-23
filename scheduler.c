@@ -111,12 +111,13 @@ int schedule(enum CallerFunc caller_id) {
     // Caller is kWait.
     // Do not put process in blocked queue
     if (caller_id == F_kWait && !is_idle_current_process) {
-        ;
+        // rc = KernelContextSwitch(KCSwitch, g_running_pcb, new_pcb);
     }
 
     // Caller is kExit
     if (caller_id == F_kExit) {
         rc = KernelContextSwitch(KCSwitch, NULL, new_pcb);
+        return 0;
     }
 
     // Invoke KCSwitch()

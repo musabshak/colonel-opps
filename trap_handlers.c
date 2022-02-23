@@ -87,7 +87,7 @@ int TrapKernelHandler(UserContext *user_context) {
         case YALNIX_WAIT:
             status_ptr = (int *)(user_context->regs[0]);
             child_pid = kWait(status_ptr);
-            user_context->regs[1] = child_pid;
+            user_context->regs[0] = child_pid;
             break;
         case YALNIX_EXIT:
             exit_code = user_context->regs[0];
