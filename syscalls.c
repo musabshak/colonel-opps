@@ -113,19 +113,6 @@ int kFork() {
         return ERROR;
     }
 
-    /**
-     * Need to initialize the following new pcb attributes:
-     *      - zombie_procs
-     *      - children_procs
-     *      - exit_status
-     *      - is_wait_blocked
-     */
-
-    child_pcb->zombie_procs = qopen();
-    child_pcb->children_procs = qopen();
-    child_pcb->exit_status = -1;
-    child_pcb->is_wait_blocked = 0;
-
     // Allocate a new R1 ptable for child process. Will later copy contents of parent's R1 pable
     // into this ptable.
     pte_t *child_r1_ptable = malloc(sizeof(pte_t) * g_len_pagetable);
@@ -195,7 +182,19 @@ int kFork() {
     child_pcb->pid = helper_new_pid(child_r1_ptable);  // hardware defined function for generating PID
     child_pcb->parent = parent_pcb;
     child_pcb->r1_ptable = child_r1_ptable;
-    child_pcb->children_procs = NULL;
+
+    /**
+     * Need to initialize the following new pcb attributes:
+     *      - zombie_procs
+     *      - children_procs
+     *      - exit_status
+     *      - is_wait_blocked
+     */
+
+    child_pcb->zombie_procs = qopen();
+    child_pcb->children_procs = qopen();
+    child_pcb->exit_status = -1;
+    child_pcb->is_wait_blocked = 0;
 
     // Indicate in the parent PCB that a child has been born
     // qput(parent_pcb->children_procs, child_pcb);
