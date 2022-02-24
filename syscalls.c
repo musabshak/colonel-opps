@@ -59,7 +59,7 @@ bool is_writeable_addr(pte_t *r1_ptable, void *addr) {
 }
 
 /**
- * Similar to `is_valid_buf()`, but for strings, and for read-only access.
+ * Similar to `is_valid_array()`, but for strings, and for read-only access.
  */
 bool is_readable_str(pte_t *r1_ptable, char *str) {
     // We iterate in this way so that we even validate the terminating character
@@ -89,17 +89,19 @@ bool is_readable_str(pte_t *r1_ptable, char *str) {
 }
 
 /**
- * Given a buffer, e.g. an array interpreted as a pointer `buf` with length `buf_len`,
- * check if each address in the buffer is accessible by the user under protection `prot`.
+ * Given an array (a pointer to the first element of an array), with length `array_len`,
+ * check if each address in the array is accessible by the user under protection `prot`.
  *
- * For instance, if the user is trying to (just) write to this buffer, we might call this
+ * For instance, if the user is trying to (just) write to this array, we might call this
  * with `prot = PROT_WRITE`. Note that this just checks if the permissions include `prot`,
  * not that the permissions are exactly `prot`. In this example, acessing a page with
  * protection `PROT_READ | PROT_WRITE` would still be valid, as it includes `PROT_WRITE`.
+ *
+ * Note that buffers are just character arrays.
  */
-bool is_valid_buf(pte_t *r1_ptable, void *buf, int buf_len, int prot) {
-    for (int i = 0; i < buf_len; i++) {
-        void *addr = buf + i;
+bool is_valid_array(pte_t *r1_ptable, void *array, int array_len, int prot) {
+    for (int i = 0; i < array_len; i++) {
+        void *addr = array + i;
         if (is_r1_addr(addr) == false) {
             // address is not in region 1
             return false;
@@ -354,7 +356,7 @@ int kExec(char *filename, char **argvec) {
     }
 
     /**
-     * Validate `argvec` and each `char *` it points to
+     * Validate `argvec` and each `char *` contained inside
      */
 
     int num_args = 0;
@@ -362,11 +364,14 @@ int kExec(char *filename, char **argvec) {
         num_args++;
     }
 
-    if (is_valid_buf(g_running_pcb->r1_ptable, (void *)argvec, num_args, PROT_READ) == false) {
+    // should it be num_args += 1 (to check for space occupied by the NULL at the end?)
+
+    if (is_valid_array(g_running_pcb->r1_ptable, (void *)argvec, num_args, PROT_READ) == false) {
         TracePrintf(1, "Invalid `argvec` passed to `kExec()`.\n");
         return ERROR;
     }
 
+    // Check each char * contained in argvec
     for (int i = 0; i < num_args; i++) {
         if (is_readable_str(g_running_pcb->r1_ptable, argvec[i]) == false) {
             TracePrintf(1, "In `kExec()`, `argvec` contains invalid string.\n");
