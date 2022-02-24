@@ -50,11 +50,13 @@ enum CallerFunc {
     F_clockTrap,
     F_kWait,
     F_kExit,
+    F_TrapMemory,
 };
 
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used);
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p);
 int find_free_frame(unsigned int *frametable);
+int find_n_free_frames(unsigned int *frametable, int num_frames, int *frame_arr);
 
 void print_r0_page_table(pte_t *ptable, int size, int *frametable);
 void print_r1_page_table(pte_t *ptable, int size);

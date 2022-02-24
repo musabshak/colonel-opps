@@ -1,6 +1,11 @@
 #ifndef __SYSCALLS_H
 #define __SYSCALLS_H
 
+#include <stdbool.h>
+
+//  ===== HELPER FUNCTIONS =====
+bool is_r1_addr(void *addr);
+
 //  ===== BASIC PROCESS CORDINATION =====
 pcb_t *running_process_p;
 
@@ -37,5 +42,4 @@ int kCvarSignal(int cvar_id);
 int kCvarBroadcast(int cvar_id);
 int kReclaim(int id);
 
-
-#endif // __SYSCALLS_H
+#endif  // __SYSCALLS_H

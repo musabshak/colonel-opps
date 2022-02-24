@@ -120,6 +120,10 @@ int schedule(enum CallerFunc caller_id) {
     //     return 0;
     // }
 
+    if (caller_id == F_TrapMemory) {
+        ;
+    }
+
     // Invoke KCSwitch()
     rc = KernelContextSwitch(KCSwitch, g_running_pcb, new_pcb);
     if (rc != 0) {

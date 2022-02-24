@@ -10,14 +10,14 @@
 K_SRC_DIR = .
 
 # What are the kernel c and include files?
-K_SRCS =  kernel.c trap_handlers.c kernel_data_structs.c queue.c load_program.c syscalls.c scheduler.c 
+K_SRCS =  kernel.c trap_handlers.c kernel_data_structs.c queue.c load_program.c syscalls.c scheduler.c address_validation.c 
 K_INCS = 
 
 # Where's your user source?
 U_SRC_DIR = tests
 
 # What are the user c and include files?
-U_SRCS = init.c cp3_tests.c cp4_tests.c exec_test.c
+U_SRCS = init.c cp3_tests.c cp4_tests.c exec_test.c grow_ustack_toomuch.c
 U_INCS = 
 
 

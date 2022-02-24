@@ -1,3 +1,4 @@
+#include "address_validation.h"
 #include "kernel_data_structs.h"
 #include "queue.h"
 #include "syscalls.h"
@@ -7,6 +8,8 @@ extern pcb_t *g_running_pcb;
 extern pcb_t *g_idle_pcb;
 extern queue_t *g_ready_procs_queue;
 extern queue_t *g_delay_blocked_procs_queue;
+extern int *g_frametable;
+extern unsigned int g_len_pagetable;
 
 int schedule(enum CallerFunc caller_id);
 
@@ -179,6 +182,62 @@ int TrapMemory(UserContext *user_context) {
     TracePrintf(1, "Address of user context: %p; page: %d\n", user_context->addr,
                 (unsigned int)(user_context->addr) >> PAGESHIFT);
     TracePrintf(1, "TrapMemory() called with code %d.\n", user_context->code);
+
+    /**
+     * Determine if the trap is an implicit request to grow the user's stack. This
+     * happens when the address is
+     *      - in region 1
+     *      - below the currently allocated memory for the user's stack
+     *      - above the current break for the executing process
+     */
+
+    void *addr = user_context->addr;
+    pte_t *r1_ptable = g_running_pcb->r1_ptable;
+    unsigned int relative_addr_page = get_page_of_addr(addr) - g_len_pagetable;
+    unsigned int last_stack_page = get_last_allocated_ustack_page(r1_ptable);
+
+    if (is_r1_addr(addr) && is_below_userstack_allocation(r1_ptable, addr) &&
+        is_above_ubrk(g_running_pcb, addr)) {
+        // this IS an implicit request
+
+        // Don't grow into the redzone!
+        if (get_page_of_addr(addr) == get_page_of_addr(g_running_pcb->user_brk) + 1) {
+            // failure
+            TracePrintf(1, "Failed to grow user stack (redzone error).\n");
+        } else {
+            int num_pages_to_grow = last_stack_page - relative_addr_page;
+
+            int *frames_found = malloc(num_pages_to_grow * sizeof(int));
+            int rc = find_n_free_frames(g_frametable, num_pages_to_grow, frames_found);
+            if (rc < 0) {
+                // failure
+                TracePrintf(1, "Failed to grow user stack (ran out of physical memory).\n");
+                free(frames_found);
+            } else {
+                // success
+                for (int i = 0; i < num_pages_to_grow; i++) {
+                    int page_idx = last_stack_page - 1 - i;
+
+                    r1_ptable[page_idx].valid = 1;
+                    r1_ptable[page_idx].prot = PROT_READ | PROT_WRITE;
+                    r1_ptable[page_idx].pfn = frames_found[i];
+
+                    unsigned int addr_to_flush = ((page_idx + g_len_pagetable) << PAGESHIFT);
+                    WriteRegister(REG_TLB_FLUSH, addr_to_flush);
+                }
+
+                free(frames_found);
+
+                return SUCCESS;
+            }
+        }
+    }
+
+    // Abort the current process-- how to do this? Call `schedule()`?
+    // REVIEW THIS
+    kExit(-1);
+    // schedule(F_TrapMemory);
+    // *user_context = g_running_pcb->uctxt;
 
     // // TODO: handle other codes
     // if (user_context->code == 0 || user_context->code == 2) {

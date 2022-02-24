@@ -155,6 +155,46 @@ int find_free_frame(unsigned int *frametable) {
     return -1;
 }
 
+/**
+ * Find `num_frames` number of free frames, and store them in `frame_arr`. If this
+ * succeeds, then the frames are marked as occupied. Otherwise, they are not.
+ *
+ * The contents of `frame_arr` if the function exited with error are not defined.
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int find_n_free_frames(unsigned int *frametable, int num_frames, int *frame_arr) {
+    // TODO: safety checks
+
+    int frames_found = 0;
+    bool ran_out_of_mem = false;
+
+    for (int i = 0; i < num_frames; i++) {
+        int frame_idx = find_free_frame(frametable);
+
+        if (frame_idx < 0) {
+            TracePrintf(1, "Ran out of physical memory.\n");
+            ran_out_of_mem = true;
+            break;
+        }
+
+        frame_arr[frames_found] = frame_idx;
+        frames_found++;
+    }
+
+    if (ran_out_of_mem) {
+        // failure
+        return -1;
+    } else {
+        // mark frames as occupied
+        for (int i = 0; i < frames_found; i++) {
+            int frame_idx = frame_arr[i];
+            frametable[frame_idx] = 1;
+        }
+        return 0;
+    }
+}
+
 void print_r0_page_table(pte_t *ptable, int size, int *frametable) {
 
     TracePrintf(1, "Printing R0 page table\n\n");

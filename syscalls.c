@@ -369,7 +369,8 @@ int kExec(char *filename, char **argvec) {
     int num_args = 0;
     if (argvec == NULL) {
         // this is allowed, see comment above definition of `argv` below.
-        ;
+        TracePrintf(1, "Error: `Exec()` called with null pointer as pointer to arguments.\n");
+        return ERROR;
     } else {
         for (char **argi = argvec; *argi != NULL; argi++) {
             num_args++;
@@ -379,7 +380,8 @@ int kExec(char *filename, char **argvec) {
 
     if (num_args == 0) {
         // nothing to validate
-        ;
+        TracePrintf(1, "Error: `Exec()` called with no arguments.\n");
+        return ERROR;
     } else {
         // We validate `num_args + 1` since technically the user is attempting to read even the
         // `NULL` argument.
@@ -397,21 +399,7 @@ int kExec(char *filename, char **argvec) {
         }
     }
 
-    /**
-     * Convention is that the first argument passed to `main()` is the name of the
-     * program. We thus augment the `argvec` so that the first item is the name of
-     * the program. This also satisfies `LoadProgram`, which cannot be passed a
-     * `NULL` pointer.
-     */
-    char **argv = malloc(sizeof(char *) * num_args + 1);
-    argv[0] = filename;
-    for (int i = 0; i < num_args; i++) {
-        argv[i + 1] = argvec[i];
-    }
-
-    int rc = LoadProgram(filename, argv, g_running_pcb);
-
-    free(argv);
+    int rc = LoadProgram(filename, argvec, g_running_pcb);
 
     if (rc != SUCCESS) {
         // We need to decide what to do here-- the caller pcb has been destroyed
