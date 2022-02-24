@@ -61,7 +61,7 @@ bool is_writeable_addr(pte_t *r1_ptable, void *addr) {
 /**
  * Similar to `is_valid_buf()`, but for strings, and for read-only access.
  */
-int is_readable_str(pte_t *r1_ptable, char *str) {
+bool is_readable_str(pte_t *r1_ptable, char *str) {
     // We iterate in this way so that we even validate the terminating character
     for (char *pointer_to_char = str;; pointer_to_char++) {
         int should_break = 0;
@@ -69,15 +69,15 @@ int is_readable_str(pte_t *r1_ptable, char *str) {
             should_break = 1;
         }
 
-        if (is_r1_addr((void *)pointer_to_char) == 0) {
-            return 0;
+        if (is_r1_addr((void *)pointer_to_char) == false) {
+            return false;
         }
 
         unsigned int addr_page = ((unsigned int)(str) >> PAGESHIFT);
         addr_page = addr_page % g_len_pagetable;
 
         if (r1_ptable[addr_page].prot & PROT_READ != PROT_READ) {
-            return 0;
+            return false;
         }
 
         if (should_break == 1) {
@@ -85,7 +85,7 @@ int is_readable_str(pte_t *r1_ptable, char *str) {
         }
     }
 
-    return 1;
+    return true;
 }
 
 /**
@@ -97,12 +97,12 @@ int is_readable_str(pte_t *r1_ptable, char *str) {
  * not that the permissions are exactly `prot`. In this example, acessing a page with
  * protection `PROT_READ | PROT_WRITE` would still be valid, as it includes `PROT_WRITE`.
  */
-int is_valid_buf(pte_t *r1_ptable, void *buf, int buf_len, int prot) {
+bool is_valid_buf(pte_t *r1_ptable, void *buf, int buf_len, int prot) {
     for (int i = 0; i < buf_len; i++) {
         void *addr = buf + i;
-        if (is_r1_addr(addr) == 0) {
+        if (is_r1_addr(addr) == false) {
             // address is not in region 1
-            return 0;
+            return false;
         }
 
         unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
@@ -115,11 +115,11 @@ int is_valid_buf(pte_t *r1_ptable, void *buf, int buf_len, int prot) {
         // originally had. If it is the same, then that page must have already included
         // `prot` (potentially it may have included more permissions).
         if (r1_ptable[addr_page].prot & prot != prot) {
-            return 0;
+            return false;
         }
     }
 
-    return 1;
+    return true;
 }
 
 int kGetPid() {
@@ -345,25 +345,30 @@ int kExec(char *filename, char **argvec) {
     // TODO: Do we need to check that the pointer is valid, or just that it doesn't point
     // to kernel memory?
 
-    // Validate `filename`
-    if (is_readable_str(g_running_pcb->r1_ptable, filename) == 0) {
+    /**
+     * Validate `filename`
+     */
+    if (is_readable_str(g_running_pcb->r1_ptable, filename) == false) {
         TracePrintf(1, "`filename` passed to `kExec()` was invalid.\n");
         return ERROR;
     }
 
-    // Validate `argvec` and each `char *` it points to
+    /**
+     * Validate `argvec` and each `char *` it points to
+     */
+
     int num_args = 0;
     for (char **argi = argvec; *argi != NULL; argi++) {
         num_args++;
     }
 
-    if (is_valid_buf(g_running_pcb->r1_ptable, (void *)argvec, num_args, PROT_READ) == 0) {
+    if (is_valid_buf(g_running_pcb->r1_ptable, (void *)argvec, num_args, PROT_READ) == false) {
         TracePrintf(1, "Invalid `argvec` passed to `kExec()`.\n");
         return ERROR;
     }
 
     for (int i = 0; i < num_args; i++) {
-        if (is_readable_str(g_running_pcb->r1_ptable, argvec[i]) == 0) {
+        if (is_readable_str(g_running_pcb->r1_ptable, argvec[i]) == false) {
             TracePrintf(1, "In `kExec()`, `argvec` contains invalid string.\n");
             return ERROR;
         }
