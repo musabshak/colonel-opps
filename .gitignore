@@ -11,3 +11,4 @@ core
 tests/init
 tests/cp3_tests
 tests/cp4_tests
+tests/exec_test
