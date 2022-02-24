@@ -1,5 +1,7 @@
 #include "kernel_data_structs.h"
 
+#include <stdbool.h>
+
 #include "queue.h"
 #include "ykernel.h"
 

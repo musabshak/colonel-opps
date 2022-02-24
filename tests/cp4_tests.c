@@ -71,20 +71,20 @@ void test_wait() {
     int pid = Fork();
     if (pid == 0) {
         for (int i = 0; i < 5; i++) {
-            TracePrintf(1, "CP4_TEST_CHILD RUNNING!\n");
+            TracePrintf(1, "CP4 TEST CHILD RUNNING!\n");
             Pause();
         }
-        TracePrintf(1, "CP4_TEST child about to exit...\n");
+        TracePrintf(1, "CP4 TEST child about to exit...\n");
         Exit(0);
     } else {
-        TracePrintf(1, "CP4_TEST waiting on child.\n");
+        TracePrintf(1, "CP4 TEST waiting on child.\n");
         int exit_status;
         int exit_pid = Wait(&exit_status);
 
-        TracePrintf(1, "CP4_TEST received exit status %d from PID %d.\n", exit_status, exit_pid);
+        TracePrintf(1, "CP4 TEST received exit status %d from PID %d.\n", exit_status, exit_pid);
 
         while (1) {
-            TracePrintf(1, "CP4_TEST RUNNING!\n");
+            TracePrintf(1, "CP4 TEST RUNNING!\n");
             Pause();
         }
     }

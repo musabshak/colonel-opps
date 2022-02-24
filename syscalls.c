@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 #include "kernel_data_structs.h"
 #include "load_program.h"
 #include "ykernel.h"
@@ -12,11 +14,113 @@ extern pte_t *g_reg0_ptable;
 extern int *g_frametable;
 
 int schedule(enum CallerFunc caller_id);
-int is_r0_addr(void *addr);
-int is_valid_buf(pte_t *r1_ptable, void *buf, int buf_len, int prot);
-int is_readable_str(pte_t *r1_ptable, char *str);
-
 void kExit(int status);
+
+/**
+ * Checks if the address lies in region 1. (1 means it does, 0 means it doesn't)
+ */
+bool is_r1_addr(void *addr) {
+    unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
+    if (addr_page < g_len_pagetable || addr_page >= 2 * MAX_PT_LEN) {
+        // the address points to r0 (kernel) memory, or past r1 memory
+
+        return false;
+    }
+
+    TracePrintf(2, "is an R1 address!\n");
+    return true;
+}
+
+/**
+ * Check that the address pointed to by a pointer passed from userland, is write-able.
+ */
+
+bool is_writeable_addr(pte_t *r1_ptable, void *addr) {
+
+    // Check that pointer is a valid R1 pointer
+    if (!is_r1_addr(addr)) {
+        TracePrintf(1, "Pointer is not pointing to an R1 addr\n");
+        return false;
+    }
+
+    // Check for write permissions in the pagetable
+    unsigned int addr_page = ((unsigned int)addr) >> PAGESHIFT;
+
+    // It is safe to do this because we know the address in in region 1
+    addr_page = addr_page % g_len_pagetable;
+
+    if (r1_ptable[addr_page].prot & PROT_WRITE == PROT_WRITE) {
+        TracePrintf(2, "is a writeable address!\n");
+        return true;
+    }
+
+    TracePrintf(2, "is not a writeable address!\n");
+    return false;
+}
+
+/**
+ * Similar to `is_valid_buf()`, but for strings, and for read-only access.
+ */
+int is_readable_str(pte_t *r1_ptable, char *str) {
+    // We iterate in this way so that we even validate the terminating character
+    for (char *pointer_to_char = str;; pointer_to_char++) {
+        int should_break = 0;
+        if (*pointer_to_char == '\0') {
+            should_break = 1;
+        }
+
+        if (is_r1_addr((void *)pointer_to_char) == 0) {
+            return 0;
+        }
+
+        unsigned int addr_page = ((unsigned int)(str) >> PAGESHIFT);
+        addr_page = addr_page % g_len_pagetable;
+
+        if (r1_ptable[addr_page].prot & PROT_READ != PROT_READ) {
+            return 0;
+        }
+
+        if (should_break == 1) {
+            break;
+        }
+    }
+
+    return 1;
+}
+
+/**
+ * Given a buffer, e.g. an array interpreted as a pointer `buf` with length `buf_len`,
+ * check if each address in the buffer is accessible by the user under protection `prot`.
+ *
+ * For instance, if the user is trying to (just) write to this buffer, we might call this
+ * with `prot = PROT_WRITE`. Note that this just checks if the permissions include `prot`,
+ * not that the permissions are exactly `prot`. In this example, acessing a page with
+ * protection `PROT_READ | PROT_WRITE` would still be valid, as it includes `PROT_WRITE`.
+ */
+int is_valid_buf(pte_t *r1_ptable, void *buf, int buf_len, int prot) {
+    for (int i = 0; i < buf_len; i++) {
+        void *addr = buf + i;
+        if (is_r1_addr(addr) == 0) {
+            // address is not in region 1
+            return 0;
+        }
+
+        unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
+        // It is safe to do this because we know the address in in region 1
+        addr_page = addr_page % g_len_pagetable;
+
+        // See if the pagetable has the same protections the user is asking the kernel to
+        // to utilize. We do this by checking if adding the protections in `prot` to the
+        // existing one in the pagetable will result in the same protection that the pagetable
+        // originally had. If it is the same, then that page must have already included
+        // `prot` (potentially it may have included more permissions).
+        if (r1_ptable[addr_page].prot & prot != prot) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
 
 int kGetPid() {
     // Confirm that there is a process that is currently running
@@ -289,10 +393,10 @@ int kWait(int *status_ptr) {
      * Verify that user-given pointer is valid (user has permissions to write
      * to what the pointer is pointing to
      */
-    // if (is_valid_buf(g_running_pcb->r1_ptable, (void *)status_ptr, 1, PROT_WRITE)) {
-    //     TracePrintf(1, "Invalid status pointer.\n");
-    //     return ERROR;
-    // }
+    if (!is_r1_addr(status_ptr) || !is_writeable_addr(g_running_pcb->r1_ptable, (void *)status_ptr)) {
+        TracePrintf(1, "kWait passed an invalid pointer!\n");
+        return ERROR;
+    }
 
     /**
      * "If the caller has an exited child whose information has not yet been collected via Wait, then this
@@ -396,81 +500,4 @@ void kExit(int status) {
      *          - Put parent into g_ready_procs_queue
      *      - Free all resources associated with g_running_pcb
      */
-}
-
-/**
- * Checks if the address lies in region 1. (1 means it does, 0 means it doesn't)
- */
-int is_r1_addr(void *addr) {
-    unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
-    if (addr_page < g_len_pagetable || addr_page >= 2 * MAX_PT_LEN) {
-        // the address points to r0 (kernel) memory, or past r1 memory
-        return 0;
-    }
-
-    return 1;
-}
-
-/**
- * Given a buffer, e.g. an array interpreted as a pointer `buf` with length `buf_len`,
- * check if each address in the buffer is accessible by the user under protection `prot`.
- *
- * For instance, if the user is trying to (just) write to this buffer, we might call this
- * with `prot = PROT_WRITE`. Note that this just checks if the permissions include `prot`,
- * not that the permissions are exactly `prot`. In this example, acessing a page with
- * protection `PROT_READ | PROT_WRITE` would still be valid, as it includes `PROT_WRITE`.
- */
-int is_valid_buf(pte_t *r1_ptable, void *buf, int buf_len, int prot) {
-    for (int i = 0; i < buf_len; i++) {
-        void *addr = buf + i;
-        if (is_r1_addr(addr) == 0) {
-            // address is not in region 1
-            return 0;
-        }
-
-        unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
-        // It is safe to do this because we know the address in in region 1
-        addr_page = addr_page % g_len_pagetable;
-
-        // See if the pagetable has the same protections the user is asking the kernel to
-        // to utilize. We do this by checking if adding the protections in `prot` to the
-        // existing one in the pagetable will result in the same protection that the pagetable
-        // originally had. If it is the same, then that page must have already included
-        // `prot` (potentially it may have included more permissions).
-        if (r1_ptable[addr_page].prot & prot != prot) {
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-/**
- * Similar to `is_valid_buf()`, but for strings, and for read-only access.
- */
-int is_readable_str(pte_t *r1_ptable, char *str) {
-    // We iterate in this way so that we even validate the terminating character
-    for (char *pointer_to_char = str;; pointer_to_char++) {
-        int should_break = 0;
-        if (*pointer_to_char == '\0') {
-            should_break = 1;
-        }
-
-        if (is_r1_addr((void *)pointer_to_char) == 0) {
-            return 0;
-        }
-
-        unsigned int addr_page = ((unsigned int)(str) >> PAGESHIFT);
-        addr_page = addr_page % g_len_pagetable;
-
-        if (r1_ptable[addr_page].prot & PROT_READ != PROT_READ) {
-            return 0;
-        }
-
-        if (should_break == 1) {
-            break;
-        }
-    }
-
-    return 1;
 }
