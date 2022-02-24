@@ -7,6 +7,10 @@
 
 #include <yuser.h>
 
+/**
+ * Forks, parent loops, child forks again, and the child and the child's child both loop.
+ * This tests basic functionality.
+ */
 void test_fork() {
     int pid2;
     TracePrintf(1, "About to fork:\n");
@@ -39,6 +43,33 @@ void test_fork() {
     }
 }
 
+/**
+ * Try calling `Exec()` with some arguments.
+ */
+void test_exec_with_args() {
+    TracePrintf(1, "About to `Exec()` with arguments...\n");
+
+    char *args_vec[] = {"hello", "world", NULL};
+    Exec("tests/exec_test", args_vec);
+}
+
+void test_exec_without_args() {
+    TracePrintf(1, "About to `Exec()` without arguments...\n");
+
+    char *args_vec[] = {NULL};
+    Exec("tests/exec_test", args_vec);
+}
+
+void test_exec_with_null_arg() {
+    TracePrintf(1, "About to `Exec()` with `NULL` as argument pointer...\n");
+
+    Exec("tests/exec_test", NULL);
+}
+
+/**
+ * Tries to load a program normally.
+ *
+ */
 void test_exec() {
     TracePrintf(1, "About to exec:\n");
     char *args_vec[] = {"hello", "world", NULL};
@@ -150,6 +181,15 @@ int main(int argc, char **argv) {
             break;
         case 6:
             test_exec_with_bad_prog();
+            break;
+        case 7:
+            test_exec_with_args();
+            break;
+        case 8:
+            test_exec_without_args();
+            break;
+        case 9:
+            test_exec_with_null_arg();
             break;
         default:
             while (1) {

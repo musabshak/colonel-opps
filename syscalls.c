@@ -340,6 +340,11 @@ int kFork() {
     return SUCCESS;
 }
 
+/**
+ * `argvec` must be null-terminated. Regardless of if there are any arguments or not,
+ * or even if `argvec == NULL`, this function passes the `filename` as the first
+ * argument to `LoadProgram`. Now if `filename == NULL`, this will return `ERROR`.
+ */
 int kExec(char *filename, char **argvec) {
 
     /* Verify that pointers passed by userland Exec call are legit */
@@ -350,7 +355,10 @@ int kExec(char *filename, char **argvec) {
     /**
      * Validate `filename`
      */
-    if (is_readable_str(g_running_pcb->r1_ptable, filename) == false) {
+    if (filename == NULL) {
+        TracePrintf(1, "`NULL` was passed as a file name to `kExec()`.\n");
+        return ERROR;
+    } else if (is_readable_str(g_running_pcb->r1_ptable, filename) == false) {
         TracePrintf(1, "`filename` passed to `kExec()` was invalid.\n");
         return ERROR;
     }
@@ -358,20 +366,30 @@ int kExec(char *filename, char **argvec) {
     /**
      * Validate `argvec` and each `char *` contained inside
      */
-
     int num_args = 0;
-    for (char **argi = argvec; *argi != NULL; argi++) {
-        num_args++;
+    if (argvec == NULL) {
+        // this is allowed, see comment above definition of `argv` below.
+        ;
+    } else {
+        for (char **argi = argvec; *argi != NULL; argi++) {
+            num_args++;
+        }
     }
-
     // should it be num_args += 1 (to check for space occupied by the NULL at the end?)
 
-    if (is_valid_array(g_running_pcb->r1_ptable, (void *)argvec, num_args, PROT_READ) == false) {
-        TracePrintf(1, "Invalid `argvec` passed to `kExec()`.\n");
-        return ERROR;
+    if (num_args == 0) {
+        // nothing to validate
+        ;
+    } else {
+        // We validate `num_args + 1` since technically the user is attempting to read even the
+        // `NULL` argument.
+        if (is_valid_array(g_running_pcb->r1_ptable, (void *)argvec, num_args + 1, PROT_READ) == false) {
+            TracePrintf(1, "Invalid `argvec` passed to `kExec()`.\n");
+            return ERROR;
+        }
     }
 
-    // Check each char * contained in argvec
+    // Validate each char * contained in argvec
     for (int i = 0; i < num_args; i++) {
         if (is_readable_str(g_running_pcb->r1_ptable, argvec[i]) == false) {
             TracePrintf(1, "In `kExec()`, `argvec` contains invalid string.\n");
@@ -379,11 +397,26 @@ int kExec(char *filename, char **argvec) {
         }
     }
 
-    int rc = LoadProgram(filename, argvec, g_running_pcb);
+    /**
+     * Convention is that the first argument passed to `main()` is the name of the
+     * program. We thus augment the `argvec` so that the first item is the name of
+     * the program. This also satisfies `LoadProgram`, which cannot be passed a
+     * `NULL` pointer.
+     */
+    char **argv = malloc(sizeof(char *) * num_args + 1);
+    argv[0] = filename;
+    for (int i = 0; i < num_args; i++) {
+        argv[i + 1] = argvec[i];
+    }
+
+    int rc = LoadProgram(filename, argv, g_running_pcb);
+
+    free(argv);
+
     if (rc != SUCCESS) {
         // We need to decide what to do here-- the caller pcb has been destroyed
 
-        // Completely destroy the calling PCB and dispatch
+        // Completely destroy the calling PCB and reschedule processes
         TracePrintf(1, "`kExec()` failed! Killing process (PID %d).\n", g_running_pcb->pid);
         kExit(ERROR);
         // not reached
