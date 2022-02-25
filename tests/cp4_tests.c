@@ -167,6 +167,13 @@ void test_exit() {
 }
 
 /**
+ *  kExit() test (16).
+ *
+ *  Tests the case where the init process exits (the CPU should halted).
+ */
+void test_exit_2() { Exit(-1); }
+
+/**
  * kWait() test (5).
  *
  * This tests basic kWait() functionality.
@@ -473,6 +480,8 @@ int main(int argc, char **argv) {
         case 15:
             test_wait_4();
             break;
+        case 16:
+            test_exit_2();
         default:
             while (1) {
                 TracePrintf(2, "CP4 TEST RUNNING!\n");

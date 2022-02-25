@@ -479,11 +479,19 @@ int kWait(int *status_ptr) {
     return g_running_pcb->last_dying_child_pid;
 }
 
+/**
+ * If init exits, the system should be halted.
+ */
 void kExit(int status) {
     pcb_t *caller = g_running_pcb;
     pcb_t *parent = caller->parent;
 
     TracePrintf(2, "PID %d exiting with status %d.\n", caller->pid, status);
+
+    if (g_running_pcb->pid == 0) {
+        TracePrintf(1, "Oh no, init process exited; the CPU will now halt\n");
+        Halt();
+    }
 
     // See `destroy_pcb()` for details. Essentially, this frees all memory associated with the
     // pcb (except its parent and children). If the parent is not `NULL`, it adds the exit
