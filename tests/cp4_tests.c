@@ -90,15 +90,36 @@ void test_fork() {
 }
 
 /**
+ * (2)
+ *
+ * Tries to load a program normally.
+ *
+ */
+void test_exec() {
+    TracePrintf(1, "About to exec init process (that prints INIT RUNNING):\n");
+    char *args_vec[] = {"hello", "world", NULL};
+
+    Exec("tests/init", args_vec);
+
+    while (1) {
+        TracePrintf(1, "CP4 TEST RUNNING! (should never be printed b/c exec)\n");
+    }
+}
+
+/**
+ * (7)
  * Try calling `Exec()` with some arguments.
  */
 void test_exec_with_args() {
-    TracePrintf(2, "About to `Exec()` with arguments...\n");
+    TracePrintf(1, "About to `Exec()` with arguments...\n");
 
     char *args_vec[] = {"hello", "world", NULL};
     Exec("tests/exec_test", args_vec);
 }
 
+/**
+ * (8)
+ */
 void test_exec_without_args() {
     int pid = Fork();
     if (pid == 0) {
@@ -130,17 +151,47 @@ void test_exec_without_args() {
 }
 
 /**
- * Tries to load a program normally.
- *
+ * (3)
  */
-void test_exec() {
-    TracePrintf(2, "About to exec:\n");
-    char *args_vec[] = {"hello", "world", NULL};
+void test_exec_with_kernel_addr() {
+    // TracePrintf(1, "About to exec with a kernel address:\n");
 
-    Exec("tests/init", args_vec);
+    // char *sneaky_kernel_addr = (char *)(0x02ab60);
+    // char **args_vec = {sneaky_kernel_addr, NULL};
+
+    // Exec("tests/init", args_vec);
+
+    // while (1) {
+    //     TracePrintf(1, "CP4_TEST RUNNING! (should never be printed b/c exec)\n");
+    //     Pause();
+    // }
+}
+
+/**
+ * (6)
+ */
+void test_exec_with_bad_prog() {
+    int pid = Fork();
+    if (pid == 0) {
+        TracePrintf(1, "CP4_TEST_CHILD about to exec a nonsense file...\n");
+        Pause();
+        char *args_vec[] = {"hello", "world", NULL};
+        Exec("tests/cp4_tests.c", args_vec);
+    } else {
+        TracePrintf(1, "CP4_TEST looping, waiting (not syscall) on child to exit...\n");
+        for (int i = 0; i < 5; i++) {
+            TracePrintf(1, "CP4_TEST RUNNING\n");
+            Pause();
+        }
+
+        int status;
+        int pid = Wait(&status);
+        TracePrintf(1, "CP4_TEST received exit status %d from PID %d.\n", status, pid);
+    }
 
     while (1) {
-        TracePrintf(2, "CP4_TEST RUNNING! (should never be printed b/c exec)\n");
+        TracePrintf(1, "CP4_TEST RUNNING!\n");
+        Pause();
     }
 }
 
@@ -350,44 +401,6 @@ void test_wait_4() {
 
     while (1) {
         TracePrintf(1, "PARENT RUNNING!\n");
-        Pause();
-    }
-}
-
-void test_exec_with_kernel_addr() {
-    // TracePrintf(1, "About to exec with a kernel address:\n");
-
-    // char *sneaky_kernel_addr = (char *)(0x02ab60);
-    // char **args_vec = {sneaky_kernel_addr, NULL};
-
-    // Exec("tests/init", args_vec);
-
-    // while (1) {
-    //     TracePrintf(1, "CP4_TEST RUNNING! (should never be printed b/c exec)\n");
-    //     Pause();
-    // }
-}
-
-void test_exec_with_bad_prog() {
-    int pid = Fork();
-    if (pid == 0) {
-        TracePrintf(2, "CP4_TEST_CHILD about to exec a nonsense file...\n");
-        Pause();
-        char *args_vec[] = {"hello", "world", NULL};
-        Exec("tests/cp4_tests.c", args_vec);
-    } else {
-        TracePrintf(2, "CP4_TEST waiting on child to exit...\n");
-        for (int i = 0; i < 5; i++) {
-            Pause();
-        }
-
-        int status;
-        int pid = Wait(&status);
-        TracePrintf(1, "CP4_TEST received exit status %d from PID %d.\n", status, pid);
-    }
-
-    while (1) {
-        TracePrintf(2, "CP4_TEST RUNNING!\n");
         Pause();
     }
 }

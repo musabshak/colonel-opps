@@ -339,9 +339,6 @@ int kExec(char *filename, char **argvec) {
 
     /* Verify that pointers passed by userland Exec call are legit */
 
-    // TODO: Do we need to check that the pointer is valid, or just that it doesn't point
-    // to kernel memory?
-
     /**
      * Validate `filename`
      */
@@ -357,8 +354,9 @@ int kExec(char *filename, char **argvec) {
      * Validate `argvec` and each `char *` contained inside
      */
     int num_args = 0;
+
+    // The user must provide at least one argument in the argvec array (the file name)
     if (argvec == NULL) {
-        // this is allowed, see comment above definition of `argv` below.
         TracePrintf(1, "Error: `Exec()` called with null pointer as pointer to arguments.\n");
         return ERROR;
     } else {
@@ -366,7 +364,6 @@ int kExec(char *filename, char **argvec) {
             num_args++;
         }
     }
-    // should it be num_args += 1 (to check for space occupied by the NULL at the end?)
 
     if (num_args == 0) {
         // nothing to validate
@@ -404,8 +401,6 @@ int kExec(char *filename, char **argvec) {
 }
 
 /**
- *
- *
  * Returns
  *      - pid of child process
  *      - exit status of child is copied to the address (status_ptr) passed to kWait as an argument, if
