@@ -2,19 +2,63 @@
  * Authors: Musab Shakeel and Varun Malladi
  * Date: 2/16/2022
  *
- * Some userland test code for yalnix checkpoint 3 syscalls (getPid, Brk, Delay).
+ * Some userland test code for yalnix syscalls.
  */
 
 #include <yuser.h>
 
 /**
- * Forks, parent loops, child forks again, and the child and the child's child both loop.
- * This tests basic functionality.
+ * This tests the round robin scheduler functionality. This test assumes that the Fork() syscall and the
+ * GetPid() syscall are working correctly.
+ *
+ * A total of 8 processes are created.
+ *
+ * Expected behavior in the TRACE:
+ *  - Process 2, 3, 4, ..., 8 should run a total of num_times times
+ *  - Process 0, 2, 3, ..., 8 should switch after each clock trap (the order may not be sequential becuase
+ *    time of creation of processes may be different).
+ *  - After the other processes terminate, the init process (pid = 0) will continue to run, switching with
+ * idle on each clock trap.
+ *
+ */
+void test_scheduler() {
+
+    for (int i = 0; i < 3; i++) {
+        Fork();
+    }
+
+    int pid = GetPid();
+    int num_times = 3;
+
+    // init process should continue to run
+    if (pid == 0) {
+        while (1) {
+            TracePrintf(1, "PROCESS %d RUNNING\n", pid);
+            Pause();
+        }
+    }
+
+    int j = 0;
+    // other processes should run a total of num_times times
+    while (j < num_times) {
+        pid = GetPid();
+        TracePrintf(1, "PROCESS %d RUNNING\n", pid);
+        Pause();
+        j += 1;
+    }
+}
+
+/**
+ * This tests basic fork functionality.
+ *
+ * Forks, parent loops, child forks again, and the child and the child's child both loop. A total
+ * of 3 processes are created (parent, child, child's child).
+ *
  */
 void test_fork() {
-    int pid2;
-    TracePrintf(1, "About to fork:\n");
-    int pid = Fork();
+    int pid, pid2;
+    TracePrintf(2, "About to fork:\n");
+    pid = Fork();
     if (pid == 0) {
         while (1) {
             TracePrintf(2, "This is the child (before forking again).\n");
@@ -37,7 +81,7 @@ void test_fork() {
         }
     } else {
         while (1) {
-            TracePrintf(2, "This is the parent... `Fork()` returned %d.\n", pid);
+            TracePrintf(2, "This is the parent... `Fork()` returned child's pid: %d.\n", pid);
             Pause();
         }
     }
@@ -221,6 +265,7 @@ int main(int argc, char **argv) {
     TracePrintf(1, "CP4_TEST RUNNING!\n");
 
     int test_case = atoi(argv[1]);
+
     switch (test_case) {
         case 1:
             test_fork();
@@ -252,9 +297,12 @@ int main(int argc, char **argv) {
         case 11:
             test_implicitly_grow_ustack_toomuch();
             break;
+        case 12:
+            test_scheduler();
+            break;
         default:
             while (1) {
-                TracePrintf(2, "CP4_TEST RUNNING!\n");
+                TracePrintf(2, "CP4 TEST RUNNING!\n");
                 Pause();
             }
     }

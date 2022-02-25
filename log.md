@@ -15,7 +15,7 @@
     - Move some logic to clockTrapHandler (for updating g_delay_blocked_queue)
     - Currently schedule() checks who called it and does stuff based on that 
 - Update queue code to maintain length as an attribute (as opposed to an O(n) method)
-- Add levels to traceprints (userland + kernelland)
+- ~Add levels to traceprints (userland + kernelland)~
 - Add all global variables as externs in kernel_data_structs.c
 
 ### Implementation notes
