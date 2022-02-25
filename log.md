@@ -1,15 +1,14 @@
 ### Outstanding Questions
-- Why are initial malloc calls not trigerring SetKernelBrk?
-    - Why is malloc allocating in the user data section?
-- TODO: Varun's question on Delay/Clock ticks
+
 
 ### Todo other
 - Bring SetKernelBrk tests into main code
     - Write some thoughtful, SetKernelBrk-specific macros?
-- CLARIFY C header/extern/linking concepts
+- ~Clarify C header/extern~
+    - Clarify linking concepts
 - Write test_KCCopy function
 - Rigorously test SetKernelBrk, Brk functions
-- Clean code
+- Clean kernel code
 - Refactor h_raise_brk/h_lower_brk and raise_brk_user/lower_brk_user into same function
 - ~Properly write code for updating clock ticks in blocked processes queue~
 - Reformat scheduler such that scheduler takes in which queue to add the running process to before context switching 
@@ -17,6 +16,7 @@
     - Currently schedule() checks who called it and does stuff based on that 
 - Update queue code to maintain length as an attribute (as opposed to an O(n) method)
 - Add levels to traceprints (userland + kernelland)
+- Add all global variables as externs in kernel_data_structs.c
 
 ### Implementation notes
 - We assume init cloning into idle (init is process 0)
