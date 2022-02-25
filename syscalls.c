@@ -2,6 +2,7 @@
 
 #include "kernel_data_structs.h"
 #include "load_program.h"
+#include "printing.h"
 #include "ykernel.h"
 
 void kExit(int status);
@@ -343,6 +344,7 @@ int kExec(char *filename, char **argvec) {
      * Validate `filename`
      */
     if (filename == NULL) {
+        // TP_ERROR("`NULL` was passed as a file name to `kExec()` %d %s.\n", 1, "hi");
         TracePrintf(1, "`NULL` was passed as a file name to `kExec()`.\n");
         return ERROR;
     } else if (is_readable_str(g_running_pcb->r1_ptable, filename) == false) {
@@ -357,7 +359,8 @@ int kExec(char *filename, char **argvec) {
 
     // The user must provide at least one argument in the argvec array (the file name)
     if (argvec == NULL) {
-        TracePrintf(1, "Error: `Exec()` called with null pointer as pointer to arguments.\n");
+        TP_ERROR("`Exec()` called with null pointer as pointer to arguments.\n");
+        // TracePrintf(1, "Error: `Exec()` called with null pointer as pointer to arguments.\n");
         return ERROR;
     } else {
         for (char **argi = argvec; *argi != NULL; argi++) {

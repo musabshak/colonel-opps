@@ -11,4 +11,6 @@ core
 tests/init
 tests/cp3_tests
 tests/cp4_tests
+tests/cp5_tests
 tests/exec_test
+tests/grow_ustack_toomuch
