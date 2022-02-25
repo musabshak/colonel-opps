@@ -7,14 +7,16 @@
 #include "queue.h"
 #include "ykernel.h"
 
+typedef struct ProcessControlBlock pcb_t;
+
 // S========= EXTERN DECLARATIONS ========== //
 extern pcb_t *g_running_pcb;
 extern pcb_t *g_idle_pcb;
 extern pte_t *g_reg0_ptable;
 
-extern queue_t *g_delay_blocked_procs_queue;
 extern queue_t *g_ready_procs_queue;
-extern int *g_frametable;
+extern queue_t *g_delay_blocked_procs_queue;
+extern unsigned int *g_frametable;
 
 extern unsigned int g_len_pagetable;
 extern unsigned int g_len_frametable;
@@ -22,7 +24,6 @@ extern unsigned int g_num_kernel_stack_pages;
 
 // E========= EXTERN DECLARATIONS ========== //
 
-typedef struct ProcessControlBlock pcb_t;
 typedef struct ProcessControlBlock {
     unsigned int pid;
 

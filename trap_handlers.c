@@ -4,15 +4,6 @@
 #include "syscalls.h"
 #include "ykernel.h"
 
-extern pcb_t *g_running_pcb;
-extern pcb_t *g_idle_pcb;
-extern queue_t *g_ready_procs_queue;
-extern queue_t *g_delay_blocked_procs_queue;
-extern int *g_frametable;
-extern unsigned int g_len_pagetable;
-
-int schedule(enum CallerFunc caller_id);
-
 /*
 Trap handlers are functions pointed to by pointers in the interrupt vector table
 */

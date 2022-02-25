@@ -15,7 +15,6 @@
  */
 
 #include "kernel_data_structs.h"
-extern int *g_frametable;
 
 /*
  *  Load a program into an existing address space.  The program comes from
