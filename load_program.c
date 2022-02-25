@@ -48,7 +48,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     long segment_size;
     char *argbuf;
 
-    TracePrintf(1, "Entering LoadProgram\n");
+    TracePrintf(2, "Entering LoadProgram\n");
 
     /*
      * Open the executable file
@@ -89,7 +89,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     }
     argcount = i;
 
-    TracePrintf(1, "LoadProgram: argsize %d, argcount %d\n", size, argcount);
+    TracePrintf(2, "LoadProgram: argsize %d, argcount %d\n", size, argcount);
 
     /*
      *  The arguments will get copied starting at "cp", and the argv
@@ -110,14 +110,14 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
      */
     cp2 = (caddr_t)cpp - INITIAL_STACK_FRAME_SIZE;
 
-    TracePrintf(1, "prog_size %d, text %d data %d bss %d pages\n", li.t_npg + data_npg, li.t_npg, li.id_npg,
+    TracePrintf(2, "prog_size %d, text %d data %d bss %d pages\n", li.t_npg + data_npg, li.t_npg, li.id_npg,
                 li.ud_npg);
 
     /*
      * Compute how many pages we need for the stack */
     stack_npg = (VMEM_1_LIMIT - DOWN_TO_PAGE(cp2)) >> PAGESHIFT;
 
-    TracePrintf(1, "LoadProgram: heap_size %d, stack_size %d\n", li.t_npg + data_npg, stack_npg);
+    TracePrintf(2, "LoadProgram: heap_size %d, stack_size %d\n", li.t_npg + data_npg, stack_npg);
 
     /* leave at least one page between heap and stack */
     if (stack_npg + data_pg1 + data_npg >= MAX_PT_LEN) {
@@ -160,7 +160,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     }
 
     for (i = 0; args[i] != NULL; i++) {
-        TracePrintf(3, "saving arg %d = '%s'\n", i, args[i]);
+        TracePrintf(2, "saving arg %d = '%s'\n", i, args[i]);
         strcpy(cp2, args[i]);
         cp2 += strlen(cp2) + 1;
     }
@@ -334,9 +334,9 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
 
     // Note that the page numbers are not relative in the following lines of code
 
-    TracePrintf(1, "proc num data pages: %d\n", data_npg);
-    TracePrintf(1, "proc data_pg1: %d\n", data_pg1);
-    TracePrintf(1, "proc text_pg1: %d\n", text_pg1);
+    TracePrintf(2, "proc num data pages: %d\n", data_npg);
+    TracePrintf(2, "proc data_pg1: %d\n", data_pg1);
+    TracePrintf(2, "proc text_pg1: %d\n", text_pg1);
 
     unsigned int last_data_page = (data_pg1 + data_npg - 1) + MAX_PT_LEN;
     unsigned int first_heap_page = last_data_page + 1;
@@ -366,6 +366,6 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     *cpp++ = NULL; /* the last argv is a NULL pointer */
     *cpp++ = NULL; /* a NULL pointer for an empty envp */
 
-    TracePrintf(1, "Exiting LoadProgram\n");
+    TracePrintf(2, "Exiting LoadProgram\n");
     return SUCCESS;
 }

@@ -42,7 +42,7 @@ Trap handlers are functions pointed to by pointers in the interrupt vector table
  */
 
 int TrapKernelHandler(UserContext *user_context) {
-    TracePrintf(1, "Entering TrapKernelHandler\n");
+    TracePrintf(2, "Entering TrapKernelHandler\n");
     int syscall_code = user_context->code;
 
     int rc;
@@ -97,7 +97,7 @@ int TrapKernelHandler(UserContext *user_context) {
             kExit(exit_code);
             break;
     }
-    TracePrintf(1, "Exiting TrapKernelHandler\n");
+    TracePrintf(2, "Exiting TrapKernelHandler\n");
 }
 
 /*
@@ -116,11 +116,11 @@ int TrapKernelHandler(UserContext *user_context) {
 
 int TrapClock(UserContext *user_context) {
 
-    TracePrintf(1, "Entering TrapClock\n");
+    TracePrintf(2, "Entering TrapClock\n");
 
     int rc = schedule(F_clockTrap);
 
-    TracePrintf(1, "Exiting TrapClock\n");
+    TracePrintf(2, "Exiting TrapClock\n");
 
     return rc;
 }
