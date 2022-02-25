@@ -7,6 +7,21 @@
 #include "queue.h"
 #include "ykernel.h"
 
+// S========= EXTERN DECLARATIONS ========== //
+extern pcb_t *g_running_pcb;
+extern pcb_t *g_idle_pcb;
+extern pte_t *g_reg0_ptable;
+
+extern queue_t *g_delay_blocked_procs_queue;
+extern queue_t *g_ready_procs_queue;
+extern int *g_frametable;
+
+extern unsigned int g_len_pagetable;
+extern unsigned int g_len_frametable;
+extern unsigned int g_num_kernel_stack_pages;
+
+// E========= EXTERN DECLARATIONS ========== //
+
 typedef struct ProcessControlBlock pcb_t;
 typedef struct ProcessControlBlock {
     unsigned int pid;
@@ -67,6 +82,8 @@ int lower_brk_user(void *new_brk, void *current_brk, pte_t *ptable);
 void print_pcb(void *elementp);
 
 int destroy_pcb(pcb_t *pcb, int exit_status);
+
+int schedule(enum CallerFunc caller_id);
 
 // int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable);
 // int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable);

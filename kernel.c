@@ -4,10 +4,8 @@
  *
  * This file contains the executable kernel code for the colonel-opps OS.
  *
- * Global variables are prepended
  */
 
-// #include "kernel_data_structs.h"
 #include "kernel_data_structs.h"
 #include "load_program.h"
 #include "queue.h"
@@ -18,37 +16,21 @@
 /* S=== GLOBALS === */
 /* ================ */
 
-int g_virtual_mem_enabled;  // 1 if virtual memory enabled, 0 otherwise
-
-void *g_kernel_brk;  // global variable storing kernel brk
-
-int CVAR_ID;  // Cvar id counter
-
-unsigned int g_len_frametable;  // number of frames in physical memory, populated by KernelStart
-
-unsigned int g_len_pagetable = MAX_PT_LEN;  // number of pages in R0 or R1 pagetable
-
-unsigned int *g_frametable;  // bitvector containing info on used/unused physical
-                             // memory frames
-
-pte_t *g_reg0_ptable;  // pagetable for kernel structures shared accross processes
-
-pcb_t *g_running_pcb;  // pcb of process that is currently running
+int g_virtual_mem_enabled;                  // 1 if virtual memory enabled, 0 otherwise
+void *g_kernel_brk;                         // Global variable storing kernel brk
+int CVAR_ID;                                // Cvar id counter
+unsigned int g_len_frametable;              // Number of frames in physical memory, populated by KernelStart
+unsigned int g_len_pagetable = MAX_PT_LEN;  // Number of pages in R0 or R1 pagetable
+unsigned int *g_frametable;                 // Bitvector containing info on used/unused physical
+                                            // memory frames.
+pte_t *g_reg0_ptable;                       // Pagetable for kernel structures shared accross processes
+pcb_t *g_running_pcb;                       // Pcb of process that is currently running
 pcb_t *g_idle_pcb;
-
 unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
-
 queue_t *g_ready_procs_queue;
 queue_t *g_delay_blocked_procs_queue;
-// queue_t *g_wait_blocked_procs_queue; // not needed
 
 /* E=== GLOBALS === */
-
-/* ========================= */
-/* S== UTILITY FUNCTIONS === */
-/* ========================= */
-
-/* E== UTILITY FUNCTIONS === */
 
 // Imitate a userland program for checkpoint 2.
 void doIdle(void) {

@@ -5,14 +5,6 @@
 #include "queue.h"
 #include "ykernel.h"
 
-extern int *g_frametable;
-
-extern pcb_t *g_running_pcb;
-extern unsigned int g_len_pagetable;
-extern unsigned int g_len_frametable;
-extern unsigned int g_num_kernel_stack_pages;
-extern pte_t *g_reg0_ptable;
-
 void mark_parent_as_null(void *pcb_p) {
     pcb_t *pcb = (pcb_t *)pcb_p;
 

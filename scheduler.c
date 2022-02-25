@@ -1,11 +1,6 @@
 #include "kernel_data_structs.h"
 #include "ykernel.h"
 
-extern queue_t *g_delay_blocked_procs_queue;
-extern queue_t *g_ready_procs_queue;
-extern pcb_t *g_idle_pcb;
-extern pcb_t *g_running_pcb;
-
 int pcb_delay_finished(void *elementp, const void *key) {
 
     pcb_t *pcb = (pcb_t *)elementp;
