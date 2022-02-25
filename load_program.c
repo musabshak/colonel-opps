@@ -84,7 +84,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
      */
     size = 0;
     for (i = 0; args[i] != NULL; i++) {
-        TracePrintf(1, "counting arg %d = '%s'\n", i, args[i]);
+        TracePrintf(2, "counting arg %d = '%s'\n", i, args[i]);
         size += strlen(args[i]) + 1;
     }
     argcount = i;
