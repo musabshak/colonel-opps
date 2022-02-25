@@ -33,16 +33,16 @@ int copy_page_contents(unsigned int source_page, unsigned int target_page) {
 
 void print_pcb(void *elementp) {
     pcb_t *my_pcb = (pcb_t *)elementp;
-    TracePrintf(1, "pid: %d \n", my_pcb->pid);
+    TracePrintf(2, "pid: %d \n", my_pcb->pid);
 }
 
 void print_zombie_pcb(void *elementp) {
     pcb_t *my_pcb = (pcb_t *)elementp;
-    TracePrintf(1, "zombie pid: %d \n", my_pcb->pid);
+    TracePrintf(2, "zombie pid: %d \n", my_pcb->pid);
 }
 
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
-    TracePrintf(1, "Entering KCCopy\n");
+    TracePrintf(2, "Entering KCCopy\n");
     // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
 
     pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
@@ -77,8 +77,8 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
 
         int rc = copy_page_contents(source_page, target_page);
 
-        TracePrintf(1, "kstack_frame_idxs[%d] = %d\n", i, new_pcb->kstack_frame_idxs[i]);
-        TracePrintf(1, "source page: %d target page: %d\n", source_page, target_page);
+        TracePrintf(2, "kstack_frame_idxs[%d] = %d\n", i, new_pcb->kstack_frame_idxs[i]);
+        TracePrintf(2, "source page: %d target page: %d\n", source_page, target_page);
 
         if (rc != 0) {
             TracePrintf(1, "Error occurred in copy_page_contents in KCCopy()\n");
@@ -98,14 +98,14 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
 
     WriteRegister(REG_TLB_FLUSH, page_below_kstack_addr);
 
-    TracePrintf(1, "Exiting KCCopy\n");
+    TracePrintf(2, "Exiting KCCopy\n");
     // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
     return kc_in;
 }
 
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p) {
 
-    TracePrintf(1, "Entering KCSwitch\n");
+    TracePrintf(2, "Entering KCSwitch\n");
     pcb_t *curr_pcb = ((pcb_t *)curr_pcb_p);
     pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
 
@@ -133,8 +133,8 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
 
     g_running_pcb = new_pcb;
 
-    TracePrintf(1, "g_running_pcb's pid: %d\n", g_running_pcb->pid);
-    TracePrintf(1, "Leaving KCSwitch\n");
+    TracePrintf(2, "g_running_pcb's pid: %d\n", g_running_pcb->pid);
+    TracePrintf(2, "Leaving KCSwitch\n");
 
     // At the end of switching, return pointer to kernel context (previously) saved in new_pcb
     return &(new_pcb->kctxt);
@@ -197,30 +197,30 @@ int find_n_free_frames(unsigned int *frametable, int num_frames, int *frame_arr)
 
 void print_r0_page_table(pte_t *ptable, int size, int *frametable) {
 
-    TracePrintf(1, "Printing R0 page table\n\n");
+    TracePrintf(2, "Printing R0 page table\n\n");
 
-    TracePrintf(1, "%3s  %2s    %s|%s|%s\t  F used?\n", "Idx", "P#", "Valid", "Prot", "PFN#");
+    TracePrintf(2, "%3s  %2s    %s|%s|%s\t  F used?\n", "Idx", "P#", "Valid", "Prot", "PFN#");
     for (int i = size - 1; i >= 0; i--) {
         TracePrintf(1, "%3d  %2d -->%5d|%4d|%4d\t  %d\n", i, i, ptable[i].valid, ptable[i].prot,
                     ptable[i].pfn, frametable[i]);
     }
-    TracePrintf(1, "\n");
+    TracePrintf(2, "\n");
 }
 
 void print_r1_page_table(pte_t *ptable, int size) {
 
-    TracePrintf(1, "Printing R1 page table\n\n");
+    TracePrintf(2, "Printing R1 page table\n\n");
 
-    TracePrintf(1, "%3s  %2s    %s|%s|%s\n", "Idx", "P#", "Valid", "Prot", "PFN#");
+    TracePrintf(2, "%3s  %2s    %s|%s|%s\n", "Idx", "P#", "Valid", "Prot", "PFN#");
     for (int i = size - 1; i >= 0; i--) {
-        TracePrintf(1, "%3d  %2d -->%5d|%4d|%4d\n", i, i + size, ptable[i].valid, ptable[i].prot,
+        TracePrintf(2, "%3d  %2d -->%5d|%4d|%4d\n", i, i + size, ptable[i].valid, ptable[i].prot,
                     ptable[i].pfn);
     }
-    TracePrintf(1, "\n");
+    TracePrintf(2, "\n");
 }
 
 int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
-    TracePrintf(1, "Calling h_raise_brk w/ arg: %x (page %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
+    TracePrintf(2, "Calling h_raise_brk w/ arg: %x (page %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
 
     unsigned int current_page = ((unsigned int)current_brk >> PAGESHIFT) - MAX_PT_LEN;
     unsigned int new_page = ((unsigned int)new_brk >> PAGESHIFT) - MAX_PT_LEN;
@@ -256,7 +256,7 @@ int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
 }
 
 int lower_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
-    TracePrintf(1, "Calling h_lower_brk\n");
+    TracePrintf(2, "Calling h_lower_brk\n");
 
     unsigned int current_page = ((unsigned int)current_brk >> PAGESHIFT) - MAX_PT_LEN;
     unsigned int new_page = ((unsigned int)new_brk >> PAGESHIFT) - MAX_PT_LEN;
@@ -297,7 +297,7 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
         if (r1_ptable[i].valid == 1) {
             // Mark physical frame as available
             int frame_idx = r1_ptable[i].pfn;
-            TracePrintf(1, "i: %d frame_idx: %d\n", i, frame_idx);
+            TracePrintf(2, "i: %d frame_idx: %d\n", i, frame_idx);
             g_frametable[frame_idx] = 0;
         }
     }
@@ -360,7 +360,7 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
  *      - `*curr_brk`
  */
 // int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
-//     TracePrintf(1, "Calling h_raise_brk\n");
+//     TracePrintf(2, "Calling h_raise_brk\n");
 
 //     unsigned int current_page = (unsigned int)curr_brk >> PAGESHIFT;
 //     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
@@ -405,7 +405,7 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
 //  *      - `*curr_brk`
 //  */
 // int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable) {
-//     // TracePrintf(1, "Calling h_lower_brk\n");
+//     // TracePrintf(2, "Calling h_lower_brk\n");
 
 //     unsigned int current_page = (unsigned int)curr_brk >> PAGESHIFT;
 //     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;

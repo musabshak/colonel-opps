@@ -17,19 +17,19 @@ void test_fork() {
     int pid = Fork();
     if (pid == 0) {
         while (1) {
-            TracePrintf(1, "This is the child (before forking again).\n");
+            TracePrintf(2, "This is the child (before forking again).\n");
 
             pid2 = Fork();
 
             if (pid2 == 0) {
                 while (1) {
-                    TracePrintf(1, "This is the child's child.\n");
+                    TracePrintf(2, "This is the child's child.\n");
                     Pause();
                 }
 
             } else {
                 while (1) {
-                    TracePrintf(1, "This is the child.\n");
+                    TracePrintf(2, "This is the child.\n");
                     Pause();
                 }
             }
@@ -37,7 +37,7 @@ void test_fork() {
         }
     } else {
         while (1) {
-            TracePrintf(1, "This is the parent... `Fork()` returned %d.\n", pid);
+            TracePrintf(2, "This is the parent... `Fork()` returned %d.\n", pid);
             Pause();
         }
     }
@@ -47,7 +47,7 @@ void test_fork() {
  * Try calling `Exec()` with some arguments.
  */
 void test_exec_with_args() {
-    TracePrintf(1, "About to `Exec()` with arguments...\n");
+    TracePrintf(2, "About to `Exec()` with arguments...\n");
 
     char *args_vec[] = {"hello", "world", NULL};
     Exec("tests/exec_test", args_vec);
@@ -88,13 +88,13 @@ void test_exec_without_args() {
  *
  */
 void test_exec() {
-    TracePrintf(1, "About to exec:\n");
+    TracePrintf(2, "About to exec:\n");
     char *args_vec[] = {"hello", "world", NULL};
 
     Exec("tests/init", args_vec);
 
     while (1) {
-        TracePrintf(1, "CP4_TEST RUNNING! (should never be printed b/c exec)\n");
+        TracePrintf(2, "CP4_TEST RUNNING! (should never be printed b/c exec)\n");
     }
 }
 
@@ -102,14 +102,14 @@ void test_exit() {
     int pid = Fork();
     if (pid == 0) {
         for (int i = 0; i < 3; i++) {
-            TracePrintf(1, "CP4_TEST's child RUNNING!\n");
+            TracePrintf(2, "CP4_TEST's child RUNNING!\n");
             Pause();
         }
-        TracePrintf(1, "CP4_TEST child about to exit...\n");
+        TracePrintf(2, "CP4_TEST child about to exit...\n");
         Exit(0);
     } else {
         while (1) {
-            TracePrintf(1, "CP4_TEST RUNNING!\n");
+            TracePrintf(2, "CP4_TEST RUNNING!\n");
             Pause();
         }
     }
@@ -119,20 +119,20 @@ void test_wait() {
     int pid = Fork();
     if (pid == 0) {
         for (int i = 0; i < 5; i++) {
-            TracePrintf(1, "CP4 TEST CHILD RUNNING!\n");
+            TracePrintf(2, "CP4 TEST CHILD RUNNING!\n");
             Pause();
         }
-        TracePrintf(1, "CP4 TEST child about to exit...\n");
+        TracePrintf(2, "CP4 TEST child about to exit...\n");
         Exit(0);
     } else {
-        TracePrintf(1, "CP4 TEST waiting on child.\n");
+        TracePrintf(2, "CP4 TEST waiting on child.\n");
         int exit_status;
         int exit_pid = Wait(&exit_status);
 
-        TracePrintf(1, "CP4 TEST received exit status %d from PID %d.\n", exit_status, exit_pid);
+        TracePrintf(2, "CP4 TEST received exit status %d from PID %d.\n", exit_status, exit_pid);
 
         while (1) {
-            TracePrintf(1, "CP4 TEST RUNNING!\n");
+            TracePrintf(2, "CP4 TEST RUNNING!\n");
             Pause();
         }
     }
@@ -155,12 +155,12 @@ void test_exec_with_kernel_addr() {
 void test_exec_with_bad_prog() {
     int pid = Fork();
     if (pid == 0) {
-        TracePrintf(1, "CP4_TEST_CHILD about to exec a nonsense file...\n");
+        TracePrintf(2, "CP4_TEST_CHILD about to exec a nonsense file...\n");
         Pause();
         char *args_vec[] = {"hello", "world", NULL};
         Exec("tests/cp4_tests.c", args_vec);
     } else {
-        TracePrintf(1, "CP4_TEST waiting on child to exit...\n");
+        TracePrintf(2, "CP4_TEST waiting on child to exit...\n");
         for (int i = 0; i < 5; i++) {
             Pause();
         }
@@ -171,7 +171,7 @@ void test_exec_with_bad_prog() {
     }
 
     while (1) {
-        TracePrintf(1, "CP4_TEST RUNNING!\n");
+        TracePrintf(2, "CP4_TEST RUNNING!\n");
         Pause();
     }
 }
@@ -254,7 +254,7 @@ int main(int argc, char **argv) {
             break;
         default:
             while (1) {
-                TracePrintf(1, "CP4_TEST RUNNING!\n");
+                TracePrintf(2, "CP4_TEST RUNNING!\n");
                 Pause();
             }
     }

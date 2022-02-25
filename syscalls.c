@@ -134,7 +134,7 @@ int kGetPid() {
 }
 
 int kBrk(void *new_brk) {
-    TracePrintf(1, "Calling Brk w/ arg: 0x%x (page: %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
+    TracePrintf(2, "Calling Brk w/ arg: 0x%x (page: %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
 
     pte_t *ptable = g_running_pcb->r1_ptable;
     void *user_brk = g_running_pcb->user_brk;
@@ -144,8 +144,8 @@ int kBrk(void *new_brk) {
     unsigned int new_brk_int = (unsigned int)new_brk;
     unsigned int last_addr_above_data = (unsigned int)(user_data_end);
 
-    TracePrintf(1, "user_stack_base_page: %d\n", user_stack_base >> PAGESHIFT);
-    TracePrintf(1, "user_brk_page: %d\n", (unsigned int)user_brk >> PAGESHIFT);
+    TracePrintf(2, "user_stack_base_page: %d\n", user_stack_base >> PAGESHIFT);
+    TracePrintf(2, "user_brk_page: %d\n", (unsigned int)user_brk >> PAGESHIFT);
 
     // Fail if new_brk lies anywhere but the region above kernel data and below kernel stack.
     // Leave 1 page between kernel heap and stack (red zone!)
@@ -209,7 +209,7 @@ int kDelay(int clock_ticks) {
 }
 
 int kFork() {
-    TracePrintf(1, "Entering kFork\n");
+    TracePrintf(2, "Entering kFork\n");
 
     pcb_t *parent_pcb = g_running_pcb;
     pte_t *parent_r1_ptable = parent_pcb->r1_ptable;
@@ -336,7 +336,7 @@ int kFork() {
     // Copy current kernel stack contents into child pcb's kernel stack frames
     int rc = KernelContextSwitch(KCCopy, child_pcb, NULL);
 
-    TracePrintf(1, "Exiting kFork\n");
+    TracePrintf(2, "Exiting kFork\n");
     return SUCCESS;
 }
 
@@ -483,7 +483,7 @@ void kExit(int status) {
     pcb_t *caller = g_running_pcb;
     pcb_t *parent = caller->parent;
 
-    TracePrintf(1, "PID %d exiting with status %d.\n", caller->pid, status);
+    TracePrintf(2, "PID %d exiting with status %d.\n", caller->pid, status);
 
     // See `destroy_pcb()` for details. Essentially, this frees all memory associated with the
     // pcb (except its parent and children). If the parent is not `NULL`, it adds the exit

@@ -66,7 +66,7 @@ void doIdle(void) {
  *      - g_kernel_brk
  */
 int h_raise_brk(void *new_brk) {
-    TracePrintf(1, "Calling h_raise_brk w/ arg: %x (page %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
+    TracePrintf(2, "Calling h_raise_brk w/ arg: %x (page %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
 
     unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
@@ -112,7 +112,7 @@ int h_raise_brk(void *new_brk) {
  *      - g_kernel_brk
  */
 int h_lower_brk(void *new_brk) {
-    TracePrintf(1, "Calling h_lower_brk\n");
+    TracePrintf(2, "Calling h_lower_brk\n");
 
     unsigned int current_page = (unsigned int)g_kernel_brk >> PAGESHIFT;
     unsigned int new_page = (unsigned int)new_brk >> PAGESHIFT;
@@ -150,7 +150,7 @@ int h_lower_brk(void *new_brk) {
  */
 int SetKernelBrk(void *new_brk) {
 
-    TracePrintf(1, "Calling SetKernelBrk w/ arg: %x (page %d)\n", new_brk,
+    TracePrintf(2, "Calling SetKernelBrk w/ arg: %x (page %d)\n", new_brk,
                 (unsigned int)new_brk >> PAGESHIFT);
 
     unsigned int new_brk_int = (unsigned int)new_brk;
@@ -232,18 +232,18 @@ int SetKernelBrk(void *new_brk) {
  */
 void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // Parse arguments
-    TracePrintf(1, "Entering KernelStart\n");
+    TracePrintf(2, "Entering KernelStart\n");
 
     g_len_frametable = pmem_size / PAGESIZE;
     g_kernel_brk = _kernel_orig_brk;  // _k_orig_brk is populated by hardware
     g_virtual_mem_enabled = 0;
 
     // Debugging
-    TracePrintf(1, "kernel orig brk: %x (p#: %d)\n", _kernel_orig_brk,
+    TracePrintf(2, "kernel orig brk: %x (p#: %d)\n", _kernel_orig_brk,
                 (unsigned int)_kernel_orig_brk >> PAGESHIFT);
-    TracePrintf(1, "kernel data start (lowest address in use): %x (p#: %d)\n", _kernel_data_start,
+    TracePrintf(2, "kernel data start (lowest address in use): %x (p#: %d)\n", _kernel_data_start,
                 (unsigned int)_kernel_data_start >> PAGESHIFT);
-    TracePrintf(1, "kernel data end (lowest address not in use): %x (p#: %d)\n\n", _kernel_data_end,
+    TracePrintf(2, "kernel data end (lowest address not in use): %x (p#: %d)\n\n", _kernel_data_end,
                 (unsigned int)_kernel_data_end >> PAGESHIFT);
 
     /* S=================== ALLOCATE + INITIALIZE PAGETABLES ==================== */
@@ -263,7 +263,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     g_frametable = malloc(sizeof(int) * g_len_frametable);
     if (g_frametable == NULL) {
-        TracePrintf(2, "Malloc failed\n");
+        TracePrintf(1, "Malloc failed\n");
         return;
     }
 
@@ -342,17 +342,17 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     /* S=================== TEST SetKernelBrk ==================== */
 
-    TracePrintf(1, "current brk: %x (p#: %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
+    TracePrintf(2, "current brk: %x (p#: %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
 
-    TracePrintf(1, "mallocing\n");
+    TracePrintf(2, "mallocing\n");
     // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
     void *my_p = malloc(PAGESIZE * 40);
 
-    TracePrintf(1, "freeing\n");
+    TracePrintf(2, "freeing\n");
     free(my_p);
     // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
 
-    TracePrintf(1, "current brk: %x (p#: %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
+    TracePrintf(2, "current brk: %x (p#: %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
 
     /* E=================== TEST SetKernelBrk ==================== */
 
@@ -398,7 +398,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         tmp++;
     }
 
-    TracePrintf(1, "num args: %d\n", num_args);
+    TracePrintf(2, "num args: %d\n", num_args);
 
     // Can't give too many arguments
     if (num_args > 10) {
@@ -410,7 +410,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // If no arguments specified, load default ./init program
     char *first_process_name = num_args == 0 ? "tests/init" : cmd_args[0];
-    TracePrintf(1, "first process name: %s\n", first_process_name);
+    TracePrintf(2, "first process name: %s\n", first_process_name);
 
     LoadProgram(first_process_name, cmd_args, init_pcb);
 
@@ -418,7 +418,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // print_r1_page_table(init_r1_ptable, g_len_pagetable);
 
     /* S=================== SETUP IVT ==================== */
-    TracePrintf(1, "Setting up IVT\n");
+    TracePrintf(2, "Setting up IVT\n");
 
     // Setup interrupt vector table (IVT). IVT is an array of function pointers. Each function
     // takes in a UserContext *, and returns an int
@@ -450,7 +450,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     /* E=================== SETUP IVT ==================== */
 
     /* S=================== SETUP IDLE PROCESS ==================== */
-    TracePrintf(1, "Setting up idle process\n");
+    TracePrintf(2, "Setting up idle process\n");
 
     // Allocate an idlePCB for idle process. Returns virtual address in kernel heap
     g_idle_pcb = malloc(sizeof(*g_idle_pcb));
@@ -493,7 +493,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_idle_pcb->user_text_pg0 = 0;
     g_idle_pcb->user_data_pg0 = 0;
 
-    TracePrintf(1, "Just populated idle's uctxt\n");
+    TracePrintf(2, "Just populated idle's uctxt\n");
 
     int idx = find_free_frame(g_frametable);
     if (idx == -1) {
@@ -535,13 +535,13 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_running_pcb = init_pcb;
 
     int rc = KernelContextSwitch(KCCopy, g_idle_pcb, NULL);
-    TracePrintf(1, "Just finished KCCopy\n");
+    TracePrintf(2, "Just finished KCCopy\n");
 
     // Should the following copy the entire saved user_context (and not just the pc and sp pointers?)
     // I think it doesn't matter here because the context-switching is between init and idle
     uctxt->pc = g_running_pcb->uctxt.pc;  // !!!!!!!!!!
     uctxt->sp = g_running_pcb->uctxt.sp;  // !!!!!!!!!!
 
-    TracePrintf(1, "g_running_pcb's pid: %d\n", g_running_pcb->pid);
-    TracePrintf(1, "Exiting KernelStart\n");
+    TracePrintf(2, "g_running_pcb's pid: %d\n", g_running_pcb->pid);
+    TracePrintf(2, "Exiting KernelStart\n");
 }

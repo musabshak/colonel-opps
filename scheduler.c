@@ -13,7 +13,7 @@ int pcb_delay_finished(void *elementp, const void *key) {
     // increment clock_ticks for the specified pcb
     pcb->elapsed_clock_ticks += 1;
 
-    TracePrintf(1, "pid: %d, elapsed: %d, delay_ticks: %d\n", pcb->pid, pcb->elapsed_clock_ticks,
+    TracePrintf(2, "pid: %d, elapsed: %d, delay_ticks: %d\n", pcb->pid, pcb->elapsed_clock_ticks,
                 pcb->delay_clock_ticks);
 
     if (pcb->elapsed_clock_ticks < pcb->delay_clock_ticks) {
@@ -25,7 +25,7 @@ int pcb_delay_finished(void *elementp, const void *key) {
      * to remove it from g_delay_blocked_procs_queue.
      */
 
-    TracePrintf(1, "DUES HAVE BEEN PAID\n");
+    TracePrintf(2, "DUES HAVE BEEN PAID\n");
 
     // move to ready queue
     qput(g_ready_procs_queue, (void *)pcb);
@@ -40,7 +40,7 @@ int pcb_delay_finished(void *elementp, const void *key) {
  */
 int schedule(enum CallerFunc caller_id) {
 
-    TracePrintf(1, "Entering scheduler\n");
+    TracePrintf(2, "Entering scheduler\n");
 
     int rc;
     // int is_caller_kDelay = !is_caller_clocktrap;
@@ -64,17 +64,17 @@ int schedule(enum CallerFunc caller_id) {
      */
 
     if (caller_id == F_clockTrap) {
-        TracePrintf(1, "calling qremove_all\n");
+        TracePrintf(2, "calling qremove_all\n");
         qremove_all(g_delay_blocked_procs_queue, pcb_delay_finished, NULL);
     }
 
-    TracePrintf(1, "ready queue: \n");
+    TracePrintf(2, "ready queue: \n");
     qapply(g_ready_procs_queue, print_pcb);
-    TracePrintf(1, "\n");
+    TracePrintf(2, "\n");
 
-    TracePrintf(1, "blocked queue: \n");
+    TracePrintf(2, "blocked queue: \n");
     qapply(g_delay_blocked_procs_queue, print_pcb);
-    TracePrintf(1, "\n");
+    TracePrintf(2, "\n");
 
     // Get a new process from ready queue (if none ready, new_pcb becomes g_idle_pcb)
     pcb_t *new_pcb = (pcb_t *)qget(g_ready_procs_queue);
@@ -103,7 +103,7 @@ int schedule(enum CallerFunc caller_id) {
     if (caller_id == F_clockTrap && !is_idle_current_process) {
         rc = qput(g_ready_procs_queue, (void *)g_running_pcb);
         if (rc != 0) {
-            TracePrintf(2, "Failed to return running process to ready queue.\n");
+            TracePrintf(1, "Failed to return running process to ready queue.\n");
             return ERROR;
         }
     }
@@ -131,6 +131,6 @@ int schedule(enum CallerFunc caller_id) {
         return ERROR;
     }
 
-    TracePrintf(1, "Exiting scheduler\n");
+    TracePrintf(2, "Exiting scheduler\n");
     return 0;
 }

@@ -177,11 +177,11 @@ int TrapIllegal(UserContext *user_context) { ; }
  */
 
 int TrapMemory(UserContext *user_context) {
-    TracePrintf(1, "CALLING MEMORY TRAP HANDLER!!\n");
+    TracePrintf(2, "CALLING MEMORY TRAP HANDLER!!\n");
 
-    TracePrintf(1, "Address of user context: %p; page: %d\n", user_context->addr,
+    TracePrintf(2, "Address of user context: %p; page: %d\n", user_context->addr,
                 (unsigned int)(user_context->addr) >> PAGESHIFT);
-    TracePrintf(1, "TrapMemory() called with code %d.\n", user_context->code);
+    TracePrintf(2, "TrapMemory() called with code %d.\n", user_context->code);
 
     /**
      * Determine if the trap is an implicit request to grow the user's stack. This
