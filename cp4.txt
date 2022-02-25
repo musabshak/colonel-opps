@@ -1,0 +1,4 @@
+Questions 
+- If kWait() passed an invalid pointer, should we exit the calling userland process
+with an error code?
+    - No

@@ -404,19 +404,25 @@ int kExec(char *filename, char **argvec) {
 }
 
 /**
+ *
+ *
  * Returns
  *      - pid of child process
- *      - if status_ptr is not null and is valid, exit status of child is copied to that address
+ *      - exit status of child is copied to the address (status_ptr) passed to kWait as an argument, if
+ *        status_ptr is valid. If it is not valid nothing bad happens but the exit code is not written into
+ *        the pointer.
  */
 int kWait(int *status_ptr) {
 
+    bool is_valid_ptr = true;
     /**
      * Verify that user-given pointer is valid (user has permissions to write
      * to what the pointer is pointing to
      */
     if (!is_r1_addr(status_ptr) || !is_writeable_addr(g_running_pcb->r1_ptable, (void *)status_ptr)) {
-        TracePrintf(1, "kWait passed an invalid pointer!\n");
-        return ERROR;
+        TracePrintf(
+            1, "kWait passed an invalid pointer -- kWait will not write exit status into passed address\n");
+        is_valid_ptr = false;
     }
 
     /**
@@ -440,7 +446,9 @@ int kWait(int *status_ptr) {
         // Destroy zombie PCB
         free(child_zombie_pcb);
 
-        *status_ptr = child_zombie_pcb->exit_status;
+        if (is_valid_ptr) {
+            *status_ptr = child_zombie_pcb->exit_status;
+        }
         return child_zombie_pcb->pid;
     }
 
@@ -465,7 +473,9 @@ int kWait(int *status_ptr) {
     // Parent needs to block
     schedule(F_kWait);
 
-    *status_ptr = g_running_pcb->last_dying_child_exit_code;
+    if (is_valid_ptr) {
+        *status_ptr = g_running_pcb->last_dying_child_exit_code;
+    }
     return g_running_pcb->last_dying_child_pid;
 }
 
