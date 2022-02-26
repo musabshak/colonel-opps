@@ -9,17 +9,17 @@
  * (1)
  */
 void test_implicitly_grow_ustack() {
-    TracePrintf(2, "Implicitly growing user stack by a reasonable amount...\n");
+    TracePrintf(1, "Implicitly growing user stack by a reasonable amount...\n");
 
     int on_stack_1[10000];
     for (int i = 0; i < 10000; i++) {
         on_stack_1[i] = 0;
     }
 
-    TracePrintf(2, "User stack implicitly grew!\n");
+    TracePrintf(1, "User stack implicitly grew!\n");
 
     while (1) {
-        TracePrintf(2, "CP4_TEST RUNNING!\n");
+        TracePrintf(1, "MEMORY TRAP HANDLER TEST RUNNING!\n");
         Pause();
     }
 }
@@ -53,6 +53,11 @@ void test_implicitly_grow_ustack_toomuch() {
 }
 
 int main(int argc, char **argv) {
+
+    if (argc < 2) {
+        TracePrintf(1, "Need to specify an option argument\n");
+        Exit(-1);
+    }
 
     int test_case = atoi(argv[1]);
 
