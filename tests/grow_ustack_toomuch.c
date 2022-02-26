@@ -1,3 +1,6 @@
+/**
+ * Used as an exec-ed program for memory_trap_handler_tess
+ */
 
 #include <yuser.h>
 
