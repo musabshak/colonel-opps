@@ -51,7 +51,7 @@ void test_scheduler() {
 }
 
 /**
- * This tests basic fork functionality.
+ * This tests basic fork functionality. (1)
  *
  * Forks, parent loops, child forks again, and the child and the child's child both loop. A total
  * of 3 processes are created (parent, child, child's child).

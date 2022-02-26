@@ -4,6 +4,34 @@
 #include "syscalls.h"
 #include "ykernel.h"
 
+int pcb_delay_finished(void *elementp, const void *key) {
+
+    pcb_t *pcb = (pcb_t *)elementp;
+
+    // increment clock_ticks for the specified pcb
+    pcb->elapsed_clock_ticks += 1;
+
+    TracePrintf(2, "pid: %d, elapsed: %d, delay_ticks: %d\n", pcb->pid, pcb->elapsed_clock_ticks,
+                pcb->delay_clock_ticks);
+
+    if (pcb->elapsed_clock_ticks < pcb->delay_clock_ticks) {
+        return 0;  // false
+    }
+
+    /**
+     * This process has paid its dues; time to move it to ready queue and to indicate to q_remove_all
+     * to remove it from g_delay_blocked_procs_queue.
+     */
+
+    TracePrintf(2, "DUES HAVE BEEN PAID\n");
+
+    // move to ready queue
+    qput(g_ready_procs_queue, (void *)pcb);
+
+    // tell qremove_all to remove this pcb from g_delay_blocked_procs_queue
+    return 1;
+}
+
 /*
 Trap handlers are functions pointed to by pointers in the interrupt vector table
 */
@@ -109,7 +137,35 @@ int TrapClock(UserContext *user_context) {
 
     TracePrintf(2, "Entering TrapClock\n");
 
-    int rc = schedule(F_clockTrap);
+    /**
+     * If trap_clock called schedule() (meaning that a clock trap has happened), iterate through the
+     * blocked processes associated with the kDelay syscall and increment each process'
+     * pcb->elapsed_clock_ticks. If pcb->elapsed_clock_ticks >= pcb->delay_clock_ticks, remove process
+     * from blocked queue and add to the ready queue.
+     *
+     * This is done using the qremove_all method. qremove_all takes a search function and a key. The search
+     * function is applied to every queue node. If the search function returns true, then that node is removed
+     * from the queue.
+     *
+     * The "search" function supplied to the following qremove_all call is not strictly/purely a "search"
+     * function. The function pcb_delay_finished for each PCB first increments the elapsed_clock_ticks
+     * attribute. Then, the function checks if the elapsed_clock_ticks are >= the delay_clock_ticks. If they
+     * are, then the function adds the PCB to the g_ready_procs_queue, while also returning 1, indicating to
+     * the qremove_all caller to delete the node from the g_delay_blocked_procs_queue.
+     */
+
+    TracePrintf(2, "calling qremove_all\n");
+    qremove_all(g_delay_blocked_procs_queue, pcb_delay_finished, NULL);
+
+    TracePrintf(2, "ready queue: \n");
+    qapply(g_ready_procs_queue, print_pcb);
+    TracePrintf(2, "\n");
+
+    TracePrintf(2, "blocked queue: \n");
+    qapply(g_delay_blocked_procs_queue, print_pcb);
+    TracePrintf(2, "\n");
+
+    int rc = schedule(g_ready_procs_queue);
 
     TracePrintf(2, "Exiting TrapClock\n");
 

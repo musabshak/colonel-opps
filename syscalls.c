@@ -194,7 +194,7 @@ int kDelay(int clock_ticks) {
     g_running_pcb->delay_clock_ticks = clock_ticks;
 
     // Call the scheduler
-    rc = schedule(F_kDelay);
+    rc = schedule(g_delay_blocked_procs_queue);
 
     return rc;
 }
@@ -469,7 +469,7 @@ int kWait(int *status_ptr) {
     g_running_pcb->is_wait_blocked = 1;
 
     // Parent needs to block
-    schedule(F_kWait);
+    schedule(NULL);
 
     if (is_valid_ptr) {
         *status_ptr = g_running_pcb->last_dying_child_exit_code;
@@ -509,7 +509,7 @@ void kExit(int status) {
     }
 
     g_running_pcb = NULL;  // the pcb g_running_pcb was previosuly pointing to, has been destroyed
-    schedule(F_kExit);
+    schedule(NULL);
 
     /**
      * For every child pcb in g_running_pcb->children_procs, mark child_pcb->parent = NULL.

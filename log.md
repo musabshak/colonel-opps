@@ -11,12 +11,12 @@
 - Clean kernel code
 - Refactor h_raise_brk/h_lower_brk and raise_brk_user/lower_brk_user into same function
 - ~Properly write code for updating clock ticks in blocked processes queue~
-- Reformat scheduler such that scheduler takes in which queue to add the running process to before context switching 
-    - Move some logic to clockTrapHandler (for updating g_delay_blocked_queue)
-    - Currently schedule() checks who called it and does stuff based on that 
+- ~Reformat scheduler such that scheduler takes in which queue to add the running process to before context switching~ 
+    - ~Move some logic to clockTrapHandler (for updating g_delay_blocked_queue)~
+    - ~Currently schedule() checks who called it and does stuff based on that~
 - Update queue code to maintain length as an attribute (as opposed to an O(n) method)
 - ~Add levels to traceprints (userland + kernelland)~
-- Add all global variables as externs in kernel_data_structs.c
+- ~Add all global variables as externs in kernel_data_structs.c~
 
 ### Implementation notes
 - We assume init cloning into idle (init is process 0)
