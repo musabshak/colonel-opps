@@ -187,14 +187,26 @@ int TrapMemory(UserContext *user_context) {
     unsigned int relative_addr_page = get_page_of_addr(addr) - g_len_pagetable;
     unsigned int last_stack_page = get_last_allocated_ustack_page(r1_ptable);
 
+    // musab: can get this via pcb->user_stack_base. also need to update pcb->user_stack_base
+    // (need to b/c kBrk needs to know the updated user_stack_base, and it finds the stack base from
+    // pcb->user_stack_base)
+
+    // musab: general comment - ideally, reduce if/else nesting (at the very least, the outter most
+    // if statement can be separated with a NOT, resulting in exit at the beginning)
+
     if (is_r1_addr(addr) && is_below_userstack_allocation(r1_ptable, addr) &&
         is_above_ubrk(g_running_pcb, addr)) {
         // this IS an implicit request
 
         // Don't grow into the redzone!
+
+        // musab: shouldn't red zone page be: get_page(g_running_pcb->user_brk)? (ie the page of the
+        // brk itself? as code stands, the stack could grow into the page of the brk, leaving no redzone page
         if (get_page_of_addr(addr) == get_page_of_addr(g_running_pcb->user_brk) + 1) {
             // failure
             TracePrintf(1, "Failed to grow user stack (redzone error).\n");
+
+            // musab: add kExit(-1) here for clarity
         } else {
             int num_pages_to_grow = last_stack_page - relative_addr_page;
 
@@ -224,12 +236,12 @@ int TrapMemory(UserContext *user_context) {
         }
     }
 
-    // Abort the current process-- how to do this? Call `schedule()`?
-    // REVIEW THIS
+    // TODO: Abort the current process-- how to do this? Call `schedule()`?
     kExit(-1);
     // schedule(F_TrapMemory);
     // *user_context = g_running_pcb->uctxt;
 
+    // ============ Dead code/comments
     // // TODO: handle other codes
     // if (user_context->code == 0 || user_context->code == 2) {
     //     TracePrintf(1, "TrapMemory() called with unsupported code %d.\n",
