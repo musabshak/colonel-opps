@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <yuser.h>
 
+#include "address_validation.h"
 #include "kernel_data_structs.h"
 
 extern unsigned int g_len_pagetable;
@@ -15,8 +16,22 @@ extern unsigned int g_len_pagetable;
 bool is_above_ubrk(pcb_t *proc, void *addr) { return (addr > proc->user_brk); }
 
 /**
+ * Check if the address is above the redzone of the process's r1 pagetable. This
+ * means that there is at least one unallocated page between the page of the last
+ * used user heap address and the page of `addr`.
+ */
+bool is_above_ubrk_redzone(pcb_t *proc, void *addr) {
+    unsigned int page_of_addr = get_page_of_addr(addr);
+    unsigned int page_of_brk = get_page_of_addr(proc->user_brk);
+
+    return (page_of_addr > page_of_brk);
+}
+
+/**
  * Is this address below the currently allocated memory for the user stack?
  * (We are viewing the user stack as growing from the top of the PCB down.)
+ * In particular, is the page of the address strictly less than the last allocated
+ * stack page?
  *
  * We do not validate that this is a region 1 address!
  */
