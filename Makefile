@@ -10,7 +10,7 @@
 K_SRC_DIR = .
 
 # What are the kernel c and include files?
-K_SRCS =  kernel.c trap_handlers.c kernel_data_structs.c queue.c load_program.c syscalls.c scheduler.c address_validation.c 
+K_SRCS =  kernel.c trap_handlers.c kernel_data_structs.c queue.c load_program.c syscalls.c scheduler.c address_validation.c mem_management.c
 K_INCS = 
 
 # Where's your user source?

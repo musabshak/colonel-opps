@@ -174,6 +174,8 @@ int TrapMemory(UserContext *user_context) {
                 (unsigned int)(user_context->addr) >> PAGESHIFT);
     TracePrintf(2, "TrapMemory() called with code %d.\n", user_context->code);
 
+    print_r1_page_table(g_running_pcb->r1_ptable, g_len_pagetable);
+
     /**
      * Determine if the trap is an implicit request to grow the user's stack. This
      * happens when the address is
@@ -198,9 +200,8 @@ int TrapMemory(UserContext *user_context) {
         } else {
             int num_pages_to_grow = last_stack_page - relative_addr_page;
 
-            int *frames_found = malloc(num_pages_to_grow * sizeof(int));
-            int rc = find_n_free_frames(g_frametable, num_pages_to_grow, frames_found);
-            if (rc < 0) {
+            int *frames_found = find_n_free_frames(g_frametable, num_pages_to_grow);
+            if (frames_found == NULL) {
                 // failure
                 TracePrintf(1, "Failed to grow user stack (ran out of physical memory).\n");
                 free(frames_found);

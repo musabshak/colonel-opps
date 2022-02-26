@@ -2,6 +2,7 @@
 
 #include "kernel_data_structs.h"
 #include "load_program.h"
+#include "mem_management.h"
 #include "printing.h"
 #include "ykernel.h"
 
@@ -205,36 +206,53 @@ int kFork() {
     pcb_t *parent_pcb = g_running_pcb;
     pte_t *parent_r1_ptable = parent_pcb->r1_ptable;
 
+    // Helps with error handling successive `malloc()` calls
+    m_builder_t *malloc_builder = m_builder_init();
+    if (malloc_builder == NULL) {
+        TP_ERROR("`malloc()` failed for `malloc_builder`.\n");
+        return ERROR;
+    }
+
     // Allocate a PCB for child process. Returns virtual address in kernel heap.
-    pcb_t *child_pcb = malloc(sizeof(*child_pcb));
+    pcb_t *child_pcb = m_builder_malloc(malloc_builder, RawPerm, sizeof(*child_pcb));
     if (child_pcb == NULL) {
-        TracePrintf(1, "malloc for kFork()'s PCB failed.\n");
+        TP_ERROR("`malloc()` failed for new PCB.\n");
+        m_builder_unwind(malloc_builder);
         return ERROR;
     }
 
     // Allocate a new R1 ptable for child process. Will later copy contents of parent's R1 pable
     // into this ptable.
-    pte_t *child_r1_ptable = malloc(sizeof(pte_t) * g_len_pagetable);
+    pte_t *child_r1_ptable =
+        (pte_t *)m_builder_malloc(malloc_builder, RawPerm, sizeof(pte_t) * g_len_pagetable);
     if (child_r1_ptable == NULL) {
-        TracePrintf(1, "Malloc failed for `kFork()`'s pagetable.\n");
+        TP_ERROR("`malloc()` failed for new R1 pagetable.\n");
+        m_builder_unwind(malloc_builder);
+        return ERROR;
+    }
+
+    // Ensure there are enough frames in physical memory to copy the current
+    // process. If there are not, then abort the process.
+
+    int num_frames_needed = get_num_valid_pages(parent_r1_ptable);
+    int *frames_for_r1 = m_builder_malloc(malloc_builder, FrameArr, num_frames_needed);
+    if (frames_for_r1 == NULL) {
+        TP_ERROR("Failed to find free frames.\n");
+        m_builder_unwind(malloc_builder);
         return ERROR;
     }
 
     // Initialize child's r1 pagetable to fully copy (not COW) parent's R1 pagetable.
+    int num_frames_assigned = 0;
     for (int i = 0; i < g_len_pagetable; i++) {
         child_r1_ptable[i] = parent_r1_ptable[i];  // COW but ...
 
         if (parent_r1_ptable[i].valid == 0) {
+            // nothing to copy
             continue;
         }
 
-        // Allocate new frame for the child's R1 page
-        int free_frame_idx = find_free_frame(g_frametable);
-        if (free_frame_idx == -1) {
-            TracePrintf(1, "Couldn't find free frame while forking.\n");
-            return ERROR;
-        }
-        g_frametable[free_frame_idx] = 1;
+        int free_frame_idx = frames_for_r1[num_frames_assigned];
 
         /**
          * Note that the child's R1 ptable, although allocated, has not been "mounted". That is,
@@ -264,6 +282,7 @@ int kFork() {
 
         // Assign this new frame to the new pagetable
         child_r1_ptable[i].pfn = free_frame_idx;
+        num_frames_assigned++;
     }
 
     // Now clone parent pcb into the child pcb allocated at the top. Note that the user context of the parent
@@ -290,28 +309,53 @@ int kFork() {
      *      - is_wait_blocked
      */
 
-    child_pcb->zombie_procs = qopen();
-    child_pcb->children_procs = qopen();
+    child_pcb->zombie_procs = (queue_t *)m_builder_malloc(malloc_builder, QueuePerm, 0);
+    if (child_pcb->zombie_procs == NULL) {
+        TP_ERROR("`malloc()` failed for zombie process queue.\n");
+        // clean up before returning
+        helper_retire_pid(child_pcb->pid);
+        m_builder_unwind(malloc_builder);
+
+        return ERROR;
+    }
+
+    child_pcb->children_procs = (queue_t *)m_builder_malloc(malloc_builder, QueuePerm, 0);
+    if (child_pcb->children_procs == NULL) {
+        TP_ERROR("`malloc()` failed for child process queue.\n");
+        // clean up before returning
+        helper_retire_pid(child_pcb->pid);
+        m_builder_unwind(malloc_builder);
+        return ERROR;
+    }
+
     child_pcb->exit_status = -1;
     child_pcb->is_wait_blocked = 0;
 
     // Indicate in the parent PCB that a child has been born
     if (parent_pcb->children_procs == NULL) {
         parent_pcb->children_procs = qopen();
+        if (parent_pcb->children_procs == NULL) {
+            TP_ERROR("`malloc()` failed for parent child process queue.\n");
+            // clean up before returning
+            helper_retire_pid(child_pcb->pid);
+            m_builder_unwind(malloc_builder);
+            return ERROR;
+        }
     }
     qput(parent_pcb->children_procs, child_pcb);
 
-    // Get free frames for idle's kernel stack
-    for (int i = 0; i < g_num_kernel_stack_pages; i++) {
-        int idx = find_free_frame(g_frametable);
-        if (idx == -1) {
-            TracePrintf(
-                1, "In `kFork()`, `find_free_frame()` failed while allocating frames for kernel_stack\n");
-            return ERROR;
-        }
-        g_frametable[idx] = 1;
+    // Get free frames for child's kernel stack
+    int *frames_for_kstack = m_builder_malloc(malloc_builder, FrameArr, g_num_kernel_stack_pages);
+    if (frames_for_kstack == NULL) {
+        TP_ERROR("Failed to find frames for child's kernel stack.\n");
+        // clean up before returning
+        helper_retire_pid(child_pcb->pid);
+        m_builder_unwind(malloc_builder);
+        return ERROR;
+    }
 
-        child_pcb->kstack_frame_idxs[i] = idx;
+    for (int i = 0; i < g_num_kernel_stack_pages; i++) {
+        child_pcb->kstack_frame_idxs[i] = frames_for_kstack[i];
     }
 
     // uctxt->pc = g_running_pcb->uctxt.pc;  // !!!!!!!!!!
@@ -323,6 +367,9 @@ int kFork() {
 
     // Put child on ready queue
     qput(g_ready_procs_queue, (void *)child_pcb);
+
+    // Clean up
+    m_builder_conclude(malloc_builder);
 
     // Copy current kernel stack contents into child pcb's kernel stack frames
     int rc = KernelContextSwitch(KCCopy, child_pcb, NULL);
