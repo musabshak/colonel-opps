@@ -90,6 +90,17 @@ void test_fork() {
 }
 
 /**
+ * Tries to `Fork()` over and over again.
+ */
+void test_excessive_fork() {
+    while (1) {
+        TracePrintf(1, "CP5_TEST (or a child)\n");
+        Fork();
+        Pause();
+    }
+}
+
+/**
  * (2)
  *
  * Tries to load a program normally.
@@ -455,7 +466,7 @@ int main(int argc, char **argv) {
             test_fork();
             break;
         case 2:
-            test_exec();
+            test_excessive_fork();
             break;
         case 3:
             test_exec_with_kernel_addr();
