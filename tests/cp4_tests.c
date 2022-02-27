@@ -450,7 +450,7 @@ int main(int argc, char **argv) {
             test_exit_2();
         default:
             while (1) {
-                TracePrintf(2, "CP4 TEST RUNNING!\n");
+                TracePrintf(1, "CP4 TEST RUNNING!\n");
                 Pause();
             }
     }

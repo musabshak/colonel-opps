@@ -15,3 +15,6 @@ tests/cp5_tests
 tests/exec_test
 tests/grow_ustack_toomuch
 tests/memory_trap_handler_tests
+tests/io_syscalls_tests
+tests/ipc_syscalls_tests
+tests/sync_syscalls_tests
