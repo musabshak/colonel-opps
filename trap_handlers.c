@@ -76,6 +76,9 @@ int TrapKernelHandler(UserContext *user_context) {
         int child_pid;    // for kWait()
         int *status_ptr;  // for kWait()
         int exit_code;    // for kExit()
+        int tty_id;       // for kTtyRead() / kTtyWrite()
+        void *buf;
+        int len;
 
         // `kExec()` args
         char *filename;
@@ -118,6 +121,18 @@ int TrapKernelHandler(UserContext *user_context) {
         case YALNIX_EXIT:
             exit_code = user_context->regs[0];
             kExit(exit_code);
+            break;
+        case YALNIX_TTY_READ:
+            tty_id = (int)user_context->regs[0];
+            buf = (void *)user_context->regs[1];
+            len = (int)user_context->regs[2];
+            kTtyRead(tty_id, buf, len);
+            break;
+        case YALNIX_TTY_WRITE:
+            tty_id = (int)user_context->regs[0];
+            buf = (void *)user_context->regs[1];
+            len = (int)user_context->regs[2];
+            kTtyWrite(tty_id, buf, len);
             break;
     }
     TracePrintf(2, "Exiting TrapKernelHandler\n");

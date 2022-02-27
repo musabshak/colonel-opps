@@ -429,8 +429,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     interrupt_vector_table_p[TRAP_ILLEGAL] = TrapIllegal;
     interrupt_vector_table_p[TRAP_MEMORY] = TrapMemory;
     interrupt_vector_table_p[TRAP_MATH] = GenericHandler;
-    interrupt_vector_table_p[TRAP_TTY_RECEIVE] = GenericHandler;
-    interrupt_vector_table_p[TRAP_TTY_TRANSMIT] = GenericHandler;
+    interrupt_vector_table_p[TRAP_TTY_RECEIVE] = TrapTTYReceive;
+    interrupt_vector_table_p[TRAP_TTY_TRANSMIT] = TrapTTYTransmit;
     interrupt_vector_table_p[TRAP_DISK] = GenericHandler;  // TRAP_DISK == 7
 
     // Many IVT entries are assigned a generic handler

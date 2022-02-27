@@ -700,7 +700,27 @@ int kTtyRead(int tty_id, void *buf, int len) {
  * Calls to TtyWrite for more than TERMINAL MAX LINE bytes should be supported.
  */
 int kTtyWrite(int tty_id, void *buf, int len) {
-    void *current_byte = buf;
+    /**
+     * Valid user input
+     */
+
+    /**
+     * Copy user buf to kernel buf
+     */
+
+    void *kbuf = malloc(len);
+    if (kbuf == NULL) {
+        TP_ERROR("`malloc()` failed.\n");
+        return ERROR;
+    }
+
+    memcpy(kbuf, buf, len);
+
+    /**
+     * Write from kernel buffer to terminal
+     */
+
+    void *current_byte = kbuf;
     int bytes_remaining = len;
 
     while (bytes_remaining > 0) {
@@ -721,5 +741,6 @@ int kTtyWrite(int tty_id, void *buf, int len) {
         bytes_remaining -= TERMINAL_MAX_LINE;
     }
 
+    free(kbuf);
     return len;
 }
