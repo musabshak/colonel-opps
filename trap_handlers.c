@@ -339,8 +339,7 @@ int TrapTTYReceive(UserContext *user_context) { ; }
  *      terminal, if any.
  *
  */
-
-bool is_waiting_for_term_id(void *elt, void *key) {
+int is_waiting_for_term_id(void *elt, const void *key) {
     pcb_t *pcb = (pcb_t *)elt;
     int tty_id = *((int *)key);
     return (pcb->blocked_term == tty_id);

@@ -5,6 +5,9 @@
 #include "printing.h"
 #include "ykernel.h"
 
+// putting this in [kernel_data_structs.h] caused issues
+extern term_buf_t g_term_bufs[NUM_TERMINALS];
+
 void kExit(int status);
 
 /**
@@ -540,6 +543,8 @@ void kExit(int status) {
 }
 
 /**
+ * (From manual)
+ *
  * Read the next line of input from terminal `tty_id`, copying it into the buffer
  * referenced by `buf`. The maximum length of the line to be returned is given by `len`.
  *
@@ -559,20 +564,127 @@ void kExit(int status) {
  *      success, the number of bytes actually copied into the calling process’s buffer is
  *      returned; in case of any error, the value ERROR is returned.
  */
-int TtyRead(int tty_id, void *buf, int len) {
+
+/**
+ * If there bytes left in the buffer from the previous read, do we still need to
+ * receive from the terminal? This implementation assumes we do NOT.
+ *
+ * If I understand correctly, WRITING more than `TERMINAL_MAX_LINE` is valid and should
+ * be supported, but READING more than `TERMINAL_MAX_LINE` is undefined. So here I
+ * exit with error if that is attempted.
+ */
+int kTtyRead(int tty_id, void *buf, int len) {
     TracePrintf(2, "Entering `TtyRead()`...\n");
 
-    // Check if there are any leftover bytes from the previous time we received from the
-    // terminal
+    /**
+     * Validate user inputs
+     */
 
-    // Create a temporary buffer to receive from the terminal
+    if (!(tty_id >= 0 && tty_id < NUM_TERMINALS)) {
+        TP_ERROR("tried to read from an invalid terminal.\n");
+        return ERROR;
+    }
 
-    // Receive bytes from the terminal
-    int chars_received = TtyReceive(tty_id, buf, len);
-    TracePrintf(2, "Received %d characters from terminal.\n", chars_received);
+    if (!(is_valid_array(g_running_pcb->r1_ptable, buf, len, PROT_READ | PROT_WRITE))) {
+        TP_ERROR("the `buf` that was passed was not valid.\n");
+        return ERROR;
+    }
 
-    if (chars_received == len) {
-        ;
+    if (len > TERMINAL_MAX_LINE) {
+        TP_ERROR("attempted to read more than `TERMINAL_MAX_LINE` from terminal.\n");
+        return ERROR;
+    }
+
+    /**
+     * Check and handle if there are any leftover bytes from the previous time we received
+     * from the terminal.
+     */
+
+    term_buf_t k_buf = g_term_bufs[tty_id];
+
+    if (k_buf.ptr != NULL) {
+        int bytes_remaining_in_kbuf = k_buf.end_pos_offset - k_buf.curr_pos_offset;
+        /**
+         * Case: copy over to user buf, clear kernel buf, and return
+         */
+        if (bytes_remaining_in_kbuf == len) {
+            memcpy(buf, k_buf.ptr + k_buf.curr_pos_offset, len);
+            free(k_buf.ptr);  // TODO: abstract this "clearing" into a function
+            k_buf.ptr = NULL;
+            k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
+            return len;
+        }
+        /**
+         * Case: copy the remaining bytes to user buf, then continue on to receive from
+         * terminal. We can clear out the k_buf since we'll have read everything in it.
+         */
+        else if (bytes_remaining_in_kbuf < len) {
+            memcpy(buf, k_buf.ptr + k_buf.curr_pos_offset, bytes_remaining_in_kbuf);
+            free(k_buf.ptr);
+            k_buf.ptr = NULL;
+            k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
+        }
+        /**
+         * Case: copy over `len` bytes from the kernel buf, update kernel buf accordingly
+         * to make it available for future reading. Return.
+         */
+        else if (bytes_remaining_in_kbuf > len) {
+            memcpy(buf, k_buf.ptr + k_buf.curr_pos_offset, len);
+            k_buf.curr_pos_offset += len;
+            return len;
+        }
+    }
+
+    /**
+     * Copy terminal data into kernel buffer
+     */
+
+    // allocate kernel buffer, if necessary
+    if (k_buf.ptr == NULL) {
+        k_buf.ptr = malloc(TERMINAL_MAX_LINE);
+        if (k_buf.ptr == NULL) {
+            TP_ERROR("`malloc()` for kernel buffer failed.\n");
+            return ERROR;
+        }
+        k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;  // not really necessary, I think
+    }
+
+    // receive from terminal. This will overwrite whatever is in the kernel buf
+    int bytes_received = TtyReceive(tty_id, k_buf.ptr, TERMINAL_MAX_LINE);
+    k_buf.end_pos_offset = bytes_received;
+
+    /**
+     * Now we wish to copy from the kernel buffer to the user buffer. Possible cases:
+     *  - bytes received from terminal < `len` requested by user
+     *  - `bytes_received` == `len`
+     *  - `bytes_received` > `len`
+     */
+
+    // Copy `bytes_received` bytes into `buf`, and return the number of bytes copied
+    if (bytes_received == len) {
+        memcpy(buf, k_buf.ptr, len);
+        // No need to keep the kernel buf since all of its data has been copied
+        free(k_buf.ptr);
+        k_buf.ptr = NULL;
+        k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
+        return len;
+    }
+    // Copy `bytes_received` bytes into `buf`, and return the number of bytes copied
+    else if (bytes_received < len) {
+        memcpy(buf, k_buf.ptr, bytes_received);
+        // No need to keep the kernel buf since all of its data has been copied
+        free(k_buf.ptr);
+        k_buf.ptr = NULL;
+        k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
+        return bytes_received;
+    }
+    // Copy `len` bytes into `buf`, keep the rest in the kernel buf
+    else if (bytes_received > len) {
+        memcpy(buf, k_buf.ptr, len);
+        // adjust the start position of the kernel buffer to indicate where we should
+        // start reading from upon the next call to ready from this terminal.
+        k_buf.curr_pos_offset += len;
+        return len;
     }
 }
 
@@ -584,7 +696,7 @@ int TtyRead(int tty_id, void *buf, int len) {
  *
  * Calls to TtyWrite for more than TERMINAL MAX LINE bytes should be supported.
  */
-int TtyWrite(int tty_id, void *buf, int len) {
+int kTtyWrite(int tty_id, void *buf, int len) {
     void *current_byte = buf;
     int bytes_remaining = len;
 

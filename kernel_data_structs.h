@@ -8,6 +8,7 @@
 #include "ykernel.h"
 
 typedef struct ProcessControlBlock pcb_t;
+typedef struct TermBuf term_buf_t;
 
 // S========= EXTERN DECLARATIONS ========== //
 extern pcb_t *g_running_pcb;
@@ -22,6 +23,8 @@ extern unsigned int *g_frametable;
 extern unsigned int g_len_pagetable;
 extern unsigned int g_len_frametable;
 extern unsigned int g_num_kernel_stack_pages;
+
+// extern term_buf_t g_term_bufs[NUM_TERMINALS];
 
 // E========= EXTERN DECLARATIONS ========== //
 
@@ -65,6 +68,15 @@ typedef struct ZombiePCB {
     int pid;
     int exit_status;
 } zombie_pcb_t;
+
+typedef struct TermBuf {
+    void *ptr;
+    // `ptr + curr_pos_offset` points to the first byte in the buffer that
+    // has NOT been read/copied
+    int curr_pos_offset;
+    // `ptr + end_pos_offset - 1` points to the last readable byte in the buffer
+    int end_pos_offset;
+} term_buf_t;
 
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used);
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p);

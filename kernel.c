@@ -31,6 +31,8 @@ queue_t *g_ready_procs_queue;
 queue_t *g_delay_blocked_procs_queue;
 queue_t *g_term_blocked_procs_queue;
 
+term_buf_t g_term_bufs[NUM_TERMINALS];
+
 /* E=== GLOBALS === */
 
 // Imitate a userland program for checkpoint 2.
@@ -361,8 +363,13 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     init_pcb->children_procs = qopen();
     init_pcb->exit_status = -1;
     init_pcb->is_wait_blocked = 0;
+    // for (int i = 0; i < NUM_TERMINALS; i++) {
+    //     init_pcb->term_bufs[i] = NULL;
+    // }
     for (int i = 0; i < NUM_TERMINALS; i++) {
-        init_pcb->term_bufs[i] = NULL;
+        g_term_bufs[i].ptr = NULL;
+        g_term_bufs[i].curr_pos_offset = 0;
+        g_term_bufs[i].end_pos_offset = 0;
     }
 
     init_pcb->pid = helper_new_pid(init_r1_ptable);
