@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 
+#include "printing.h"
 #include "queue.h"
 #include "ykernel.h"
 
@@ -148,15 +149,18 @@ int find_free_frame(unsigned int *frametable) {
 }
 
 /**
- * Find `num_frames` number of free frames, and store them in `frame_arr`. If this
- * succeeds, then the frames are marked as occupied. Otherwise, they are not.
- *
- * The contents of `frame_arr` if the function exited with error are not defined.
- *
- * Returns 0 on success, -1 on error.
+ * Find `num_frames` number of free frames, allocate an array of integers to store them
+ * in. That array will be terminated with `-1`. Returns `NULL` on failure.
  */
-int find_n_free_frames(unsigned int *frametable, int num_frames, int *frame_arr) {
+int *find_n_free_frames(unsigned int *frametable, int num_frames) {
     // TODO: safety checks
+
+    // Leave extra spot for `NULL` ending
+    int *frame_arr = malloc(num_frames * sizeof(int) + 1);
+    if (frame_arr == NULL) {
+        TP_ERROR("`malloc()` failed.\n");
+        return NULL;
+    }
 
     int frames_found = 0;
     bool ran_out_of_mem = false;
@@ -167,23 +171,39 @@ int find_n_free_frames(unsigned int *frametable, int num_frames, int *frame_arr)
         if (frame_idx < 0) {
             TracePrintf(1, "Ran out of physical memory.\n");
             ran_out_of_mem = true;
+            frame_arr[frames_found] = -1;
             break;
         }
 
         frame_arr[frames_found] = frame_idx;
         frames_found++;
+        frametable[frame_idx] = 1;
     }
 
     if (ran_out_of_mem) {
         // failure
-        return -1;
+        retire_frames(frametable, frame_arr);
+        free(frame_arr);
+        return NULL;
     } else {
-        // mark frames as occupied
-        for (int i = 0; i < frames_found; i++) {
-            int frame_idx = frame_arr[i];
-            frametable[frame_idx] = 1;
+        // insert terminating indicator
+        frame_arr[num_frames] = -1;
+
+        return frame_arr;
+    }
+}
+
+/**
+ * Takes an array of frame table indices, terminated with -1, and marks those frames
+ * as available.
+ */
+void retire_frames(int *frametable, int *frame_idxs) {
+    for (int i = 0;; i++) {
+        if (frame_idxs[i] == -1) {
+            break;
         }
-        return 0;
+
+        frametable[frame_idxs[i]] = 0;
     }
 }
 

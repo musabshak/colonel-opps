@@ -1,5 +1,6 @@
 #include "address_validation.h"
 #include "kernel_data_structs.h"
+#include "printing.h"
 #include "queue.h"
 #include "syscalls.h"
 #include "ykernel.h"
@@ -243,96 +244,56 @@ int TrapMemory(UserContext *user_context) {
     unsigned int relative_addr_page = get_page_of_addr(addr) - g_len_pagetable;
     unsigned int last_stack_page = get_last_allocated_ustack_page(r1_ptable);
 
+    bool is_in_region1 = is_r1_addr(addr);
+    bool is_below_ustack_allocation = is_below_userstack_allocation(r1_ptable, addr);
+    bool is_above_uredzone = is_above_ubrk_redzone(g_running_pcb, addr);
+
+    if (!(is_in_region1 && is_below_ustack_allocation && is_above_uredzone)) {
+        // Not an implicit request to grow user stack-- abort
+        kExit(-1);
+        return ERROR;
+    }
+
+    int num_pages_to_grow = last_stack_page - relative_addr_page;
+    // TODO: use malloc builder here (!!)
+    int *frames_found = find_n_free_frames(g_frametable, num_pages_to_grow);
+    if (frames_found == NULL) {
+        TP_ERROR("Failed to grow user stack (ran out of physical memory).\n");
+        kExit(-1);
+    }
+
+    for (int i = 0;; i++) {
+        int frame_idx = frames_found[i];
+        if (frame_idx == -1) {
+            break;
+        }
+
+        int page_idx = last_stack_page - 1 - i;
+
+        r1_ptable[page_idx].valid = 1;
+        r1_ptable[page_idx].prot = PROT_READ | PROT_WRITE;
+        r1_ptable[page_idx].pfn = frame_idx;
+
+        unsigned int addr_to_flush = ((page_idx + g_len_pagetable) << PAGESHIFT);
+        WriteRegister(REG_TLB_FLUSH, addr_to_flush);
+    }
+
+    free(frames_found);
+
+    // Update PCB to reflect this change
+    // varun: do we do this even if we haven't put anything on the newly allocated pages?
+    // (or are we only going to reach this code if those pages are going to be populated
+    // right away)
+    g_running_pcb->user_stack_base = (void *)DOWN_TO_PAGE((unsigned int)addr);
+
+    return SUCCESS;
+
     // musab: can get this via pcb->user_stack_base. also need to update pcb->user_stack_base
     // (need to b/c kBrk needs to know the updated user_stack_base, and it finds the stack base from
     // pcb->user_stack_base)
 
     // musab: general comment - ideally, reduce if/else nesting (at the very least, the outter most
     // if statement can be separated with a NOT, resulting in exit at the beginning)
-
-    if (is_r1_addr(addr) && is_below_userstack_allocation(r1_ptable, addr) &&
-        is_above_ubrk(g_running_pcb, addr)) {
-        // this IS an implicit request
-
-        // Don't grow into the redzone!
-
-        // musab: shouldn't red zone page be: get_page(g_running_pcb->user_brk)? (ie the page of the
-        // brk itself? as code stands, the stack could grow into the page of the brk, leaving no redzone page
-        if (get_page_of_addr(addr) == get_page_of_addr(g_running_pcb->user_brk) + 1) {
-            // failure
-            TracePrintf(1, "Failed to grow user stack (redzone error).\n");
-
-            // musab: add kExit(-1) here for clarity
-        } else {
-            int num_pages_to_grow = last_stack_page - relative_addr_page;
-
-            int *frames_found = malloc(num_pages_to_grow * sizeof(int));
-            int rc = find_n_free_frames(g_frametable, num_pages_to_grow, frames_found);
-            if (rc < 0) {
-                // failure
-                TracePrintf(1, "Failed to grow user stack (ran out of physical memory).\n");
-                free(frames_found);
-            } else {
-                // success
-                for (int i = 0; i < num_pages_to_grow; i++) {
-                    int page_idx = last_stack_page - 1 - i;
-
-                    r1_ptable[page_idx].valid = 1;
-                    r1_ptable[page_idx].prot = PROT_READ | PROT_WRITE;
-                    r1_ptable[page_idx].pfn = frames_found[i];
-
-                    unsigned int addr_to_flush = ((page_idx + g_len_pagetable) << PAGESHIFT);
-                    WriteRegister(REG_TLB_FLUSH, addr_to_flush);
-                }
-
-                free(frames_found);
-
-                return SUCCESS;
-            }
-        }
-    }
-
-    // TODO: Abort the current process-- how to do this? Call `schedule()`?
-    kExit(-1);
-    // schedule(F_TrapMemory);
-    // *user_context = g_running_pcb->uctxt;
-
-    // ============ Dead code/comments
-    // // TODO: handle other codes
-    // if (user_context->code == 0 || user_context->code == 2) {
-    //     TracePrintf(1, "TrapMemory() called with unsupported code %d.\n",
-    //                 user_context->code);
-    // }
-
-    // // If user_context->addr < currently_allocated_memory_stack and
-    // // user_context->addr > brk: grow stack to cover user_context->addr
-    // int page_of_uctx_addr = (unsigned int)(user_context->addr) >> PAGESHIFT;
-
-    // pte_t *reg1_pagetable = g_running_pcb->pagetable;
-
-    // // Allocate one more page to user stack of currently running process
-    // // Need to allocate a free frame, and update R1 page table
-    // for (int i = g_len_pagetable - 1; i > 0; i--) {  // TODO: add red zone
-    //     if (reg1_pagetable[i].valid = 1) {
-    //         continue;
-    //     }
-
-    //     int free_frame_idx = find_free_frame();
-    //     reg1_pagetable[i].valid = 1;
-    //     reg1_pagetable[i].prot = PROT_READ | PROT_WRITE;
-    //     reg1_pagetable[i].pfn = free_frame_idx;
-
-    //     g_running_pcb->sp = i << PAGESHIFT;
-    //     break;
-    // }
-
-    // Else abort currently running user propcess but continue running other processes
-
-    // Note: Maintain at least one page between top of heap and bottom of stack
-
-    // If COW implemented, and trying to write into a readonly page, the exception
-    // should not kill the process. Instead, should allocate a free frame to
-    // the page trying to be written into.
 }
 
 /*
