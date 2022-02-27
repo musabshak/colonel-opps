@@ -49,11 +49,32 @@ void print_more_than_tmaxline() {
     TracePrintf(1, "TEST END: printing more than terminal max line\n");
 }
 
+/**
+ * Read a reasonable amount from the terminal (0) and print it to terminal (1)
+ */
+void read_reasonable() {
+    TracePrintf(1, "TEST START: read reasonable amount from terminal\n");
+    Pause();
+
+    int len_to_read = 500;
+    void *buf = malloc(len_to_read);
+    int bytes_read = TtyRead(0, buf, len_to_read);
+
+    int str_len = bytes_read / sizeof(char);
+    char *str = (char *)buf;
+    str[str_len] = '\0';
+
+    TtyPrintf(1, "%s", str);
+
+    TracePrintf(1, "TEST END: read reasonable amount from terminal\n");
+}
+
 int main() {
     TracePrintf(1, "TERMINAL_TESTS RUNNING!\n");
 
     // print_hello_world();
-    print_more_than_tmaxline();
+    // print_more_than_tmaxline();
+    read_reasonable();
 
     while (1) {
         TracePrintf(1, "TERMINAL_TESTS RUNNING!\n");

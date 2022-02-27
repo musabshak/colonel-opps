@@ -6,7 +6,7 @@
 #include "ykernel.h"
 
 // putting this in [kernel_data_structs.h] caused issues
-extern term_buf_t g_term_bufs[NUM_TERMINALS];
+extern term_buf_t *g_term_bufs[NUM_TERMINALS];
 
 void kExit(int status);
 
@@ -600,9 +600,9 @@ int kTtyRead(int tty_id, void *buf, int len) {
      * until there is. We detect this by seeing if the corresponding kernel buf for this
      * terminal is `NULL`.
      */
-    term_buf_t k_buf = g_term_bufs[tty_id];
+    term_buf_t *k_buf = g_term_bufs[tty_id];
 
-    if (k_buf.ptr == NULL) {
+    if (k_buf->ptr == NULL) {
         g_running_pcb->blocked_term = tty_id;
         schedule(g_term_blocked_procs_queue);
     }
@@ -611,22 +611,24 @@ int kTtyRead(int tty_id, void *buf, int len) {
      * There is now an input line ready to be read. So copy that over.
      */
 
-    int bytes_remaining_in_kbuf = k_buf.end_pos_offset - k_buf.curr_pos_offset;
+    int bytes_remaining_in_kbuf = k_buf->end_pos_offset - k_buf->curr_pos_offset;
+
+    // TODO: Handle if above is 0
 
     // Copy over to user buf, clear kernel buf, and return
     if (bytes_remaining_in_kbuf <= len) {
-        memcpy(buf, k_buf.ptr + k_buf.curr_pos_offset, len);
-        free(k_buf.ptr);  // TODO: abstract this "clearing" into a function
-        k_buf.ptr = NULL;
-        k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
+        memcpy(buf, k_buf->ptr + k_buf->curr_pos_offset, len);
+        free(k_buf->ptr);  // TODO: abstract this "clearing" into a function
+        k_buf->ptr = NULL;
+        k_buf->curr_pos_offset, k_buf->end_pos_offset = 0;
         return len;
     }
 
     // Copy over `len` bytes from the kernel buf, update kernel buf accordingly
     // to make it available for future reading. Return.
     else if (bytes_remaining_in_kbuf > len) {
-        memcpy(buf, k_buf.ptr + k_buf.curr_pos_offset, len);
-        k_buf.curr_pos_offset += len;
+        memcpy(buf, k_buf->ptr + k_buf->curr_pos_offset, len);
+        k_buf->curr_pos_offset += len;
         return len;
     }
 
@@ -703,6 +705,21 @@ int kTtyWrite(int tty_id, void *buf, int len) {
     /**
      * Valid user input
      */
+
+    if (!(tty_id >= 0 && tty_id < NUM_TERMINALS)) {
+        TP_ERROR("tried to read from an invalid terminal.\n");
+        return ERROR;
+    }
+
+    if (!(is_valid_array(g_running_pcb->r1_ptable, buf, len, PROT_READ | PROT_WRITE))) {
+        TP_ERROR("the `buf` that was passed was not valid.\n");
+        return ERROR;
+    }
+
+    if (len > TERMINAL_MAX_LINE) {
+        TP_ERROR("attempted to read more than `TERMINAL_MAX_LINE` from terminal.\n");
+        return ERROR;
+    }
 
     /**
      * Copy user buf to kernel buf

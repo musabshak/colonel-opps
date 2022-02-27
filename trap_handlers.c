@@ -6,7 +6,7 @@
 #include "ykernel.h"
 
 // didn't work when this was in [kernel_data_structs.h]
-extern term_buf_t g_term_bufs[NUM_TERMINALS];
+extern term_buf_t *g_term_bufs[NUM_TERMINALS];
 
 int pcb_delay_finished(void *elementp, const void *key) {
 
@@ -79,6 +79,7 @@ int TrapKernelHandler(UserContext *user_context) {
         int tty_id;       // for kTtyRead() / kTtyWrite()
         void *buf;
         int len;
+        int bytes_read;
 
         // `kExec()` args
         char *filename;
@@ -126,7 +127,8 @@ int TrapKernelHandler(UserContext *user_context) {
             tty_id = (int)user_context->regs[0];
             buf = (void *)user_context->regs[1];
             len = (int)user_context->regs[2];
-            kTtyRead(tty_id, buf, len);
+            bytes_read = kTtyRead(tty_id, buf, len);
+            user_context->regs[0] = bytes_read;
             break;
         case YALNIX_TTY_WRITE:
             tty_id = (int)user_context->regs[0];
@@ -350,13 +352,15 @@ int is_waiting_for_term_id(void *elt, const void *key) {
  */
 
 int TrapTTYReceive(UserContext *user_context) {
+    TracePrintf(2, "Entering `TrapTTYReceive()`...\n");
+
     int *tty_id = malloc(sizeof(int));
     if (tty_id == NULL) {
         TP_ERROR("`malloc()` failed.\n");
         return ERROR;
     }
     *tty_id = user_context->code;
-    term_buf_t k_buf = g_term_bufs[*tty_id];
+    term_buf_t *k_buf = g_term_bufs[*tty_id];
 
     /**
      * Copy terminal data into kernel buffer. This will overwrite the contents of that
@@ -364,27 +368,29 @@ int TrapTTYReceive(UserContext *user_context) {
      */
 
     // allocate kernel buffer, if necessary
-    if (k_buf.ptr == NULL) {
-        k_buf.ptr = malloc(TERMINAL_MAX_LINE);
-        if (k_buf.ptr == NULL) {
+    if (k_buf->ptr == NULL) {
+        k_buf->ptr = malloc(TERMINAL_MAX_LINE);
+        if (k_buf->ptr == NULL) {
             TP_ERROR("`malloc()` for kernel buffer failed.\n");
             free(tty_id);
             return ERROR;
         }
-        k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;  // not really necessary, I think
+        k_buf->curr_pos_offset, k_buf->end_pos_offset = 0;  // not really necessary, I think
     }
 
     // receive from terminal. This will overwrite whatever is in the kernel buf
-    int bytes_received = TtyReceive(*tty_id, k_buf.ptr, TERMINAL_MAX_LINE);
-    k_buf.end_pos_offset = bytes_received;
+    int bytes_received = TtyReceive(*tty_id, k_buf->ptr, TERMINAL_MAX_LINE);
+    k_buf->end_pos_offset = bytes_received;
 
     /**
      * Alert any blocked process waiting on this terminal that it has new input
      */
 
-    qremove(g_term_blocked_procs_queue, is_waiting_for_term_id, (void *)tty_id);
+    pcb_t *pcb = (pcb_t *)qremove(g_term_blocked_procs_queue, is_waiting_for_term_id, (void *)tty_id);
+    qput(g_ready_procs_queue, (void *)pcb);
 
     free(tty_id);
+    TracePrintf(2, "Exiting `TrapTTYReceive()`...\n");
     return SUCCESS;
 }
 
