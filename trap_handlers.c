@@ -200,21 +200,23 @@ int TrapMemory(UserContext *user_context) {
 
     int num_pages_to_grow = last_stack_page - relative_addr_page;
     // TODO: use malloc builder here (!!)
-    int *frames_found = malloc(num_pages_to_grow * sizeof(int));
-    int rc = find_n_free_frames(g_frametable, num_pages_to_grow, frames_found);
-    if (rc < 0) {
-        // failure
+    int *frames_found = find_n_free_frames(g_frametable, num_pages_to_grow);
+    if (frames_found == NULL) {
         TP_ERROR("Failed to grow user stack (ran out of physical memory).\n");
-        free(frames_found);  // will be improved with malloc builder
         kExit(-1);
     }
 
-    for (int i = 0; i < num_pages_to_grow; i++) {
+    for (int i = 0;; i++) {
+        int frame_idx = frames_found[i];
+        if (frame_idx == -1) {
+            break;
+        }
+
         int page_idx = last_stack_page - 1 - i;
 
         r1_ptable[page_idx].valid = 1;
         r1_ptable[page_idx].prot = PROT_READ | PROT_WRITE;
-        r1_ptable[page_idx].pfn = frames_found[i];
+        r1_ptable[page_idx].pfn = frame_idx;
 
         unsigned int addr_to_flush = ((page_idx + g_len_pagetable) << PAGESHIFT);
         WriteRegister(REG_TLB_FLUSH, addr_to_flush);
