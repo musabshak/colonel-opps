@@ -61,7 +61,7 @@ typedef struct ProcessControlBlock {
 
     // --- for IO
     void *term_bufs[NUM_TERMINALS];
-    int blocked_term;
+    int blocked_term;  // TODO: do we want a seperate field for waiting for term write/read?
 } pcb_t;
 
 typedef struct ZombiePCB {

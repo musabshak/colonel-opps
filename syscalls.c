@@ -596,96 +596,99 @@ int kTtyRead(int tty_id, void *buf, int len) {
     }
 
     /**
-     * Check and handle if there are any leftover bytes from the previous time we received
-     * from the terminal.
+     * If there isn't an input line from the terminal ready to go, block this process
+     * until there is. We detect this by seeing if the corresponding kernel buf for this
+     * terminal is `NULL`.
      */
-
     term_buf_t k_buf = g_term_bufs[tty_id];
 
-    if (k_buf.ptr != NULL) {
-        int bytes_remaining_in_kbuf = k_buf.end_pos_offset - k_buf.curr_pos_offset;
-        /**
-         * Case: copy over to user buf, clear kernel buf, and return
-         */
-        if (bytes_remaining_in_kbuf == len) {
-            memcpy(buf, k_buf.ptr + k_buf.curr_pos_offset, len);
-            free(k_buf.ptr);  // TODO: abstract this "clearing" into a function
-            k_buf.ptr = NULL;
-            k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
-            return len;
-        }
-        /**
-         * Case: copy the remaining bytes to user buf, then continue on to receive from
-         * terminal. We can clear out the k_buf since we'll have read everything in it.
-         */
-        else if (bytes_remaining_in_kbuf < len) {
-            memcpy(buf, k_buf.ptr + k_buf.curr_pos_offset, bytes_remaining_in_kbuf);
-            free(k_buf.ptr);
-            k_buf.ptr = NULL;
-            k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
-        }
-        /**
-         * Case: copy over `len` bytes from the kernel buf, update kernel buf accordingly
-         * to make it available for future reading. Return.
-         */
-        else if (bytes_remaining_in_kbuf > len) {
-            memcpy(buf, k_buf.ptr + k_buf.curr_pos_offset, len);
-            k_buf.curr_pos_offset += len;
-            return len;
-        }
-    }
-
-    /**
-     * Copy terminal data into kernel buffer
-     */
-
-    // allocate kernel buffer, if necessary
     if (k_buf.ptr == NULL) {
-        k_buf.ptr = malloc(TERMINAL_MAX_LINE);
-        if (k_buf.ptr == NULL) {
-            TP_ERROR("`malloc()` for kernel buffer failed.\n");
-            return ERROR;
-        }
-        k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;  // not really necessary, I think
+        g_running_pcb->blocked_term = tty_id;
+        schedule(g_term_blocked_procs_queue);
     }
 
-    // receive from terminal. This will overwrite whatever is in the kernel buf
-    int bytes_received = TtyReceive(tty_id, k_buf.ptr, TERMINAL_MAX_LINE);
-    k_buf.end_pos_offset = bytes_received;
-
     /**
-     * Now we wish to copy from the kernel buffer to the user buffer. Possible cases:
-     *  - bytes received from terminal < `len` requested by user
-     *  - `bytes_received` == `len`
-     *  - `bytes_received` > `len`
+     * There is now an input line ready to be read. So copy that over.
      */
 
-    // Copy `bytes_received` bytes into `buf`, and return the number of bytes copied
-    if (bytes_received == len) {
-        memcpy(buf, k_buf.ptr, len);
-        // No need to keep the kernel buf since all of its data has been copied
-        free(k_buf.ptr);
+    int bytes_remaining_in_kbuf = k_buf.end_pos_offset - k_buf.curr_pos_offset;
+
+    // Copy over to user buf, clear kernel buf, and return
+    if (bytes_remaining_in_kbuf <= len) {
+        memcpy(buf, k_buf.ptr + k_buf.curr_pos_offset, len);
+        free(k_buf.ptr);  // TODO: abstract this "clearing" into a function
         k_buf.ptr = NULL;
         k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
         return len;
     }
-    // Copy `bytes_received` bytes into `buf`, and return the number of bytes copied
-    else if (bytes_received < len) {
-        memcpy(buf, k_buf.ptr, bytes_received);
-        // No need to keep the kernel buf since all of its data has been copied
-        free(k_buf.ptr);
-        k_buf.ptr = NULL;
-        k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
-        return bytes_received;
-    }
-    // Copy `len` bytes into `buf`, keep the rest in the kernel buf
-    else if (bytes_received > len) {
-        memcpy(buf, k_buf.ptr, len);
-        // adjust the start position of the kernel buffer to indicate where we should
-        // start reading from upon the next call to ready from this terminal.
+
+    // Copy over `len` bytes from the kernel buf, update kernel buf accordingly
+    // to make it available for future reading. Return.
+    else if (bytes_remaining_in_kbuf > len) {
+        memcpy(buf, k_buf.ptr + k_buf.curr_pos_offset, len);
         k_buf.curr_pos_offset += len;
         return len;
     }
+
+    /**
+     * Block until more lines are received
+     *
+     */
+
+    //     This now lives in TrapTtyReceive, which I think(?) is the right place for it
+    //
+    //     /**
+    //      * Copy terminal data into kernel buffer
+    //      */
+
+    //     // allocate kernel buffer, if necessary
+    //     if (k_buf.ptr == NULL) {
+    //         k_buf.ptr = malloc(TERMINAL_MAX_LINE);
+    //         if (k_buf.ptr == NULL) {
+    //             TP_ERROR("`malloc()` for kernel buffer failed.\n");
+    //             return ERROR;
+    //         }
+    //         k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;  // not really necessary, I think
+    //     }
+
+    //     // receive from terminal. This will overwrite whatever is in the kernel buf
+    //     int bytes_received = TtyReceive(tty_id, k_buf.ptr, TERMINAL_MAX_LINE);
+    //     k_buf.end_pos_offset = bytes_received;
+
+    //     /**
+    //      * Now we wish to copy from the kernel buffer to the user buffer. Possible cases:
+    //      *  - bytes received from terminal < `len` requested by user
+    //      *  - `bytes_received` == `len`
+    //      *  - `bytes_received` > `len`
+    //      */
+
+    //     // Copy `bytes_received` bytes into `buf`, and return the number of bytes copied
+    //     if (bytes_received == len) {
+    //         memcpy(buf, k_buf.ptr, len);
+    //         // No need to keep the kernel buf since all of its data has been copied
+    //         free(k_buf.ptr);
+    //         k_buf.ptr = NULL;
+    //         k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
+    //         return len;
+    //     }
+    //     // Copy `bytes_received` bytes into `buf`, and return the number of bytes copied
+    //     else if (bytes_received < len) {
+    //         memcpy(buf, k_buf.ptr, bytes_received);
+    //         // No need to keep the kernel buf since all of its data has been copied
+    //         free(k_buf.ptr);
+    //         k_buf.ptr = NULL;
+    //         k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
+    //         return bytes_received;
+    //     }
+    //     // Copy `len` bytes into `buf`, keep the rest in the kernel buf
+    //     else if (bytes_received > len) {
+    //         memcpy(buf, k_buf.ptr, len);
+    //         // adjust the start position of the kernel buffer to indicate where we should
+    //         // start reading from upon the next call to ready from this terminal.
+    //         k_buf.curr_pos_offset += len;
+    //         return len;
+    //     }
+    //
 }
 
 /**

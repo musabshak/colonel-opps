@@ -5,6 +5,9 @@
 #include "syscalls.h"
 #include "ykernel.h"
 
+// didn't work when this was in [kernel_data_structs.h]
+extern term_buf_t g_term_bufs[NUM_TERMINALS];
+
 int pcb_delay_finished(void *elementp, const void *key) {
 
     pcb_t *pcb = (pcb_t *)elementp;
@@ -307,6 +310,15 @@ int TrapMemory(UserContext *user_context) {
 
 int TrapMath(UserContext *user_context) { ; }
 
+/**
+ * Helper for terminal trap handlers to wake up waiting procs
+ */
+int is_waiting_for_term_id(void *elt, const void *key) {
+    pcb_t *pcb = (pcb_t *)elt;
+    int tty_id = *((int *)key);
+    return (pcb->blocked_term == tty_id);
+}
+
 /*
  *  ======================
  *  === TRAPTTYRECEIVE ===
@@ -322,7 +334,44 @@ int TrapMath(UserContext *user_context) { ; }
  *
  */
 
-int TrapTTYReceive(UserContext *user_context) { ; }
+int TrapTTYReceive(UserContext *user_context) {
+    int *tty_id = malloc(sizeof(int));
+    if (tty_id == NULL) {
+        TP_ERROR("`malloc()` failed.\n");
+        return ERROR;
+    }
+    *tty_id = user_context->code;
+    term_buf_t k_buf = g_term_bufs[*tty_id];
+
+    /**
+     * Copy terminal data into kernel buffer. This will overwrite the contents of that
+     * kernel buffer (e.g. from a previous trap). TODO: is this the right behavior?
+     */
+
+    // allocate kernel buffer, if necessary
+    if (k_buf.ptr == NULL) {
+        k_buf.ptr = malloc(TERMINAL_MAX_LINE);
+        if (k_buf.ptr == NULL) {
+            TP_ERROR("`malloc()` for kernel buffer failed.\n");
+            free(tty_id);
+            return ERROR;
+        }
+        k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;  // not really necessary, I think
+    }
+
+    // receive from terminal. This will overwrite whatever is in the kernel buf
+    int bytes_received = TtyReceive(*tty_id, k_buf.ptr, TERMINAL_MAX_LINE);
+    k_buf.end_pos_offset = bytes_received;
+
+    /**
+     * Alert any blocked process waiting on this terminal that it has new input
+     */
+
+    qremove(g_term_blocked_procs_queue, is_waiting_for_term_id, (void *)tty_id);
+
+    free(tty_id);
+    return SUCCESS;
+}
 
 /*
  *  =======================
@@ -339,11 +388,6 @@ int TrapTTYReceive(UserContext *user_context) { ; }
  *      terminal, if any.
  *
  */
-int is_waiting_for_term_id(void *elt, const void *key) {
-    pcb_t *pcb = (pcb_t *)elt;
-    int tty_id = *((int *)key);
-    return (pcb->blocked_term == tty_id);
-}
 
 int TrapTTYTransmit(UserContext *user_context) {
     // Place the process that was blocking for this terminal back on the ready queue
