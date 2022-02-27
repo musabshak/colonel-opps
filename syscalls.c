@@ -538,3 +538,18 @@ void kExit(int status) {
      *      - Free all resources associated with g_running_pcb
      */
 }
+
+/**
+ *
+ */
+int kPipeInit(int *pipe_idp) {}
+
+/**
+ *
+ */
+int kPipeRead(int pipe_id, void *buf, int len) {}
+
+/**
+ *
+ */
+int kPipeWrite(int pipe_id, void *buf, int len) {}
