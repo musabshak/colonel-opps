@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 
+#include "printing.h"
 #include "queue.h"
 #include "ykernel.h"
 
@@ -189,6 +190,20 @@ int *find_n_free_frames(unsigned int *frametable, int num_frames) {
         frame_arr[num_frames] = -1;
 
         return frame_arr;
+    }
+}
+
+/**
+ * Takes an array of frame table indices, terminated with -1, and marks those frames
+ * as available.
+ */
+void retire_frames(int *frametable, int *frame_idxs) {
+    for (int i = 0;; i++) {
+        if (frame_idxs[i] == -1) {
+            break;
+        }
+
+        frametable[frame_idxs[i]] = 0;
     }
 }
 
