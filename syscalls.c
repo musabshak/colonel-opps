@@ -538,3 +538,73 @@ void kExit(int status) {
      *      - Free all resources associated with g_running_pcb
      */
 }
+
+/**
+ * Read the next line of input from terminal `tty_id`, copying it into the buffer
+ * referenced by `buf`. The maximum length of the line to be returned is given by `len`.
+ *
+ * Note: The line returned in the buffer is not null-terminated.
+ *
+ * Return behavior:
+ *  - If there are sufficient unread bytes already waiting, the call will return right away,
+ *  with those.
+ *  - Otherwise, the calling process is blocked until a line of input is available to be
+ *  returned.
+ *      - If the length of the next available input line is longer than `len` bytes, only the
+ *      first `len` bytes of the line are copied to the calling process, and the remaining
+ *      bytes of the line are saved by the kernel for the next `TtyRead()` (by this or another
+ *      process).
+ *      - If the length of the next available input line is shorter than len bytes, only as
+ *      many bytes are copied to the calling process as are available in the input line; On
+ *      success, the number of bytes actually copied into the calling process’s buffer is
+ *      returned; in case of any error, the value ERROR is returned.
+ */
+int TtyRead(int tty_id, void *buf, int len) {
+    TracePrintf(2, "Entering `TtyRead()`...\n");
+
+    // Check if there are any leftover bytes from the previous time we received from the
+    // terminal
+
+    // Create a temporary buffer to receive from the terminal
+
+    // Receive bytes from the terminal
+    int chars_received = TtyReceive(tty_id, buf, len);
+    TracePrintf(2, "Received %d characters from terminal.\n", chars_received);
+
+    if (chars_received == len) {
+        ;
+    }
+}
+
+/**
+ * Write the contents of the buffer referenced by buf to the terminal tty id. The length
+ * of the buffer in bytes is given by `len`. The calling process is blocked until all
+ * characters from the buffer have been written on the terminal. On success, the number of
+ * bytes written (`len`) is returned; in case of any error, the value `ERROR` is returned.
+ *
+ * Calls to TtyWrite for more than TERMINAL MAX LINE bytes should be supported.
+ */
+int TtyWrite(int tty_id, void *buf, int len) {
+    void *current_byte = buf;
+    int bytes_remaining = len;
+
+    while (bytes_remaining > 0) {
+        if (bytes_remaining < TERMINAL_MAX_LINE) {
+            TtyTransmit(tty_id, current_byte, bytes_remaining);
+            // Block until this operation completes
+            g_running_pcb->blocked_term = tty_id;
+            schedule(g_term_blocked_procs_queue);
+            break;
+        }
+
+        TtyTransmit(tty_id, current_byte, TERMINAL_MAX_LINE);
+        // Block until this operation completes
+        g_running_pcb->blocked_term = tty_id;
+        schedule(g_term_blocked_procs_queue);
+
+        current_byte += TERMINAL_MAX_LINE;
+        bytes_remaining -= TERMINAL_MAX_LINE;
+    }
+
+    return len;
+}

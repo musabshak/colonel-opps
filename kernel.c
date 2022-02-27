@@ -29,6 +29,7 @@ pcb_t *g_idle_pcb;
 unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
 queue_t *g_ready_procs_queue;
 queue_t *g_delay_blocked_procs_queue;
+queue_t *g_term_blocked_procs_queue;
 
 /* E=== GLOBALS === */
 
@@ -353,12 +354,16 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
      *      - children_procs
      *      - exit_status
      *      - is_wait_blocked
+     *      - term_bufs
      */
 
     init_pcb->zombie_procs = qopen();
     init_pcb->children_procs = qopen();
     init_pcb->exit_status = -1;
     init_pcb->is_wait_blocked = 0;
+    for (int i = 0; i < NUM_TERMINALS; i++) {
+        init_pcb->term_bufs[i] = NULL;
+    }
 
     init_pcb->pid = helper_new_pid(init_r1_ptable);
     init_pcb->r1_ptable = init_r1_ptable;
@@ -510,6 +515,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     g_ready_procs_queue = qopen();
     g_delay_blocked_procs_queue = qopen();
+    g_term_blocked_procs_queue = qopen();
     // g_wait_blocked_procs_queue = qopen();
 
     /* E=================== SETUP IDLE PROCESS ==================== */

@@ -340,7 +340,37 @@ int TrapTTYReceive(UserContext *user_context) { ; }
  *
  */
 
-int TrapTTYTransmit(UserContext *user_context) { ; }
+bool is_waiting_for_term_id(void *elt, void *key) {
+    pcb_t *pcb = (pcb_t *)elt;
+    int tty_id = *((int *)key);
+    return (pcb->blocked_term == tty_id);
+}
+
+int TrapTTYTransmit(UserContext *user_context) {
+    // Place the process that was blocking for this terminal back on the ready queue
+    // so that when it starts running, it will pick up where it left off (e.g. in
+    // 'TtyWrite()`).
+    int *tty_id = malloc(sizeof(int));
+    if (tty_id == NULL) {
+        TP_ERROR("`malloc()` failed.\n");
+        return ERROR;
+    }
+    *tty_id = user_context->code;
+
+    pcb_t *pcb = (pcb_t *)(qremove(g_term_blocked_procs_queue, is_waiting_for_term_id, tty_id));
+    if (pcb == NULL) {
+        TP_ERROR("Couldn't find process the terminal was waiting on.\n");
+        free(tty_id);
+        return ERROR;
+    } else {
+        free(tty_id);
+    }
+
+    qput(g_ready_procs_queue, pcb);
+
+    // Scheduling doesn't need to happen in this trap-- just return
+    return SUCCESS;
+}
 
 /*
  *  ================
