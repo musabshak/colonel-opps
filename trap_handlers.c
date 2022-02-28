@@ -5,7 +5,7 @@
 #include "syscalls.h"
 #include "ykernel.h"
 
-int pcb_delay_finished(void *elementp, const void *key) {
+bool pcb_delay_finished(void *elementp, const void *key) {
 
     pcb_t *pcb = (pcb_t *)elementp;
 
@@ -16,7 +16,7 @@ int pcb_delay_finished(void *elementp, const void *key) {
                 pcb->delay_clock_ticks);
 
     if (pcb->elapsed_clock_ticks < pcb->delay_clock_ticks) {
-        return 0;  // false
+        return false;  // false
     }
 
     /**
@@ -30,7 +30,7 @@ int pcb_delay_finished(void *elementp, const void *key) {
     qput(g_ready_procs_queue, (void *)pcb);
 
     // tell qremove_all to remove this pcb from g_delay_blocked_procs_queue
-    return 1;
+    return true;
 }
 
 /*
