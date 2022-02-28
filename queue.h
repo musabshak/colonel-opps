@@ -8,7 +8,7 @@
 /*
  * queue.h -- public interface to the queue module
  */
-// #include <stdbool.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 /* the queue representation is hidden from users of the module */
@@ -21,7 +21,7 @@ queue_t* qopen(void);
 void qclose(queue_t* qp);
 
 /* cs58 addition */
-int qis_empty(queue_t* qp);
+bool qis_empty(queue_t* qp);
 
 /* cs58 addition */
 int qlen(queue_t* qp);
@@ -46,19 +46,19 @@ void qapply(queue_t* qp, void (*fn)(void* elementp));
  *          -- returns TRUE or FALSE as defined in bool.h
  * returns a pointer to an element, or NULL if not found
  */
-void* qsearch(queue_t* qp, int (*searchfn)(void* elementp, const void* keyp), const void* skeyp);
+void* qsearch(queue_t* qp, bool (*searchfn)(void* elementp, const void* keyp), const void* skeyp);
 
 /* search a queue using a supplied boolean function (as in qsearch),
  * removes the element from the queue and returns a pointer to it or
  * NULL if not found
  */
-void* qremove(queue_t* qp, int (*searchfn)(void* elementp, const void* keyp), const void* skeyp);
+void* qremove(queue_t* qp, bool (*searchfn)(void* elementp, const void* keyp), const void* skeyp);
 
 /* cs58 addition
  * same as the qremove function except it removes all nodes for which the supplied search
  * function returns true. returns 0 if everything went successfully.
  */
-int qremove_all(queue_t* qp, int (*searchfn)(void* elementp, const void* keyp), const void* skeyp);
+int qremove_all(queue_t* qp, bool (*searchfn)(void* elementp, const void* keyp), const void* skeyp);
 
 /* concatenates elements of q2 into q1
  * q2 is dealocated, closed, and unusable upon completion
