@@ -87,6 +87,51 @@ void test_pipe_init3() {
     }
 }
 
+/**
+ * (4)
+ *
+ * Tests basic pipe read/write functionality.
+ */
+void test_pipe_read_write() {
+
+    TracePrintf(1, "Initializing a new pipe\n");
+    int rc, pipe_id, num_bytes_written, num_bytes_read;
+
+    char *write_buf = "abcde";
+    int len = 5;
+    char read_buf[len];
+
+    rc = PipeInit(&pipe_id);
+    if (rc != 0) {
+        TracePrintf(1, "Error in `PipeInit` syscall\n");
+    } else {
+        TracePrintf(1, "Pipe %d initialized successfully!\n", pipe_id);
+    }
+
+    TracePrintf(1, "Writing some bytes to a new pipe\n");
+
+    num_bytes_written = PipeWrite(pipe_id, (void *)write_buf, len);
+    if (num_bytes_written == -1) {
+        TracePrintf(1, "PipeWrite syscall failed\n");
+    } else {
+        TracePrintf(1, "Just wrote %d bytes into pipe %d\n", num_bytes_written, pipe_id);
+    }
+
+    TracePrintf(1, "Reading some bytes from the same pipe\n");
+
+    num_bytes_read = PipeRead(pipe_id, (void *)read_buf, len);
+    if (num_bytes_read == -1) {
+        TracePrintf(1, "PipeWrite syscall failed\n");
+    } else {
+        TracePrintf(1, "Just read %d bytes from pipe %d\n", num_bytes_read, pipe_id);
+    }
+
+    while (1) {
+        TracePrintf(1, "PIPE TEST RUNNING\n");
+        Pause();
+    }
+}
+
 int main(int argc, char **argv) {
 
     if (argc < 2) {
@@ -105,6 +150,9 @@ int main(int argc, char **argv) {
             break;
         case 3:
             test_pipe_init3();
+            break;
+        case 4:
+            test_pipe_read_write();
             break;
         default:
 

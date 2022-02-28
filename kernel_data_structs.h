@@ -8,6 +8,8 @@
 #include "queue.h"
 #include "ykernel.h"
 
+#define MAX_PIPE_KEYLEN 12
+
 typedef struct ProcessControlBlock pcb_t;
 
 // S========= EXTERN DECLARATIONS ========== //
@@ -69,9 +71,10 @@ typedef struct ZombiePCB {
 typedef struct Pipe {
     int pipe_id;
     char buffer[PIPE_BUFFER_LEN];  // circular
-    int curr_size;                 // number of current bytes in the pipe
+    int curr_num_bytes;            // number of current bytes in the pipe
     int front;                     // index of front element of pipe
     int back;                      // index of back elemetn of pipe
+    queue_t *blocked_procs_queue;  // blocked processes associated with a particular pipe
 } pipe_t;
 
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used);

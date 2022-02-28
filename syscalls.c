@@ -8,6 +8,92 @@
 void kExit(int status);
 
 /**
+ * Pipe buffer enqueue.
+ *
+ * Returns ERROR if anythign goes wrong, and success if everything goes right.
+ *
+ * Idea: https://www.geeksforgeeks.org/circular-queue-set-1-introduction-array-implementation/
+ */
+
+int circular_enqueue(pipe_t *pipe, char byte_to_write) {
+
+    // Just to be safe, check this
+    if (pipe->curr_num_bytes == PIPE_BUFFER_LEN) {
+        TP_ERROR("Trying to enqueue into a full pipe!\n");
+        return ERROR;
+    }
+
+    if (pipe->front == -1) {  // insert first element
+        pipe->front = 0;
+        pipe->back = 0;
+    } else if (pipe->back == PIPE_BUFFER_LEN - 1) {
+        pipe->back = 0;
+    } else {
+        pipe->back += 1;
+    }
+
+    pipe->buffer[pipe->back] = byte_to_write;
+    pipe->curr_num_bytes += 1;
+
+    return SUCCESS;
+}
+
+/**
+ * Pipe buffer dequeue.
+ *
+ * Writes byte into address pointed to by char_addr.
+ *
+ * Returns ERROR if anything goes wrong, and SUCCESS if everything goes right.
+ *
+ * Idea: https://www.geeksforgeeks.org/circular-queue-set-1-introduction-array-implementation/
+ */
+
+int circular_dequeue(pipe_t *pipe, char *char_addr) {
+
+    // Check that the pipe buffer is not empty, just to be safe
+    if (pipe->curr_num_bytes == 0) {
+        TP_ERROR("Trying to dequeue from an empty pipe!\n");
+        return ERROR;
+    }
+
+    *char_addr = pipe->buffer[pipe->front];  // dequeued char
+    pipe->buffer[pipe->front] = '\0';        // mark dequeued char as NULL
+    pipe->curr_num_bytes--;
+
+    // Update front
+    if (pipe->front == pipe->back) {  // means queue is now empty
+        pipe->front = -1;
+        pipe->back = -1;
+    } else if (pipe->front == PIPE_BUFFER_LEN - 1) {  // circle back to the start of queue
+        pipe->front = 0;
+    } else {
+        pipe->front += 1;
+    }
+
+    return SUCCESS;
+}
+
+/**
+ * Used by hsearch()
+ */
+
+bool search_pipe(void *elementp, const void *searchkeyp) {
+    pipe_t *pipe = (pipe_t *)elementp;
+    const char *search_key_str = searchkeyp;
+
+    char pipe_key[MAX_PIPE_KEYLEN];
+    sprintf(pipe_key, "pipe%d\0", pipe->pipe_id);
+
+    TracePrintf(2, "Comparing strings: %s =? %s\n", pipe_key, search_key_str);
+    if (strcmp(pipe_key, search_key_str) == 0) {
+        TracePrintf(2, "Strings are the same!");
+        return true;
+    } else {
+        return false;
+    }
+}
+
+/**
  * Used by happly()
  */
 
@@ -592,15 +678,16 @@ int kPipeInit(int *pipe_idp) {
         return ERROR;
     }
 
-    new_pipe->curr_size = 0;
-    new_pipe->front = 0;
-    new_pipe->back = 0;
+    new_pipe->curr_num_bytes = 0;
+    new_pipe->front = -1;
+    new_pipe->back = -1;
+    new_pipe->blocked_procs_queue = qopen();
 
     /**
      * Put newly created pipe in global pipes hashtable
      */
-    char pipe_key[30];  // 30 should be more than enough to cover a billion pipes (even though g_max_pipes
-                        // will probably be less)
+    char pipe_key[MAX_PIPE_KEYLEN];  // 12 should be more than enough to cover a billion pipes (even though
+                                     // g_max_pipes will probably be less)
 
     sprintf(pipe_key, "pipe%d\0", new_pipe->pipe_id);
 
@@ -622,11 +709,126 @@ int kPipeInit(int *pipe_idp) {
 }
 
 /**
+ * Returns the number of bytes read.
  *
+ * If syscall fails, some pipe contents may have been partly written into the buffer.
  */
-int kPipeRead(int pipe_id, void *buf, int len) {}
+int kPipeRead(int pipe_id, void *buffer, int len) {
+
+    /**
+     * Check that the args are legit (including buffer)
+     */
+
+    char *buffer_str = (char *)buffer;
+
+    /**
+     * Get pipe from hashtable
+     */
+    char pipe_key[MAX_PIPE_KEYLEN];
+    sprintf(pipe_key, "pipe%d\0", pipe_id);
+
+    pipe_t *pipe = (pipe_t *)hsearch(g_pipes_htable, search_pipe, pipe_key, strlen(pipe_key));
+    if (pipe == NULL) {
+        TP_ERROR("Failed retrieving pipe %d from pipes hashtable\n", pipe_id);
+        return ERROR;
+    }
+
+    int curr_num_bytes = pipe->curr_num_bytes;
+
+    /**
+     * If pipe is empty, block the caller
+     */
+    if (pipe->curr_num_bytes == 0) {
+        TracePrintf(2, "pipe is empty, blocking caller\n");
+        schedule(pipe->blocked_procs_queue);
+    }
+
+    /**
+     * If pipe->curr_num_bytes <= len, give all to the caller and return.
+     * If pipe->curr_num_bytes > len, give the first len to caller and return.
+     *
+     */
+    int num_bytes_to_read;  // = min(curr_num_bytes, len)
+    if (curr_num_bytes <= len) {
+        num_bytes_to_read = curr_num_bytes;
+    } else {
+        num_bytes_to_read = len;
+    }
+
+    int rc;
+
+    /**
+     * Call circular_dequeue() num_bytes_to_read times
+     */
+    for (int i = 0; i < num_bytes_to_read; i++) {
+        rc = circular_dequeue(pipe, &buffer_str[i]);
+
+        if (rc != 0) {
+            TP_ERROR("Dequeue failed\n");
+            return ERROR;
+        }
+    }
+
+    return num_bytes_to_read;
+}
 
 /**
- *
+ * If a writer tries to write and the buffer is full, the syscall returns ERROR.
  */
-int kPipeWrite(int pipe_id, void *buf, int len) {}
+int kPipeWrite(int pipe_id, void *buffer, int len) {
+
+    /**
+     * Check that the args are legit (including buffer)
+     */
+
+    char *buffer_str = (char *)buffer;
+
+    /**
+     * Get pipe from hashtable
+     */
+    char pipe_key[MAX_PIPE_KEYLEN];
+    sprintf(pipe_key, "pipe%d\0", pipe_id);
+
+    pipe_t *pipe = (pipe_t *)hsearch(g_pipes_htable, search_pipe, pipe_key, strlen(pipe_key));
+    if (pipe == NULL) {
+        TP_ERROR("Failed retrieving pipe %d from pipes hashtable\n", pipe_id);
+        return ERROR;
+    }
+
+    int num_free_bytes = PIPE_BUFFER_LEN - pipe->curr_num_bytes;
+
+    /**
+     * If pipe is full, fail the syscall
+     */
+    if (num_free_bytes == 0) {
+        TP_ERROR("Trying to write to a full pipe\n");
+        return ERROR;
+    }
+
+    /**
+     * Otherwise, write as many as possible
+     */
+
+    int num_bytes_to_write;  // = min(num_free_bytes, len)
+    if (num_free_bytes <= len) {
+        num_bytes_to_write = num_free_bytes;
+    } else {
+        num_bytes_to_write = len;
+    }
+
+    int rc;
+
+    /**
+     * Call circular_enqueue(byte) num_bytes_to_write times
+     */
+    for (int i = 0; i < num_bytes_to_write; i++) {
+        rc = circular_enqueue(pipe, buffer_str[i]);
+
+        if (rc != 0) {
+            TP_ERROR("Enqueue failed\n");
+            return ERROR;
+        }
+    }
+
+    return num_bytes_to_write;
+}

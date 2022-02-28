@@ -74,6 +74,9 @@ int TrapKernelHandler(UserContext *user_context) {
         int *status_ptr;  // for kWait()
         int exit_code;    // for kExit()
         int *pipe_idp;    // for kPipeInit()
+        int pipe_id;      // for kPipeRead/Write()
+        void *buf;        // for kPipeRead/Write()
+        int len;          // for kPipeRead/Write()
 
         // `kExec()` args
         char *filename;
@@ -121,7 +124,21 @@ int TrapKernelHandler(UserContext *user_context) {
             pipe_idp = (int *)user_context->regs[0];
             rc = kPipeInit(pipe_idp);
             user_context->regs[0] = rc;
+            break;
+        case YALNIX_PIPE_READ:
+            pipe_id = user_context->regs[0];
+            buf = (void *)user_context->regs[1];
+            len = user_context->regs[2];
+            rc = kPipeRead(pipe_id, buf, len);
+            user_context->regs[0] = rc;
 
+            break;
+        case YALNIX_PIPE_WRITE:
+            pipe_id = user_context->regs[0];
+            buf = (void *)user_context->regs[1];
+            len = user_context->regs[2];
+            rc = kPipeWrite(pipe_id, buf, len);
+            user_context->regs[0] = rc;
             break;
     }
     TracePrintf(2, "Exiting TrapKernelHandler\n");

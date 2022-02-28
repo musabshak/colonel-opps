@@ -515,7 +515,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_ready_procs_queue = qopen();
     g_delay_blocked_procs_queue = qopen();
     g_pipes_htable = hopen(30);
-    // g_wait_blocked_procs_queue = qopen();
 
     /* E=================== SETUP IDLE PROCESS ==================== */
 
