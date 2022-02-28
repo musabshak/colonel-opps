@@ -364,6 +364,32 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
 }
 
 /**
+ * Returns a new pipe id. Returns ERROR if the maximum number of pipes per kernel
+ * session has been exhausted.
+ *
+ * Currently implemented naively (via a global counter). Overflow of pipe_ids
+ * protected by g_max_pipes.
+ */
+int assign_pipe_id() {
+    if (g_pipe_id == g_max_pipes) {
+        TracePrintf(1,
+                    "The maximum number of allowed pipes has already been created. Please delete some pipes "
+                    "in order to create more!\n");
+        return ERROR;
+    }
+
+    g_pipe_id += 1;
+    return g_pipe_id - 1;
+}
+
+/**
+ * Retires a given pipe id.
+ *
+ * Currently implemented naively.
+ */
+int retire_pipe_id(int pipe_id) { return 0; }
+
+/**
  * Helper function called by SetKernelBrk(void *addr) in the case that addr > g_kernel_brk,
  * also analagously by `Brk()`.
  *

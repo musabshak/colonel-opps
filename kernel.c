@@ -6,6 +6,7 @@
  *
  */
 
+#include "hash.h"
 #include "kernel_data_structs.h"
 #include "load_program.h"
 #include "queue.h"
@@ -16,9 +17,8 @@
 /* S=== GLOBALS === */
 /* ================ */
 
-int g_virtual_mem_enabled;                  // 1 if virtual memory enabled, 0 otherwise
+int g_virtual_mem_enabled = 0;              // 1 if virtual memory enabled, 0 otherwise
 void *g_kernel_brk;                         // Global variable storing kernel brk
-int CVAR_ID;                                // Cvar id counter
 unsigned int g_len_frametable;              // Number of frames in physical memory, populated by KernelStart
 unsigned int g_len_pagetable = MAX_PT_LEN;  // Number of pages in R0 or R1 pagetable
 unsigned int *g_frametable;                 // Bitvector containing info on used/unused physical
@@ -29,6 +29,10 @@ pcb_t *g_idle_pcb;
 unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
 queue_t *g_ready_procs_queue;
 queue_t *g_delay_blocked_procs_queue;
+
+hashtable_t *g_pipes_htable;
+int g_max_pipes = 50;  // max number of pipes that can be created in one session of the kernel
+int g_pipe_id = 0;     // next pipe created should have this id
 
 /* E=== GLOBALS === */
 
@@ -510,6 +514,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     g_ready_procs_queue = qopen();
     g_delay_blocked_procs_queue = qopen();
+    g_pipes_htable = hopen(30);
     // g_wait_blocked_procs_queue = qopen();
 
     /* E=================== SETUP IDLE PROCESS ==================== */

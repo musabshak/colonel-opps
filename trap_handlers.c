@@ -73,6 +73,7 @@ int TrapKernelHandler(UserContext *user_context) {
         int child_pid;    // for kWait()
         int *status_ptr;  // for kWait()
         int exit_code;    // for kExit()
+        int *pipe_idp;    // for kPipeInit()
 
         // `kExec()` args
         char *filename;
@@ -115,6 +116,12 @@ int TrapKernelHandler(UserContext *user_context) {
         case YALNIX_EXIT:
             exit_code = user_context->regs[0];
             kExit(exit_code);
+            break;
+        case YALNIX_PIPE_INIT:
+            pipe_idp = (int *)user_context->regs[0];
+            rc = kPipeInit(pipe_idp);
+            user_context->regs[0] = rc;
+
             break;
     }
     TracePrintf(2, "Exiting TrapKernelHandler\n");

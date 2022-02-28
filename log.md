@@ -17,6 +17,10 @@
 - Update queue code to maintain length as an attribute (as opposed to an O(n) method)
 - ~Add levels to traceprints (userland + kernelland)~
 - ~Add all global variables as externs in kernel_data_structs.c~
+- Check user arg in kExit()
+- May need to update process "queues" to "hashtables" while implementing sync stuff
+- Improve assign_pipe_id() and retire_pipe_id() code
+- Incorporate malloc_builder into main branch
 
 ### Implementation notes
 - We assume init cloning into idle (init is process 0)

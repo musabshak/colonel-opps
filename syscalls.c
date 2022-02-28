@@ -8,6 +8,15 @@
 void kExit(int status);
 
 /**
+ * Used by happly()
+ */
+
+void print_pipe(void *elementp) {
+    pipe_t *pipe = elementp;
+    TracePrintf(2, "Pipe id: %d\n", pipe->pipe_id);
+}
+
+/**
  * Checks if the address lies in region 1. (1 means it does, 0 means it doesn't)
  */
 bool is_r1_addr(void *addr) {
@@ -481,6 +490,10 @@ int kWait(int *status_ptr) {
  * If init exits, the system should be halted.
  */
 void kExit(int status) {
+
+    // TODO: should check if `status` here is valid? Someone could try passing an address here
+    // disguised as an int?
+
     pcb_t *caller = g_running_pcb;
     pcb_t *parent = caller->parent;
 
@@ -540,9 +553,73 @@ void kExit(int status) {
 }
 
 /**
+ * Buffer implementation:
+ *      - Easy way: use currently existing Queue code (linked list implementation).
+ *      - Slicker way: implement a circular array implementation of FIFO queue for pipe buffers.
+ *
+ * We do it the slicker way. That is, The pipe is really a Queue ADT implemented as a circular array.
+ *
+ * Passing an invalid pointer to kPipeInit() does not result in the user program exiting; the syscall
+ * just returns with an ERROR.
+ *
  *
  */
-int kPipeInit(int *pipe_idp) {}
+int kPipeInit(int *pipe_idp) {
+
+    /**
+     * Verify that user-given pointer is valid (user has permissions to write
+     * to what the pointer is pointing to
+     */
+    if (!is_r1_addr(pipe_idp) || !is_writeable_addr(g_running_pcb->r1_ptable, (void *)pipe_idp)) {
+        TracePrintf(1, "`kPipeInit()` passed an invalid pointer -- syscall now returning ERROR\n");
+        return ERROR;
+    }
+
+    /**
+     * Allocate a pipe on kernel heap and initialize it.
+     */
+    pipe_t *new_pipe = malloc(sizeof(*new_pipe));
+    if (new_pipe == NULL) {
+        TracePrintf(1, "malloc failed in `kPipeInit`()\n");
+    }
+
+    // Initialize pipe
+    new_pipe->pipe_id = assign_pipe_id();
+
+    // Check that max pipe limit has not been reached
+    if (new_pipe->pipe_id == ERROR) {
+        free(new_pipe);
+        return ERROR;
+    }
+
+    new_pipe->curr_size = 0;
+    new_pipe->front = 0;
+    new_pipe->back = 0;
+
+    /**
+     * Put newly created pipe in global pipes hashtable
+     */
+    char pipe_key[30];  // 30 should be more than enough to cover a billion pipes (even though g_max_pipes
+                        // will probably be less)
+
+    sprintf(pipe_key, "pipe%d\0", new_pipe->pipe_id);
+
+    TracePrintf(2, "pipe key: %s; pipe key length: %d\n", pipe_key, strlen(pipe_key));
+
+    int rc = hput(g_pipes_htable, (void *)new_pipe, pipe_key, strlen(pipe_key));
+    if (rc != 0) {
+        TracePrintf(1, "error occurred while putting pipe into hashtable\n");
+        free(new_pipe);
+        return ERROR;
+    }
+
+    TracePrintf(2, "printing pipes hash table\n");
+    happly(g_pipes_htable, print_pipe);
+
+    *pipe_idp = new_pipe->pipe_id;
+
+    return SUCCESS;
+}
 
 /**
  *
