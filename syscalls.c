@@ -86,7 +86,7 @@ bool search_pipe(void *elementp, const void *searchkeyp) {
 
     TracePrintf(2, "Comparing strings: %s =? %s\n", pipe_key, search_key_str);
     if (strcmp(pipe_key, search_key_str) == 0) {
-        TracePrintf(2, "Strings are the same!");
+        TracePrintf(2, "Strings are the same!\n");
         return true;
     } else {
         return false;
