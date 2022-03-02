@@ -764,11 +764,17 @@ int kPipeRead(int pipe_id, void *buffer, int len) {
     /**
      * If pipe is empty, block the caller
      */
+<<<<<<< HEAD
     while (curr_num_bytes == 0) {
+=======
+    if (curr_num_bytes == 0) {
+>>>>>>> 1f85896257aa6c17b0af47b3197f3910678470e8
         TracePrintf(2, "pipe is empty, blocking caller\n");
         schedule(pipe->blocked_procs_queue);
         curr_num_bytes = pipe->curr_num_bytes;  // need to update after process wakes back up
     }
+
+    curr_num_bytes = pipe->curr_num_bytes;  // for if process wakes up again
 
     /**
      * If pipe->curr_num_bytes <= len, give all to the caller and return.
