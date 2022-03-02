@@ -764,12 +764,11 @@ int kPipeRead(int pipe_id, void *buffer, int len) {
     /**
      * If pipe is empty, block the caller
      */
-    if (curr_num_bytes == 0) {
+    while (curr_num_bytes == 0) {
         TracePrintf(2, "pipe is empty, blocking caller\n");
         schedule(pipe->blocked_procs_queue);
+        curr_num_bytes = pipe->curr_num_bytes;  // need to update after process wakes back up
     }
-
-    curr_num_bytes = pipe->curr_num_bytes;  // for if process wakes up again
 
     /**
      * If pipe->curr_num_bytes <= len, give all to the caller and return.
@@ -802,6 +801,8 @@ int kPipeRead(int pipe_id, void *buffer, int len) {
 
 /**
  * If a writer tries to write and the buffer is full, the syscall returns ERROR.
+ *
+ * All blocked processes waiting for bytes on the pipe are woken up by kPipeWrite.
  */
 int kPipeWrite(int pipe_id, void *buffer, int len) {
 

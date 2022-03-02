@@ -274,7 +274,7 @@ void test_pipe_read_write3() {
 /**
  * (7)
  *
- * Test that a processes waiting for bytes on an empty pipe get woken up after someone writes to that pipe.
+ * Test that a process waiting for bytes on an empty pipe gets woken up after someone writes to that pipe.
  */
 void test_pipe_read_write4() {
     int rc, pipe_id, num_bytes_written, num_bytes_read;
@@ -329,6 +329,83 @@ void test_pipe_read_write4() {
     }
 }
 
+/**
+ * (8)
+ *
+ * Test that multiple processes waiting for bytes on an empty pipe get woken up after someone writes to that
+ * pipe.
+ */
+void test_pipe_read_write5() {
+    int rc, pipe_id, num_bytes_written, num_bytes_read;
+
+    char *write_buf = "abcdefghijklmnopqrstuvwxyz";
+    int len = 26;
+    char read_buf[len + 1];
+    memset(read_buf, 0, len + 1);
+    int num_bytes_to_read = 10;
+    int orig_pid = GetPid();
+
+    /**
+     * Initialize pipe
+     */
+    TracePrintf(1, "Initializing a new pipe\n");
+    rc = PipeInit(&pipe_id);
+    if (rc != 0) {
+        TracePrintf(1, "Error in `PipeInit` syscall\n");
+    } else {
+        TracePrintf(1, "Pipe %d initialized successfully!\n", pipe_id);
+    }
+
+    /**
+     * Fork multiple children to try and read from empty pipe
+     */
+    for (int i = 0; i < 4; i++) {
+        Fork();
+    }
+
+    if (GetPid() != orig_pid) {
+
+        TracePrintf(1, "Process %d trying to read some bytes from an empty pipe\n", GetPid());
+        num_bytes_read = PipeRead(pipe_id, (void *)read_buf, num_bytes_to_read);
+        if (num_bytes_read == -1) {
+            TracePrintf(1, "PipeWrite syscall failed\n");
+        } else {
+            TracePrintf(1, "Process %d just read %d bytes from pipe %d. Bytes: %s\n", GetPid(),
+                        num_bytes_read, pipe_id, read_buf);
+        }
+
+        Exit(0);
+    }
+
+    // Delay parent for a bit so it is clear that the child process that is waiting for bytes on the pipe,
+    // remains asleep
+    Delay(3);
+
+    TracePrintf(1, "Writing some bytes to a new pipe. Bytes: %s\n", write_buf);
+    num_bytes_written = PipeWrite(pipe_id, (void *)write_buf, len);
+    if (num_bytes_written == -1) {
+        TracePrintf(1, "PipeWrite syscall failed\n");
+    } else {
+        TracePrintf(1, "Just wrote %d bytes into pipe %d\n", num_bytes_written, pipe_id);
+    }
+
+    // Delay a little more before writing more bytes to pipe
+    Delay(3);
+
+    TracePrintf(1, "Writing some bytes to a new pipe. Bytes: %s\n", write_buf);
+    num_bytes_written = PipeWrite(pipe_id, (void *)write_buf, len);
+    if (num_bytes_written == -1) {
+        TracePrintf(1, "PipeWrite syscall failed\n");
+    } else {
+        TracePrintf(1, "Just wrote %d bytes into pipe %d\n", num_bytes_written, pipe_id);
+    }
+
+    while (1) {
+        TracePrintf(1, "PIPE TEST RUNNING\n");
+        Pause();
+    }
+}
+
 int main(int argc, char **argv) {
 
     if (argc < 2) {
@@ -359,6 +436,9 @@ int main(int argc, char **argv) {
             break;
         case 7:
             test_pipe_read_write4();
+            break;
+        case 8:
+            test_pipe_read_write5();
             break;
         default:
 
