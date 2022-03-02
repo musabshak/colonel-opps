@@ -386,10 +386,11 @@ int TrapTTYReceive(UserContext *user_context) {
      * Alert any blocked process waiting on this terminal that it has new input
      */
 
-    pcb_t *pcb = (pcb_t *)qremove(g_term_blocked_procs_queue, is_waiting_for_term_id, (void *)tty_id);
+    pcb_t *pcb = (pcb_t *)qremove(g_term_blocked_transmit_queue, is_waiting_for_term_id, (void *)tty_id);
     qput(g_ready_procs_queue, (void *)pcb);
 
     free(tty_id);
+
     TracePrintf(2, "Exiting `TrapTTYReceive()`...\n");
     return SUCCESS;
 }
@@ -421,7 +422,7 @@ int TrapTTYTransmit(UserContext *user_context) {
     }
     *tty_id = user_context->code;
 
-    pcb_t *pcb = (pcb_t *)(qremove(g_term_blocked_procs_queue, is_waiting_for_term_id, tty_id));
+    pcb_t *pcb = (pcb_t *)(qremove(g_term_blocked_transmit_queue, is_waiting_for_term_id, tty_id));
     if (pcb == NULL) {
         TP_ERROR("Couldn't find process the terminal was waiting on.\n");
         free(tty_id);

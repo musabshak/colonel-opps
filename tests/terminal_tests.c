@@ -69,12 +69,34 @@ void read_reasonable() {
     TracePrintf(1, "TEST END: read reasonable amount from terminal\n");
 }
 
+void multiple_procs_write_to_same_terminal() {
+    int pid0 = Fork();
+    if (pid0 == 0) {
+        int pid1 = Fork();
+        if (pid1 == 0) {
+            print_more_than_tmaxline();
+            Exit(0);
+        }
+
+        print_more_than_tmaxline();
+        Exit(0);
+    }
+
+    print_more_than_tmaxline();
+
+    while (1) {
+        TracePrintf(1, "TERMINAL_TESTS RUNNING!\n");
+        Pause();
+    }
+}
+
 int main() {
     TracePrintf(1, "TERMINAL_TESTS RUNNING!\n");
 
     // print_hello_world();
     // print_more_than_tmaxline();
-    read_reasonable();
+    // read_reasonable();
+    multiple_procs_write_to_same_terminal();
 
     while (1) {
         TracePrintf(1, "TERMINAL_TESTS RUNNING!\n");

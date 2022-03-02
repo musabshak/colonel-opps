@@ -3,7 +3,19 @@
 #include "kernel_data_structs.h"
 #include "load_program.h"
 #include "printing.h"
+#include "trap_handlers.h"
 #include "ykernel.h"
+
+/**
+ * This is how we handle "locked" access to terminals (only one process can use a terminal
+ * at a time). This method only works because we are the kernel.
+ *
+ * Each entry in the array represents the terminal with id corresponding to its index.
+ * `0` indicates that no process is using the terminal. A nonzero value should represent
+ * that the process with that PID is using the terminal, e.g. if `term_status[0] == 2` then
+ * this means PID 2 is using terminal 0.
+ */
+int term_status[NUM_TERMINALS] = {0, 0, 0, 0};
 
 // putting this in [kernel_data_structs.h] caused issues
 extern term_buf_t *g_term_bufs[NUM_TERMINALS];
@@ -21,7 +33,7 @@ bool is_r1_addr(void *addr) {
         return false;
     }
 
-    TracePrintf(2, "is an R1 address!\n");
+    // TracePrintf(2, "is an R1 address!\n");
     return true;
 }
 
@@ -543,6 +555,47 @@ void kExit(int status) {
 }
 
 /**
+ * Check if terminal is being used by another process. If so, sleep.
+ */
+void gain_access_to_term(int tty_id) {
+    // Sleep if the terminal is marked with a different PID than the one of this process,
+    // and if it is not not being used
+    while (term_status[tty_id] != g_running_pcb->pid && term_status[tty_id != 0]) {
+        TracePrintf(2, "PID %d tried to write to terminal %d, but it was in use. Sleeping...\n",
+                    g_running_pcb->pid, tty_id);
+        schedule(g_term_blocked_access_queue);
+    }
+    // woke up with access to terminal-- free to continue
+    TracePrintf(2, "PID %d has access to terminal %d.\n", g_running_pcb->pid, tty_id);
+    term_status[tty_id] = g_running_pcb->pid;
+}
+
+/**
+ * Mark terminal as available and wake up next process waiting on it.
+ */
+int release_access_to_term(int tty_id) {
+    TracePrintf(2, "PID %d releasing access to terminal %d.\n", g_running_pcb->pid, tty_id);
+    term_status[tty_id] = 0;
+
+    int *key = malloc(sizeof(int));
+    if (key == NULL) {
+        TP_ERROR("`malloc()` failed.\n");
+        return ERROR;
+    }
+    *key = tty_id;
+
+    pcb_t *pcb = qremove(g_term_blocked_access_queue, is_waiting_for_term_id, (void *)key);
+    if (pcb != NULL) {
+        TracePrintf(2, "PID %d woke up from terminal blocked queue.\n", pcb->pid);
+        qput(g_ready_procs_queue, (void *)pcb);
+    }
+
+    free(key);
+
+    return SUCCESS;
+}
+
+/**
  * (From manual)
  *
  * Read the next line of input from terminal `tty_id`, copying it into the buffer
@@ -577,6 +630,11 @@ int kTtyRead(int tty_id, void *buf, int len) {
     TracePrintf(2, "Entering `TtyRead()`...\n");
 
     /**
+     * Check if terminal is being used by another process. If so, sleep.
+     */
+    gain_access_to_term(tty_id);
+
+    /**
      * Validate user inputs
      */
 
@@ -600,11 +658,12 @@ int kTtyRead(int tty_id, void *buf, int len) {
      * until there is. We detect this by seeing if the corresponding kernel buf for this
      * terminal is `NULL`.
      */
+
     term_buf_t *k_buf = g_term_bufs[tty_id];
 
     if (k_buf->ptr == NULL) {
         g_running_pcb->blocked_term = tty_id;
-        schedule(g_term_blocked_procs_queue);
+        schedule(g_term_blocked_transmit_queue);
     }
 
     /**
@@ -633,64 +692,14 @@ int kTtyRead(int tty_id, void *buf, int len) {
     }
 
     /**
-     * Block until more lines are received
-     *
+     * Wake up any processes waiting on this terminal.
      */
 
-    //     This now lives in TrapTtyReceive, which I think(?) is the right place for it
-    //
-    //     /**
-    //      * Copy terminal data into kernel buffer
-    //      */
+    if (release_access_to_term(tty_id) == ERROR) {
+        return ERROR;
+    }
 
-    //     // allocate kernel buffer, if necessary
-    //     if (k_buf.ptr == NULL) {
-    //         k_buf.ptr = malloc(TERMINAL_MAX_LINE);
-    //         if (k_buf.ptr == NULL) {
-    //             TP_ERROR("`malloc()` for kernel buffer failed.\n");
-    //             return ERROR;
-    //         }
-    //         k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;  // not really necessary, I think
-    //     }
-
-    //     // receive from terminal. This will overwrite whatever is in the kernel buf
-    //     int bytes_received = TtyReceive(tty_id, k_buf.ptr, TERMINAL_MAX_LINE);
-    //     k_buf.end_pos_offset = bytes_received;
-
-    //     /**
-    //      * Now we wish to copy from the kernel buffer to the user buffer. Possible cases:
-    //      *  - bytes received from terminal < `len` requested by user
-    //      *  - `bytes_received` == `len`
-    //      *  - `bytes_received` > `len`
-    //      */
-
-    //     // Copy `bytes_received` bytes into `buf`, and return the number of bytes copied
-    //     if (bytes_received == len) {
-    //         memcpy(buf, k_buf.ptr, len);
-    //         // No need to keep the kernel buf since all of its data has been copied
-    //         free(k_buf.ptr);
-    //         k_buf.ptr = NULL;
-    //         k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
-    //         return len;
-    //     }
-    //     // Copy `bytes_received` bytes into `buf`, and return the number of bytes copied
-    //     else if (bytes_received < len) {
-    //         memcpy(buf, k_buf.ptr, bytes_received);
-    //         // No need to keep the kernel buf since all of its data has been copied
-    //         free(k_buf.ptr);
-    //         k_buf.ptr = NULL;
-    //         k_buf.curr_pos_offset, k_buf.end_pos_offset = 0;
-    //         return bytes_received;
-    //     }
-    //     // Copy `len` bytes into `buf`, keep the rest in the kernel buf
-    //     else if (bytes_received > len) {
-    //         memcpy(buf, k_buf.ptr, len);
-    //         // adjust the start position of the kernel buffer to indicate where we should
-    //         // start reading from upon the next call to ready from this terminal.
-    //         k_buf.curr_pos_offset += len;
-    //         return len;
-    //     }
-    //
+    return len;
 }
 
 /**
@@ -702,6 +711,14 @@ int kTtyRead(int tty_id, void *buf, int len) {
  * Calls to TtyWrite for more than TERMINAL MAX LINE bytes should be supported.
  */
 int kTtyWrite(int tty_id, void *buf, int len) {
+    TracePrintf(2, "Entering `kTtyWrite()`...\n");
+
+    /**
+     * Check if terminal is being used by another process. If so, sleep.
+     */
+
+    gain_access_to_term(tty_id);
+
     /**
      * Valid user input
      */
@@ -713,11 +730,6 @@ int kTtyWrite(int tty_id, void *buf, int len) {
 
     if (!(is_valid_array(g_running_pcb->r1_ptable, buf, len, PROT_READ | PROT_WRITE))) {
         TP_ERROR("the `buf` that was passed was not valid.\n");
-        return ERROR;
-    }
-
-    if (len > TERMINAL_MAX_LINE) {
-        TP_ERROR("attempted to read more than `TERMINAL_MAX_LINE` from terminal.\n");
         return ERROR;
     }
 
@@ -745,19 +757,27 @@ int kTtyWrite(int tty_id, void *buf, int len) {
             TtyTransmit(tty_id, current_byte, bytes_remaining);
             // Block until this operation completes
             g_running_pcb->blocked_term = tty_id;
-            schedule(g_term_blocked_procs_queue);
+            schedule(g_term_blocked_transmit_queue);
             break;
         }
 
         TtyTransmit(tty_id, current_byte, TERMINAL_MAX_LINE);
         // Block until this operation completes
         g_running_pcb->blocked_term = tty_id;
-        schedule(g_term_blocked_procs_queue);
+        schedule(g_term_blocked_transmit_queue);
 
         current_byte += TERMINAL_MAX_LINE;
         bytes_remaining -= TERMINAL_MAX_LINE;
     }
 
     free(kbuf);
+
+    /**
+     * Wake up next process waiting on this terminal
+     */
+
+    release_access_to_term(tty_id);
+
+    TracePrintf(2, "Exiting `kTtyWrite()`...\n");
     return len;
 }
