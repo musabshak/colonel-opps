@@ -98,7 +98,8 @@ void test_pipe_read_write() {
 
     char *write_buf = "abcde";
     int len = 5;
-    char read_buf[len];
+    char read_buf[len + 1];
+    read_buf[len] = '\0';
 
     TracePrintf(1, "Initializing a new pipe\n");
 
@@ -109,7 +110,7 @@ void test_pipe_read_write() {
         TracePrintf(1, "Pipe %d initialized successfully!\n", pipe_id);
     }
 
-    TracePrintf(1, "Writing some bytes to a new pipe, from: %s\n", write_buf);
+    TracePrintf(1, "Writing some bytes to a new pipe. Bytes: %s\n", write_buf);
 
     num_bytes_written = PipeWrite(pipe_id, (void *)write_buf, len);
     if (num_bytes_written == -1) {
@@ -124,7 +125,7 @@ void test_pipe_read_write() {
     if (num_bytes_read == -1) {
         TracePrintf(1, "PipeWrite syscall failed\n");
     } else {
-        TracePrintf(1, "Just read %d bytes from pipe %d: %s\n", num_bytes_read, pipe_id, read_buf);
+        TracePrintf(1, "Just read %d bytes from pipe %d. Bytes: %s\n", num_bytes_read, pipe_id, read_buf);
     }
 
     while (1) {
@@ -223,7 +224,7 @@ void test_pipe_read_write3() {
         TracePrintf(1, "Pipe %d initialized successfully!\n", pipe_id);
     }
 
-    TracePrintf(1, "Writing some bytes to a new pipe, from: %s\n", write_buf);
+    TracePrintf(1, "Writing some bytes to a new pipe. Bytes: %s\n", write_buf);
 
     num_bytes_written = PipeWrite(pipe_id, (void *)write_buf, PIPE_BUFFER_LEN);
     if (num_bytes_written == -1) {
@@ -245,7 +246,7 @@ void test_pipe_read_write3() {
     if (num_bytes_read == -1) {
         TracePrintf(1, "PipeWrite syscall failed\n");
     } else {
-        TracePrintf(1, "Just read %d bytes from pipe %d: %s\n", num_bytes_read, pipe_id, read_buf);
+        TracePrintf(1, "Just read %d bytes from pipe %d. Bytes: %s\n", num_bytes_read, pipe_id, read_buf);
     }
 
     TracePrintf(1, "Writing into newly emptied pipe. Bytes: %s\n", write_buf2);
@@ -261,7 +262,65 @@ void test_pipe_read_write3() {
     if (num_bytes_read == -1) {
         TracePrintf(1, "PipeWrite syscall failed\n");
     } else {
-        TracePrintf(1, "Just read %d bytes from pipe %d. Bytes %s\n", num_bytes_read, pipe_id, read_buf2);
+        TracePrintf(1, "Just read %d bytes from pipe %d. Bytes: %s\n", num_bytes_read, pipe_id, read_buf2);
+    }
+
+    while (1) {
+        TracePrintf(1, "PIPE TEST RUNNING\n");
+        Pause();
+    }
+}
+
+/**
+ * (7)
+ *
+ * Test that a processes waiting for bytes on an empty pipe get woken up after someone writes to that pipe.
+ */
+void test_pipe_read_write4() {
+    int rc, pipe_id, num_bytes_written, num_bytes_read;
+
+    char *write_buf = "abcdefghijklmno";
+    int len = 15;
+    char read_buf[len + 1];
+    read_buf[len] = '\0';
+
+    /**
+     * Initialize pipe
+     */
+    TracePrintf(1, "Initializing a new pipe\n");
+    rc = PipeInit(&pipe_id);
+    if (rc != 0) {
+        TracePrintf(1, "Error in `PipeInit` syscall\n");
+    } else {
+        TracePrintf(1, "Pipe %d initialized successfully!\n", pipe_id);
+    }
+
+    /**
+     * Fork a child to try and read from empty pipe
+     */
+    int pid = Fork();
+    if (pid == 0) {
+        TracePrintf(1, "Process %d trying to read some bytes from an empty pipe\n", GetPid());
+        num_bytes_read = PipeRead(pipe_id, (void *)read_buf, len);
+        if (num_bytes_read == -1) {
+            TracePrintf(1, "PipeWrite syscall failed\n");
+        } else {
+            TracePrintf(1, "Just read %d bytes from pipe %d. Bytes: %s\n", num_bytes_read, pipe_id, read_buf);
+        }
+
+        Exit(0);
+    }
+
+    // Delay parent for a bit so it is clear that the child process that is waiting for bytes on the pipe,
+    // remains asleep
+    Delay(10);
+
+    TracePrintf(1, "Writing some bytes to a new pipe. Bytes: %s\n", write_buf);
+    num_bytes_written = PipeWrite(pipe_id, (void *)write_buf, len);
+    if (num_bytes_written == -1) {
+        TracePrintf(1, "PipeWrite syscall failed\n");
+    } else {
+        TracePrintf(1, "Just wrote %d bytes into pipe %d\n", num_bytes_written, pipe_id);
     }
 
     while (1) {
@@ -297,6 +356,9 @@ int main(int argc, char **argv) {
             break;
         case 6:
             test_pipe_read_write3();
+            break;
+        case 7:
+            test_pipe_read_write4();
             break;
         default:
 

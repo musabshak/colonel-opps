@@ -5,6 +5,15 @@
 #include "syscalls.h"
 #include "ykernel.h"
 
+/**
+ * Used as "search" fxn in qremove_all (in clock trap handler).
+ *
+ * If process has completed its delay time
+ *      - returns true
+ *      - Puts the process in the ready queue
+ * Otherwise
+ *      - returns false
+ */
 bool pcb_delay_finished(void *elementp, const void *key) {
 
     pcb_t *pcb = (pcb_t *)elementp;
