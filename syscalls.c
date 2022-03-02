@@ -5,7 +5,27 @@
 #include "printing.h"
 #include "ykernel.h"
 
+/**
+ * Prototype
+ */
 void kExit(int status);
+
+/**
+ * Used as "search" fxn in qremove_all (in kPipeWrite).
+ *
+ * Does two things
+ *      - Puts process on ready queue
+ *      - returns true
+ * Otherwise
+ *      - returns false
+ */
+bool put_proc_on_ready_queue(void *elementp, const void *key) {
+
+    pcb_t *proc = (pcb_t *)elementp;
+
+    qput(g_ready_procs_queue, proc);
+    return true;
+}
 
 /**
  * Pipe buffer enqueue.
@@ -716,8 +736,14 @@ int kPipeInit(int *pipe_idp) {
 int kPipeRead(int pipe_id, void *buffer, int len) {
 
     /**
-     * Check that the args are legit (including buffer)
+     * Check that the args are legit (pipe_id, buffer, len).
+     *
+     * Buffer (living in R1 land) needs to have write permissions (it is going to be written into).
      */
+    if (!is_valid_array(g_running_pcb->r1_ptable, buffer, len, PROT_WRITE)) {
+        TP_ERROR("buffer not valid\n");
+        return ERROR;
+    }
 
     char *buffer_str = (char *)buffer;
 
@@ -738,10 +764,12 @@ int kPipeRead(int pipe_id, void *buffer, int len) {
     /**
      * If pipe is empty, block the caller
      */
-    if (pipe->curr_num_bytes == 0) {
+    if (curr_num_bytes == 0) {
         TracePrintf(2, "pipe is empty, blocking caller\n");
         schedule(pipe->blocked_procs_queue);
     }
+
+    curr_num_bytes = pipe->curr_num_bytes;  // for if process wakes up again
 
     /**
      * If pipe->curr_num_bytes <= len, give all to the caller and return.
@@ -778,8 +806,14 @@ int kPipeRead(int pipe_id, void *buffer, int len) {
 int kPipeWrite(int pipe_id, void *buffer, int len) {
 
     /**
-     * Check that the args are legit (including buffer)
+     * Check that the args are legit (pipe_id, buffer, len).
+     *
+     * Buffer (living in R1 land) needs to have read permissions (it's going to be read from).
      */
+    if (!is_valid_array(g_running_pcb->r1_ptable, buffer, len, PROT_READ | PROT_WRITE)) {
+        TP_ERROR("buffer not valid\n");
+        return ERROR;
+    }
 
     char *buffer_str = (char *)buffer;
 
@@ -819,7 +853,8 @@ int kPipeWrite(int pipe_id, void *buffer, int len) {
     int rc;
 
     /**
-     * Call circular_enqueue(byte) num_bytes_to_write times
+     * Write into pipe's buffer from input buffer.
+     * Call circular_enqueue(byte) num_bytes_to_write times.
      */
     for (int i = 0; i < num_bytes_to_write; i++) {
         rc = circular_enqueue(pipe, buffer_str[i]);
@@ -830,5 +865,13 @@ int kPipeWrite(int pipe_id, void *buffer, int len) {
         }
     }
 
+    /**
+     * Wake up all processes that were waiting for bytes on this pipe.
+     *
+     * (done similarly as in clockTrap where blocked queue needed to be iterated, and processes
+     * needed to be removed during iteration if they had paid their dues in waiting).
+     */
+
+    qremove_all(pipe->blocked_procs_queue, put_proc_on_ready_queue, NULL);
     return num_bytes_to_write;
 }
