@@ -351,6 +351,12 @@ int is_waiting_for_term_id(void *elt, const void *key) {
  *
  */
 
+// If more than `TERMINAL_MAX_LEN` bytes are typed into the terminal, we do not support
+// reading every byte. All we support is reading `TERMINAL_MAX_LEN` bytes. For instance,
+// manual testing of typing an excessive amonut of characters and pressing return resulted
+// in reading far fewer characters, which seems on first inspection to be `TERMINAL_MAX_LEN`
+// number of characters.
+
 int TrapTTYReceive(UserContext *user_context) {
     TracePrintf(2, "Entering `TrapTTYReceive()`...\n");
 
@@ -386,8 +392,10 @@ int TrapTTYReceive(UserContext *user_context) {
      * Alert any blocked process waiting on this terminal that it has new input
      */
 
-    pcb_t *pcb = (pcb_t *)qremove(g_term_blocked_transmit_queue, is_waiting_for_term_id, (void *)tty_id);
-    qput(g_ready_procs_queue, (void *)pcb);
+    pcb_t *pcb = (pcb_t *)qremove(g_term_blocked_read_queue, is_waiting_for_term_id, (void *)tty_id);
+    if (pcb != NULL) {
+        qput(g_ready_procs_queue, (void *)pcb);
+    }
 
     free(tty_id);
 

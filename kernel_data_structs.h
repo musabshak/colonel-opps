@@ -18,7 +18,8 @@ extern pte_t *g_reg0_ptable;
 extern queue_t *g_ready_procs_queue;
 extern queue_t *g_delay_blocked_procs_queue;
 extern queue_t *g_term_blocked_transmit_queue;
-extern queue_t *g_term_blocked_access_queue;
+extern queue_t *g_term_blocked_read_queue;
+extern queue_t *g_term_blocked_write_queue;
 extern unsigned int *g_frametable;
 
 extern unsigned int g_len_pagetable;

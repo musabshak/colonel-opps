@@ -62,13 +62,17 @@ void read_reasonable() {
 
     int str_len = bytes_read / sizeof(char);
     char *str = (char *)buf;
-    str[str_len] = '\0';
+    str[str_len - 1] = '\0';
 
     TtyPrintf(1, "%s", str);
 
     TracePrintf(1, "TEST END: read reasonable amount from terminal\n");
 }
 
+/**
+ * Multiple processes try writing lengthy strings to the same terminal-- tests
+ * if we are appropriately blocking and waking up processes.
+ */
 void multiple_procs_write_to_same_terminal() {
     int pid0 = Fork();
     if (pid0 == 0) {
@@ -90,13 +94,36 @@ void multiple_procs_write_to_same_terminal() {
     }
 }
 
+void read_from_term_when_line_is_long() {
+    int pid = Fork();
+    if (pid == 0) {
+        for (int i = 0; i < 5; i++) {
+            Pause();
+        }
+
+        print_more_than_tmaxline();
+        Exit(0);
+    }
+
+    int len_to_read = 500;
+    void *buf = malloc(len_to_read);
+    int bytes_read = TtyRead(0, buf, len_to_read);
+
+    int str_len = bytes_read / sizeof(char);
+    char *str = (char *)buf;
+    str[str_len - 1] = '\0';
+
+    TtyPrintf(1, "%s", str);
+}
+
 int main() {
     TracePrintf(1, "TERMINAL_TESTS RUNNING!\n");
 
     // print_hello_world();
     // print_more_than_tmaxline();
-    // read_reasonable();
-    multiple_procs_write_to_same_terminal();
+    read_reasonable();
+    // multiple_procs_write_to_same_terminal();
+    // read_from_term_when_line_is_long();
 
     while (1) {
         TracePrintf(1, "TERMINAL_TESTS RUNNING!\n");

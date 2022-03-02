@@ -15,7 +15,8 @@
  * that the process with that PID is using the terminal, e.g. if `term_status[0] == 2` then
  * this means PID 2 is using terminal 0.
  */
-int term_status[NUM_TERMINALS] = {0, 0, 0, 0};
+int term_read_status[NUM_TERMINALS] = {0, 0, 0, 0};
+int term_write_status[NUM_TERMINALS] = {0, 0, 0, 0};
 
 // putting this in [kernel_data_structs.h] caused issues
 extern term_buf_t *g_term_bufs[NUM_TERMINALS];
@@ -554,28 +555,74 @@ void kExit(int status) {
      */
 }
 
+enum TermAccessKind { Read, Write };
+
+int term_queue_get(int idx, enum TermAccessKind queue_kind) {
+    if (queue_kind == Read) {
+        return term_read_status[idx];
+    } else if (queue_kind == Write) {
+        return term_write_status[idx];
+    }
+}
+
+void term_queue_set(int idx, enum TermAccessKind queue_kind, int val) {
+    if (queue_kind == Read) {
+        term_read_status[idx] = val;
+    } else if (queue_kind == Write) {
+        term_write_status[idx] = val;
+    }
+}
+
 /**
  * Check if terminal is being used by another process. If so, sleep.
  */
-void gain_access_to_term(int tty_id) {
+void gain_access_to_term(int tty_id, enum TermAccessKind access_kind) {
     // Sleep if the terminal is marked with a different PID than the one of this process,
     // and if it is not not being used
-    while (term_status[tty_id] != g_running_pcb->pid && term_status[tty_id != 0]) {
-        TracePrintf(2, "PID %d tried to write to terminal %d, but it was in use. Sleeping...\n",
-                    g_running_pcb->pid, tty_id);
-        schedule(g_term_blocked_access_queue);
+    while (term_queue_get(tty_id, access_kind) != g_running_pcb->pid &&
+           term_queue_get(tty_id, access_kind) != 0) {
+        g_running_pcb->blocked_term = tty_id;
+
+        if (access_kind == Read) {
+            TracePrintf(2, "PID %d tried to read from terminal %d, but it was in use. Sleeping...\n",
+                        g_running_pcb->pid, tty_id);
+            schedule(g_term_blocked_read_queue);
+        } else if (access_kind == Write) {
+            TracePrintf(2, "PID %d tried to write to terminal %d, but it was in use. Sleeping...\n",
+                        g_running_pcb->pid, tty_id);
+            schedule(g_term_blocked_write_queue);
+        }
     }
     // woke up with access to terminal-- free to continue
-    TracePrintf(2, "PID %d has access to terminal %d.\n", g_running_pcb->pid, tty_id);
-    term_status[tty_id] = g_running_pcb->pid;
+    if (access_kind == Read) {
+        TracePrintf(2, "PID %d has read access to terminal %d.\n", g_running_pcb->pid, tty_id);
+        term_read_status[tty_id] = g_running_pcb->pid;
+    } else if (access_kind == Write) {
+        TracePrintf(2, "PID %d has write access to terminal %d.\n", g_running_pcb->pid, tty_id);
+        term_write_status[tty_id] = g_running_pcb->pid;
+    }
 }
 
 /**
  * Mark terminal as available and wake up next process waiting on it.
  */
-int release_access_to_term(int tty_id) {
-    TracePrintf(2, "PID %d releasing access to terminal %d.\n", g_running_pcb->pid, tty_id);
-    term_status[tty_id] = 0;
+int release_access_to_term(int tty_id, enum TermAccessKind access_kind) {
+
+    /**
+     * Mark terminal in appropriate queue as unused
+     */
+
+    if (access_kind == Read) {
+        TracePrintf(2, "PID %d releasing read access to terminal %d.\n", g_running_pcb->pid, tty_id);
+        term_read_status[tty_id] = 0;
+    } else if (access_kind == Write) {
+        TracePrintf(2, "PID %d releasing write access to terminal %d.\n", g_running_pcb->pid, tty_id);
+        term_write_status[tty_id] = 0;
+    }
+
+    /**
+     * Wake up any processes waiting for this kind of access on this terminal
+     */
 
     int *key = malloc(sizeof(int));
     if (key == NULL) {
@@ -584,10 +631,18 @@ int release_access_to_term(int tty_id) {
     }
     *key = tty_id;
 
-    pcb_t *pcb = qremove(g_term_blocked_access_queue, is_waiting_for_term_id, (void *)key);
-    if (pcb != NULL) {
-        TracePrintf(2, "PID %d woke up from terminal blocked queue.\n", pcb->pid);
-        qput(g_ready_procs_queue, (void *)pcb);
+    if (access_kind == Read) {
+        pcb_t *pcb = qremove(g_term_blocked_read_queue, is_waiting_for_term_id, (void *)key);
+        if (pcb != NULL) {
+            TracePrintf(2, "PID %d woke up from terminal read blocked queue.\n", pcb->pid);
+            qput(g_ready_procs_queue, (void *)pcb);
+        }
+    } else if (access_kind == Write) {
+        pcb_t *pcb = qremove(g_term_blocked_write_queue, is_waiting_for_term_id, (void *)key);
+        if (pcb != NULL) {
+            TracePrintf(2, "PID %d woke up from terminal write blocked queue.\n", pcb->pid);
+            qput(g_ready_procs_queue, (void *)pcb);
+        }
     }
 
     free(key);
@@ -632,7 +687,7 @@ int kTtyRead(int tty_id, void *buf, int len) {
     /**
      * Check if terminal is being used by another process. If so, sleep.
      */
-    gain_access_to_term(tty_id);
+    gain_access_to_term(tty_id, Read);
 
     /**
      * Validate user inputs
@@ -663,7 +718,7 @@ int kTtyRead(int tty_id, void *buf, int len) {
 
     if (k_buf->ptr == NULL) {
         g_running_pcb->blocked_term = tty_id;
-        schedule(g_term_blocked_transmit_queue);
+        schedule(g_term_blocked_read_queue);
     }
 
     /**
@@ -695,7 +750,7 @@ int kTtyRead(int tty_id, void *buf, int len) {
      * Wake up any processes waiting on this terminal.
      */
 
-    if (release_access_to_term(tty_id) == ERROR) {
+    if (release_access_to_term(tty_id, Read) == ERROR) {
         return ERROR;
     }
 
@@ -717,7 +772,7 @@ int kTtyWrite(int tty_id, void *buf, int len) {
      * Check if terminal is being used by another process. If so, sleep.
      */
 
-    gain_access_to_term(tty_id);
+    gain_access_to_term(tty_id, Write);
 
     /**
      * Valid user input
@@ -776,7 +831,7 @@ int kTtyWrite(int tty_id, void *buf, int len) {
      * Wake up next process waiting on this terminal
      */
 
-    release_access_to_term(tty_id);
+    release_access_to_term(tty_id, Write);
 
     TracePrintf(2, "Exiting `kTtyWrite()`...\n");
     return len;

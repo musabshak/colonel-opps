@@ -29,8 +29,10 @@ pcb_t *g_idle_pcb;
 unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
 queue_t *g_ready_procs_queue;
 queue_t *g_delay_blocked_procs_queue;
+
+queue_t *g_term_blocked_read_queue;
+queue_t *g_term_blocked_write_queue;
 queue_t *g_term_blocked_transmit_queue;
-queue_t *g_term_blocked_access_queue;
 
 term_buf_t *g_term_bufs[NUM_TERMINALS];
 
@@ -524,8 +526,9 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     g_ready_procs_queue = qopen();
     g_delay_blocked_procs_queue = qopen();
+    g_term_blocked_read_queue = qopen();
+    g_term_blocked_write_queue = qopen();
     g_term_blocked_transmit_queue = qopen();
-    g_term_blocked_access_queue = qopen();
     // g_wait_blocked_procs_queue = qopen();
 
     /* E=================== SETUP IDLE PROCESS ==================== */
