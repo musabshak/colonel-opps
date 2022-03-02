@@ -34,6 +34,10 @@ hashtable_t *g_pipes_htable;
 int g_max_pipes = 50;  // max number of pipes that can be created in one session of the kernel
 int g_pipe_id = 0;     // next pipe created should have this id
 
+hashtable_t *g_locks_htable;
+int g_max_locks = 50;
+int g_lock_id = 0;
+
 /* E=== GLOBALS === */
 
 // Imitate a userland program for checkpoint 2.
@@ -515,6 +519,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_ready_procs_queue = qopen();
     g_delay_blocked_procs_queue = qopen();
     g_pipes_htable = hopen(30);
+    g_locks_htable = hopen(30);
 
     /* E=================== SETUP IDLE PROCESS ==================== */
 

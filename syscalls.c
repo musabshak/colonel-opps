@@ -101,7 +101,7 @@ bool search_pipe(void *elementp, const void *searchkeyp) {
     pipe_t *pipe = (pipe_t *)elementp;
     const char *search_key_str = searchkeyp;
 
-    char pipe_key[MAX_PIPE_KEYLEN];
+    char pipe_key[MAX_KEYLEN];
     sprintf(pipe_key, "pipe%d\0", pipe->pipe_id);
 
     TracePrintf(2, "Comparing strings: %s =? %s\n", pipe_key, search_key_str);
@@ -111,6 +111,15 @@ bool search_pipe(void *elementp, const void *searchkeyp) {
     } else {
         return false;
     }
+}
+
+/**
+ * Used by happly()
+ */
+
+void print_lock(void *elementp) {
+    lock_t *lock = elementp;
+    TracePrintf(2, "Pipe id: %d\n", lock->lock_id);
 }
 
 /**
@@ -687,6 +696,7 @@ int kPipeInit(int *pipe_idp) {
     pipe_t *new_pipe = malloc(sizeof(*new_pipe));
     if (new_pipe == NULL) {
         TracePrintf(1, "malloc failed in `kPipeInit`()\n");
+        return ERROR;
     }
 
     // Initialize pipe
@@ -706,8 +716,8 @@ int kPipeInit(int *pipe_idp) {
     /**
      * Put newly created pipe in global pipes hashtable
      */
-    char pipe_key[MAX_PIPE_KEYLEN];  // 12 should be more than enough to cover a billion pipes (even though
-                                     // g_max_pipes will probably be less)
+    char pipe_key[MAX_KEYLEN];  // 12 should be more than enough to cover a billion pipes (even though
+                                // g_max_pipes will probably be less)
 
     sprintf(pipe_key, "pipe%d\0", new_pipe->pipe_id);
 
@@ -750,7 +760,7 @@ int kPipeRead(int pipe_id, void *buffer, int len) {
     /**
      * Get pipe from hashtable
      */
-    char pipe_key[MAX_PIPE_KEYLEN];
+    char pipe_key[MAX_KEYLEN];
     sprintf(pipe_key, "pipe%d\0", pipe_id);
 
     pipe_t *pipe = (pipe_t *)hsearch(g_pipes_htable, search_pipe, pipe_key, strlen(pipe_key));
@@ -823,7 +833,7 @@ int kPipeWrite(int pipe_id, void *buffer, int len) {
     /**
      * Get pipe from hashtable
      */
-    char pipe_key[MAX_PIPE_KEYLEN];
+    char pipe_key[MAX_KEYLEN];
     sprintf(pipe_key, "pipe%d\0", pipe_id);
 
     pipe_t *pipe = (pipe_t *)hsearch(g_pipes_htable, search_pipe, pipe_key, strlen(pipe_key));
@@ -878,3 +888,259 @@ int kPipeWrite(int pipe_id, void *buffer, int len) {
     qremove_all(pipe->blocked_procs_queue, put_proc_on_ready_queue, NULL);
     return num_bytes_to_write;
 }
+
+/*
+ *
+ *  From manual (p. 34):
+ *      Create a new lock; save its identifier at *lock idp. In case
+ *      of any error, the value ERROR is returned.
+ *
+ *  Pseudocode
+ *  - Malloc a new lock struct onto the kernel heap
+ *      - Need to malloc, as opposed to just storing lock as local variable in kernel stack because
+ *       need lock to persist in virtual memory even as processes are switched; kernel stack is unique
+ *       per process
+ *  - Add newly created lock to global lock_list_qp (linked list)
+ *      - qadd(lock_list_qp, lock)
+ *  - Initilize lock struct
+ *      - Allocate a unique lock_id for the lock
+ *          - lock_id determined by global lock_id counter (kernel.c)
+ *      - set lock.locked = 0
+ *      - set lock.owner = -1
+ *  - Set *lock_idp = lock.lock_id
+ *  - Return 0 if everything went successfully, ERROR otherwise
+ */
+
+int kLockInit(int *lock_idp) {
+    TracePrintf(2, "Entering `kLockInit`\n");
+    /**
+     * Verify that user-given pointer is valid (user has permissions to write
+     * to what the pointer is pointing to
+     */
+    if (!is_r1_addr(lock_idp) || !is_writeable_addr(g_running_pcb->r1_ptable, (void *)lock_idp)) {
+        TracePrintf(1, "`kLockInit()` passed an invalid pointer -- syscall now returning ERROR\n");
+        return ERROR;
+    }
+
+    /**
+     * Allocate a lock on kernel heap and initialize it.
+     */
+    lock_t *new_lock = malloc(sizeof(*new_lock));
+    if (new_lock == NULL) {
+        TracePrintf(1, "malloc failed in `kLockInit`()\n");
+        return ERROR;
+    }
+
+    /**
+     * Initialize lock.
+     */
+    new_lock->lock_id = assign_lock_id();
+
+    // Check that max lock limit has not been reached
+    if (new_lock->lock_id == ERROR) {
+        free(new_lock);
+        return ERROR;
+    }
+
+    new_lock->locked = false;
+    new_lock->corrupted = false;
+    new_lock->owner_proc = g_running_pcb;
+    new_lock->blocked_procs_queue = qopen();
+
+    /**
+     * Put newly created lock in global locks hashtable
+     */
+    char lock_key[MAX_KEYLEN];  // 12 should be more than enough to cover a billion locks (even though
+                                // g_max_locks will probably be less)
+
+    sprintf(lock_key, "lock%d\0", new_lock->lock_id);
+
+    TracePrintf(2, "lock key: %s; lock key length: %d\n", lock_key, strlen(lock_key));
+
+    int rc = hput(g_locks_htable, (void *)new_lock, lock_key, strlen(lock_key));
+    if (rc != 0) {
+        TracePrintf(1, "error occurred while putting lock into hashtable\n");
+        free(new_lock);
+        return ERROR;
+    }
+
+    TracePrintf(2, "printing locks hash table\n");
+    happly(g_locks_htable, print_lock);
+
+    *lock_idp = new_lock->lock_id;
+
+    return SUCCESS;
+}
+
+/*
+ *  ===============
+ *  === ACQUIRE ===
+ *  ===============
+ *
+ *  From manual (p. 34):
+ *      Acquire the lock identified by lock id. In case of any error,
+ *      the value ERROR is returned.
+ *
+ *  Pseudocode
+ *  - Traverse lock_list_qp to find the lock referenced by lock_id
+ *  - if lock.locked == 0
+ *      - lock.locked = 1
+ *      - lock.owner = running_process.pid;
+ *      - return 0
+ *  - elif lock.locked == 1
+ *      - if lock.owner == running_procces.pid
+ *          - return ERROR (you already have the lock!)
+ *      - else
+ *          - add running_process to blocked_processes queue
+ *              - qadd(lock.blocked_processes, running_process)
+ *          - return 0
+ *
+ */
+
+int kAcquire(int lock_id) {}
+
+/*
+ *  ===============
+ *  === RELEASE ===
+ *  ===============
+ *
+ *  From manual (p. 35):
+ *      Release the lock identified by lock id. The caller must currently
+ *      hold this lock. In case of any error, the value ERROR is returned.
+ *
+ *  Pseudocode
+ *  - Traverse lock_list_qp to find the lock referenced by lock_id
+ *  - if lock.locked == 0 (cannot release an unacquired lock)
+ *      - return ERROR
+ *  - if lock.owner != running_process.pid
+ *      - return ERROR
+ *  - else
+ *      - if qsize(lock.blocked_processes) != 0
+ *          - proc = qget(lock.blocked_processes)
+ *          - MOVE proc to READY_PROCESSES
+ *          - lock.owner = proc.id
+ *          - lock.locked = 1 (lock stays locked)
+ *      - else
+ *          - lock.owner = -1
+ *          - lock.locked = 0
+ */
+
+int kRelease(int lock_id) {}
+
+/*
+ *  ================
+ *  === CVARINIT ===
+ *  ================
+ *
+ *  From manual (p. 35):
+ *      Create a new condition variable; save its identifier at *cvar_idp.
+ *      In case of any error, the value ERROR is returned.
+ *
+ *
+ *  Pseudocode
+ *  - Malloc a new cvar struct onto the kernel heap
+ *  - Add newly created cvar to global cvar_list_qp (linked list)
+ *  - Initilize cvar struct
+ *      - Allocate a unique cvar_id for the lock
+ *          - cvar_id determined by global cvar_id counter (kernel.c)
+ *  - Set *cvar_idp = cvar.cvar_id
+ *  - Return 0 if everything went successfully, ERROR otherwise
+ *
+ */
+int kCvarInit(int *cvar_idp) {}
+
+/*
+ *  ================
+ *  === CVARWAIT ===
+ *  ================
+ *
+ *  From manual (p. 35):
+ *      The kernel-level process releases the lock identified by lock id and
+ *      waits on the condition variable indentified by cvar id. When the
+ *      kernel-level process wakes up (e.g., because the condition variable was
+ *      signaled), it re-acquires the lock. (Use Mesa-style semantics.)
+ *      When the lock is finally acquired, the call returns to userland. In case
+ *      of any error, the value ERROR is returned.
+ *
+ *  Pseudocode
+ *  - Traverse cvar_list_qp to find cvar associated with cvar_id
+ *  - Set the following
+ *      - cvar.lock_id = lock_id
+ *      - cvar.pid = running_process.pid
+ *  - Call kRelease(lock_id)
+ *  - Add running_process to cvar.blocked_processes queue
+ *  - ** at this time, cvar_wait method is blocked because the calling process was just
+ *      put into the blocked queue **
+ *  - ** signal wakes up process **
+ *  - Call kAcquire(lock_id)
+ *  - return 0
+ *
+ *
+ *
+ */
+int kCvarWait(int cvar_id, int lock_id) {}
+
+/*
+ *  ==================
+ *  === CVARSIGNAL ===
+ *  ==================
+ *
+ *  From manual (p. 35):
+ *      Signal the condition variable identified by cvar id. (Use Mesa-style
+ *      semantics.) In case of any error, the value ERROR is returned.
+ *
+ *  Pseudocode
+ *  - Traverse cvar_list_qp to find cvar associated with cvar_id
+ *  - Find and remove one blocked process associated with the cvar
+ *      - proc = qget(cvar.blocked_process)
+ *  - Add proc to the ready_processes queue
+ *  - return 0
+ */
+int kCvarSignal(int cvar_id) {}
+
+/*
+ *  =====================
+ *  === CVARBROADCAST ===
+ *  =====================
+ *
+ *  From manual (p. 35):
+ *      Broadcast the condition variable identified by cvar id. (Use Mesa-style
+ *      semantics.) In case of any error, the value ERROR is returned.
+ *
+ *  Pseudocode
+ *  - Traverse cvar_list_qp to find cvar associated with cvar_id
+ *  - Go through cvar.blocked_processes and pop all PCBs from this list
+ *  - Add each popped list to the ready_processes queue
+ *  - return 0
+ *
+ */
+int kCvarBroadcast(int cvar_id) {}
+
+/*
+ *  ===============
+ *  === RECLAIM ===
+ *  ===============
+ *
+ *  From manual (p. 35):
+ *      Destroy the lock, condition variable, or pipe indentified by id,
+ *      and release any associated resources.
+ *      In case of any error, the value ERROR is returned.
+ *      If you feel additional specification is necessary to handle unusual
+ *      scenarios, then create and document it.
+ *
+ *  Thoughts
+ *  - Not sure how to determine whether its a lock/cvar/pipe being reclaimed, based on id alone
+ *  since we're maintaing separate counters for
+ *      - Suggestions: increment lock_id in multiples of 3, cvar_id in multiples of 5, pipe_id in multiples of
+ * 7
+ *
+ *  Pseudocode
+ *  - Determine whether to look in the lock_list_qp or cvar_list_qp or pipe_list_qp
+ *      - if id % 3 == 0: look in lock_qp
+ *      - elif id % 5 == 0: look in cvar_list_qp
+ *      - elif id % 7 == 0: look in pipe_list_qp
+ *  - If lock
+ *      - Go through lock.blocked_processes, remove each process from queue, and kill process?
+ *
+ */
+int kReclaim(int id) {}

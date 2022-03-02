@@ -390,6 +390,32 @@ int assign_pipe_id() {
 int retire_pipe_id(int pipe_id) { return 0; }
 
 /**
+ * Returns a new lock id. Returns ERROR if the maximum number of locks per kernel
+ * session has been exhausted.
+ *
+ * Currently implemented naively (via a global counter). Overflow of pipe_ids
+ * protected by g_max_locks.
+ */
+int assign_lock_id() {
+    if (g_lock_id == g_max_locks) {
+        TracePrintf(1,
+                    "The maximum number of allowed locks has already been created. Please delete some locks "
+                    "in order to create more!\n");
+        return ERROR;
+    }
+
+    g_lock_id += 1;
+    return g_lock_id - 1;
+}
+
+/**
+ * Retires a given lock id.
+ *
+ * Currently implemented naively.
+ */
+int retire_lock_id(int lock_id) { return 0; }
+
+/**
  * Helper function called by SetKernelBrk(void *addr) in the case that addr > g_kernel_brk,
  * also analagously by `Brk()`.
  *
