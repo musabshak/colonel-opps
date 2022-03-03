@@ -1042,7 +1042,7 @@ int kAcquire(int lock_id) {
     /**
      * If lock is already locked, check that the acquiring process is not the lock
      * owner. If it is, return ERROR. If not, add the process to the blocked queue
-     * associated with the lock.
+     * associated with the lock, and call the scheduler.
      */
     if (lock->owner_proc == g_running_pcb) {
         TP_ERROR("Process %d already owns lock %d!\n", g_running_pcb->pid, lock->lock_id);
@@ -1050,6 +1050,7 @@ int kAcquire(int lock_id) {
     }
 
     qput(lock->blocked_procs_queue, g_running_pcb);
+    schedule(NULL);
 
     return 0;
 }

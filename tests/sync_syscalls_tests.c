@@ -86,6 +86,59 @@ void test_lock_init3() {
     }
 }
 
+/**
+ * (4)
+ *
+ * Test basic acquire/release functionality with two processes.
+ */
+void test_locks1() {
+    int rc, pid, lock_id;
+
+    /**
+     * Create a lock
+     */
+    TracePrintf(1, "Initializing lock ... \n");
+    rc = LockInit(&lock_id);
+
+    /**
+     * Fork a child and make sure it acquires lock by delaying parent for a bit.
+     */
+
+    pid = Fork();
+    if (pid == 0) {
+        TracePrintf(1, "Process %d acquiring lock %d\n", GetPid(), lock_id);
+        rc = Acquire(lock_id);
+        TracePrintf(1, "Process %d successfully acquired lock %d\n", GetPid(), lock_id);
+
+        TracePrintf(1, "Process %d will now count to ten!\n", GetPid());
+        for (int i = 1; i <= 10; i++) {
+            TracePrintf(1, "Process %d: %d\n", GetPid(), i);
+            Pause();
+        }
+        TracePrintf(1, "Process %d releasing lock %d\n", GetPid(), lock_id);
+        rc = Release(lock_id);
+
+        Exit(0);
+    }
+
+    Delay(1);  // make sure child gets the lock
+
+    TracePrintf(1, "Process %d acquiring lock %d\n", GetPid(), lock_id);
+    rc = Acquire(lock_id);
+    TracePrintf(1, "Process %d successfully acquired lock %d\n", GetPid(), lock_id);
+
+    TracePrintf(1, "Process %d will now count to ten!\n", GetPid());
+    for (int i = 1; i <= 10; i++) {
+        TracePrintf(1, "Process %d: %d\n", GetPid(), i);
+        Pause();
+    }
+
+    TracePrintf(1, "Process %d releasing lock %d\n", GetPid(), lock_id);
+    rc = Release(lock_id);
+
+    Exit(0);
+}
+
 int main(int argc, char **argv) {
 
     if (argc < 2) {
@@ -105,8 +158,10 @@ int main(int argc, char **argv) {
         case 3:
             test_lock_init3();
             break;
+        case 4:
+            test_locks1();
+            break;
         default:
-
             while (1) {
                 TracePrintf(1, "%s RUNNING!\n", argv[0]);
                 Pause();
