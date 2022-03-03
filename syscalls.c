@@ -964,7 +964,7 @@ int kLockInit(int *lock_idp) {
 
     new_lock->locked = false;
     new_lock->corrupted = false;
-    new_lock->owner_proc = g_running_pcb;
+    new_lock->owner_proc = NULL;
     new_lock->blocked_procs_queue = qopen();
 
     /**
@@ -993,10 +993,6 @@ int kLockInit(int *lock_idp) {
 }
 
 /*
- *  ===============
- *  === ACQUIRE ===
- *  ===============
- *
  *  From manual (p. 34):
  *      Acquire the lock identified by lock id. In case of any error,
  *      the value ERROR is returned.
@@ -1059,10 +1055,6 @@ int kAcquire(int lock_id) {
 }
 
 /*
- *  ===============
- *  === RELEASE ===
- *  ===============
- *
  *  From manual (p. 35):
  *      Release the lock identified by lock id. The caller must currently
  *      hold this lock. In case of any error, the value ERROR is returned.
@@ -1084,7 +1076,53 @@ int kAcquire(int lock_id) {
  *          - lock.locked = 0
  */
 
-int kRelease(int lock_id) {}
+int kRelease(int lock_id) {
+    /**
+     * TODO: validate arg
+     */
+
+    /**
+     * Get lock from hashtable
+     */
+    char lock_key[MAX_KEYLEN];
+    sprintf(lock_key, "lock%d\0", lock_id);
+
+    lock_t *lock = (lock_t *)hsearch(g_locks_htable, search_lock, lock_key, strlen(lock_key));
+    if (lock == NULL) {
+        TP_ERROR("Failed retrieving lock %d from locks hashtable\n", lock_id);
+        return ERROR;
+    }
+
+    /**
+     * Check that we're not trying to release an unacquired lock.
+     */
+
+    if (!lock->locked) {
+        TP_ERROR("Cannot release an un-locked lock!\n");
+        return ERROR;
+    }
+
+    /**
+     * If there is a process waiting to get this lock (blocked process queue
+     * associated with the lock is not empty), move that process out of the blocked
+     * queue into the ready queue, and transfer lock ownership here directly.
+     *
+     * If not, unnlock the lock and set attributes accordingly.
+     */
+
+    if (qlen(lock->blocked_procs_queue) > 0) {
+        pcb_t *proc = qget(lock->blocked_procs_queue);
+        qput(g_ready_procs_queue, proc);
+        lock->owner_proc = proc;
+        lock->locked = true;  // stays locked
+        return 0;
+    }
+
+    lock->locked = false;
+    lock->owner_proc = NULL;
+
+    return 0;
+}
 
 /*
  *  ================
