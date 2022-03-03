@@ -38,6 +38,10 @@ hashtable_t *g_locks_htable;
 int g_max_locks = 50;
 int g_lock_id = 0;
 
+hashtable_t *g_cvars_htable;
+int g_max_cvars = 50;
+int g_cvar_id = 0;
+
 /* E=== GLOBALS === */
 
 // Imitate a userland program for checkpoint 2.
@@ -520,6 +524,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     g_delay_blocked_procs_queue = qopen();
     g_pipes_htable = hopen(30);
     g_locks_htable = hopen(30);
+    g_cvars_htable = hopen(30);
 
     /* E=================== SETUP IDLE PROCESS ==================== */
 

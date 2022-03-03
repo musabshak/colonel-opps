@@ -33,6 +33,10 @@ extern hashtable_t *g_locks_htable;
 extern int g_max_locks;
 extern int g_lock_id;
 
+hashtable_t *g_cvars_htable;
+int g_max_cvars;
+int g_cvar_id;
+
 // E========= EXTERN DECLARATIONS ========== //
 
 typedef struct ProcessControlBlock {
@@ -93,8 +97,6 @@ typedef struct Lock {
 
 typedef struct Cvar {
     unsigned int cvar_id;
-    unsigned int lock_id;
-    unsigned int pid;
     queue_t *blocked_procs_queue;
 } cvar_t;
 
@@ -121,6 +123,9 @@ int retire_pipe_id(int pipe_id);
 
 int assign_lock_id();
 int retire_lock_id(int lock_id);
+
+int assign_cvar_id();
+int retire_cvar_id(int cvar_id);
 
 // int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable);
 // int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable);

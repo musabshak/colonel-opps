@@ -416,6 +416,32 @@ int assign_lock_id() {
 int retire_lock_id(int lock_id) { return 0; }
 
 /**
+ * Returns a new cvar id. Returns ERROR if the maximum number of cvars per kernel
+ * session has been exhausted.
+ *
+ * Currently implemented naively (via a global counter). Overflow of pipe_ids
+ * protected by g_max_cvars.
+ */
+int assign_cvar_id() {
+    if (g_cvar_id == g_max_cvars) {
+        TracePrintf(1,
+                    "The maximum number of allowed cvars has already been created. Please delete some cvars "
+                    "in order to create more!\n");
+        return ERROR;
+    }
+
+    g_cvar_id += 1;
+    return g_cvar_id - 1;
+}
+
+/**
+ * Retires a given cvar id.
+ *
+ * Currently implemented naively.
+ */
+int retire_cvar_id(int cvar_id) { return 0; }
+
+/**
  * Helper function called by SetKernelBrk(void *addr) in the case that addr > g_kernel_brk,
  * also analagously by `Brk()`.
  *

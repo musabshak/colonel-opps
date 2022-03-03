@@ -146,6 +146,15 @@ void print_lock(void *elementp) {
  * Used by happly()
  */
 
+void print_cvar(void *elementp) {
+    cvar_t *cvar = elementp;
+    TracePrintf(2, "Cvar id: %d\n", cvar->cvar_id);
+}
+
+/**
+ * Used by happly()
+ */
+
 void print_pipe(void *elementp) {
     pipe_t *pipe = elementp;
     TracePrintf(2, "Pipe id: %d\n", pipe->pipe_id);
@@ -559,7 +568,7 @@ int kWait(int *status_ptr) {
     bool is_valid_ptr = true;
     /**
      * Verify that user-given pointer is valid (user has permissions to write
-     * to what the pointer is pointing to
+     * to what the pointer is pointing to)
      */
     if (!is_r1_addr(status_ptr) || !is_writeable_addr(g_running_pcb->r1_ptable, (void *)status_ptr)) {
         TracePrintf(
@@ -703,7 +712,7 @@ int kPipeInit(int *pipe_idp) {
 
     /**
      * Verify that user-given pointer is valid (user has permissions to write
-     * to what the pointer is pointing to
+     * to what the pointer is pointing to)
      */
     if (!is_r1_addr(pipe_idp) || !is_writeable_addr(g_running_pcb->r1_ptable, (void *)pipe_idp)) {
         TracePrintf(1, "`kPipeInit()` passed an invalid pointer -- syscall now returning ERROR\n");
@@ -935,7 +944,7 @@ int kLockInit(int *lock_idp) {
     TracePrintf(2, "Entering `kLockInit`\n");
     /**
      * Verify that user-given pointer is valid (user has permissions to write
-     * to what the pointer is pointing to
+     * to what the pointer is pointing to)
      */
     if (!is_r1_addr(lock_idp) || !is_writeable_addr(g_running_pcb->r1_ptable, (void *)lock_idp)) {
         TracePrintf(1, "`kLockInit()` passed an invalid pointer -- syscall now returning ERROR\n");
@@ -1145,7 +1154,63 @@ int kRelease(int lock_id) {
  *  - Return 0 if everything went successfully, ERROR otherwise
  *
  */
-int kCvarInit(int *cvar_idp) {}
+int kCvarInit(int *cvar_idp) {
+    TracePrintf(2, "Entering `kCvarInit`\n");
+    /**
+     * Verify that user-given pointer is valid (user has permissions to write
+     * to what the pointer is pointing to).
+     */
+    if (!is_r1_addr(cvar_idp) || !is_writeable_addr(g_running_pcb->r1_ptable, (void *)cvar_idp)) {
+        TracePrintf(1, "`kCvarInit()` passed an invalid pointer -- syscall now returning ERROR\n");
+        return ERROR;
+    }
+
+    /**
+     * Allocate a cvar on kernel heap and initialize it.
+     */
+    cvar_t *new_cvar = malloc(sizeof(*new_cvar));
+    if (new_cvar == NULL) {
+        TracePrintf(1, "malloc failed in `kCvarInit`()\n");
+        return ERROR;
+    }
+
+    /**
+     * Initialize cvar.
+     */
+    new_cvar->cvar_id = assign_cvar_id();
+
+    // Check that max cvar limit has not been reached
+    if (new_cvar->cvar_id == ERROR) {
+        free(new_cvar);
+        return ERROR;
+    }
+
+    new_cvar->blocked_procs_queue = qopen();
+
+    /**
+     * Put newly created cvar in global cvars hashtable
+     */
+    char cvar_key[MAX_KEYLEN];  // 12 should be more than enough to cover a billion cvars (even though
+                                // g_max_cvars will probably be less)
+
+    sprintf(cvar_key, "cvar%d\0", new_cvar->cvar_id);
+
+    TracePrintf(2, "cvar key: %s; cvar key length: %d\n", cvar_key, strlen(cvar_key));
+
+    int rc = hput(g_cvars_htable, (void *)new_cvar, cvar_key, strlen(cvar_key));
+    if (rc != 0) {
+        TracePrintf(1, "error occurred while putting cvar into hashtable\n");
+        free(new_cvar);
+        return ERROR;
+    }
+
+    TracePrintf(2, "printing cvars hash table\n");
+    happly(g_cvars_htable, print_cvar);
+
+    *cvar_idp = new_cvar->cvar_id;
+
+    return SUCCESS;
+}
 
 /*
  *  ================

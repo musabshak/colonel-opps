@@ -180,6 +180,29 @@ void test_locks2() {
     }
 }
 
+/**
+ * (6)
+ *
+ * Test initialziing a cvar
+ */
+
+void test_cvar_init() {
+    TracePrintf(1, "Initializing a new cvar\n");
+    int rc, cvar_id;
+
+    rc = CvarInit(&cvar_id);
+    if (rc != 0) {
+        TracePrintf(1, "Error in `CvarInit` syscall\n");
+    } else {
+        TracePrintf(1, "Cvar %d initialized successfully!\n", cvar_id);
+    }
+
+    while (1) {
+        TracePrintf(1, "CVAR TEST RUNNING\n");
+        Pause();
+    }
+}
+
 int main(int argc, char **argv) {
 
     if (argc < 2) {
@@ -204,6 +227,9 @@ int main(int argc, char **argv) {
             break;
         case 5:
             test_locks2();
+            break;
+        case 6:
+            test_cvar_init();
             break;
         default:
             while (1) {

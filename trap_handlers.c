@@ -87,7 +87,9 @@ int TrapKernelHandler(UserContext *user_context) {
         void *buf;        // for kPipeRead/Write()
         int len;          // for kPipeRead/Write()
         int *lock_idp;    // for kLockInit()
-        int lock_id;      // for
+        int lock_id;      // for kAcquire/kRelease()
+        int *cvar_idp;    // for kCvarInit()
+        int cvar_id;      // for cvar syscalls
 
         // `kExec()` args
         char *filename;
@@ -167,12 +169,25 @@ int TrapKernelHandler(UserContext *user_context) {
             user_context->regs[0] = rc;
             break;
         case YALNIX_CVAR_INIT:
+            cvar_idp = (int *)user_context->regs[0];
+            rc = kCvarInit(cvar_idp);
+            user_context->regs[0] = rc;
             break;
         case YALNIX_CVAR_SIGNAL:
+            cvar_id = user_context->regs[0];
+            rc = kCvarSignal(cvar_id);
+            user_context->regs[0] = rc;
             break;
         case YALNIX_CVAR_BROADCAST:
+            cvar_id = user_context->regs[0];
+            rc = kCvarBroadcast(cvar_id);
+            user_context->regs[0] = rc;
             break;
         case YALNIX_CVAR_WAIT:
+            cvar_id = user_context->regs[0];
+            lock_id = user_context->regs[1];
+            rc = kCvarWait(cvar_id, lock_id);
+            user_context->regs[0] = rc;
             break;
     }
     TracePrintf(2, "Exiting TrapKernelHandler\n");
