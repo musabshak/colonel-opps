@@ -8,7 +8,7 @@
 #include "queue.h"
 #include "ykernel.h"
 
-#define MAX_PIPE_KEYLEN 12
+#define MAX_KEYLEN 12
 
 typedef struct ProcessControlBlock pcb_t;
 typedef struct TermBuf term_buf_t;
@@ -30,9 +30,17 @@ extern unsigned int g_len_frametable;
 extern unsigned int g_num_kernel_stack_pages;
 
 // extern term_buf_t g_term_bufs[NUM_TERMINALS];
+extern hashtable_t *g_pipes_htable;
 extern int g_max_pipes;
 extern int g_pipe_id;
-extern hashtable_t *g_pipes_htable;
+
+extern hashtable_t *g_locks_htable;
+extern int g_max_locks;
+extern int g_lock_id;
+
+hashtable_t *g_cvars_htable;
+int g_max_cvars;
+int g_cvar_id;
 
 // E========= EXTERN DECLARATIONS ========== //
 
@@ -42,10 +50,10 @@ typedef struct ProcessControlBlock {
     // --- userland
     UserContext uctxt;
     void *user_brk;
-    unsigned int user_text_pg0;
-    unsigned int user_data_pg0;
-    void *user_data_end;
-    void *user_stack_base;
+    unsigned int user_text_pg0;  // populated in LoadProgram
+    unsigned int user_data_pg0;  // populated in LoadProgram
+    void *user_data_end;         // populated in LoadProgram
+    void *user_stack_base;       // populated in LoadProgram; updated by memoryTrapHandler()
 
     // --- kernelland
     KernelContext kctxt;
@@ -95,6 +103,21 @@ typedef struct Pipe {
     queue_t *blocked_procs_queue;  // blocked processes associated with a particular pipe
 } pipe_t;
 
+typedef struct Lock {
+    unsigned int lock_id;
+    bool locked;
+    bool corrupted;  // indicates whether lock is corrupted (if process holding lock
+                     // exited w/o releasing)
+    pcb_t *owner_proc;
+
+    queue_t *blocked_procs_queue;  // Queue of blocked processes associated with this lock
+} lock_t;
+
+typedef struct Cvar {
+    unsigned int cvar_id;
+    queue_t *blocked_procs_queue;
+} cvar_t;
+
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used);
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p);
 int find_free_frame(unsigned int *frametable);
@@ -115,6 +138,12 @@ int schedule(queue_t *old_process_destination_queue);
 
 int assign_pipe_id();
 int retire_pipe_id(int pipe_id);
+
+int assign_lock_id();
+int retire_lock_id(int lock_id);
+
+int assign_cvar_id();
+int retire_cvar_id(int cvar_id);
 
 // int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable);
 // int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable);

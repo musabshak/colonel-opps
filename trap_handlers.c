@@ -91,6 +91,10 @@ int TrapKernelHandler(UserContext *user_context) {
         int pipe_id;    // for kPipeRead/Write()
         void *buf;      // for kPipeRead/Write()
         int len;        // for kPipeRead/Write()
+        int *lock_idp;  // for kLockInit()
+        int lock_id;    // for kAcquire/kRelease()
+        int *cvar_idp;  // for kCvarInit()
+        int cvar_id;    // for cvar syscalls
 
         // `kExec()` args
         char *filename;
@@ -164,6 +168,42 @@ int TrapKernelHandler(UserContext *user_context) {
             buf = (void *)user_context->regs[1];
             len = user_context->regs[2];
             rc = kPipeWrite(pipe_id, buf, len);
+            user_context->regs[0] = rc;
+            break;
+        case YALNIX_LOCK_INIT:
+            lock_idp = (int *)user_context->regs[0];
+            rc = kLockInit(lock_idp);
+            user_context->regs[0] = rc;
+            break;
+        case YALNIX_LOCK_ACQUIRE:
+            lock_id = user_context->regs[0];
+            rc = kAcquire(lock_id);
+            user_context->regs[0] = rc;
+            break;
+        case YALNIX_LOCK_RELEASE:
+            lock_id = user_context->regs[0];
+            rc = kRelease(lock_id);
+            user_context->regs[0] = rc;
+            break;
+        case YALNIX_CVAR_INIT:
+            cvar_idp = (int *)user_context->regs[0];
+            rc = kCvarInit(cvar_idp);
+            user_context->regs[0] = rc;
+            break;
+        case YALNIX_CVAR_SIGNAL:
+            cvar_id = user_context->regs[0];
+            rc = kCvarSignal(cvar_id);
+            user_context->regs[0] = rc;
+            break;
+        case YALNIX_CVAR_BROADCAST:
+            cvar_id = user_context->regs[0];
+            rc = kCvarBroadcast(cvar_id);
+            user_context->regs[0] = rc;
+            break;
+        case YALNIX_CVAR_WAIT:
+            cvar_id = user_context->regs[0];
+            lock_id = user_context->regs[1];
+            rc = kCvarWait(cvar_id, lock_id);
             user_context->regs[0] = rc;
             break;
     }
