@@ -446,6 +446,19 @@ void test_implicitly_grow_ustack_toomuch() {
     }
 }
 
+void test_terminal() {
+    int pid = Fork();
+    if (pid == 0) {
+        char *args[] = {"tests/terminal_tests", NULL};
+        Exec("tests/terminal_tests", args);
+    } else {
+        while (1) {
+            TracePrintf(1, "CP5_TESTS RUNNING!\n");
+            Pause();
+        }
+    }
+}
+
 int main(int argc, char **argv) {
 
     int test_case = atoi(argv[1]);
@@ -495,6 +508,9 @@ int main(int argc, char **argv) {
             break;
         case 16:
             test_exit_2();
+        case 18:
+            test_terminal();
+            break;
         default:
             while (1) {
                 TracePrintf(2, "CP4 TEST RUNNING!\n");

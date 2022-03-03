@@ -5,6 +5,9 @@
 #include "syscalls.h"
 #include "ykernel.h"
 
+// didn't work when this was in [kernel_data_structs.h]
+extern term_buf_t *g_term_bufs[NUM_TERMINALS];
+
 /**
  * Used as "search" fxn in qremove_all (in clock trap handler).
  *
@@ -82,10 +85,12 @@ int TrapKernelHandler(UserContext *user_context) {
         int child_pid;    // for kWait()
         int *status_ptr;  // for kWait()
         int exit_code;    // for kExit()
-        int *pipe_idp;    // for kPipeInit()
-        int pipe_id;      // for kPipeRead/Write()
-        void *buf;        // for kPipeRead/Write()
-        int len;          // for kPipeRead/Write()
+        int tty_id;       // for kTtyRead() / kTtyWrite()
+        int bytes_read;
+        int *pipe_idp;  // for kPipeInit()
+        int pipe_id;    // for kPipeRead/Write()
+        void *buf;      // for kPipeRead/Write()
+        int len;        // for kPipeRead/Write()
 
         // `kExec()` args
         char *filename;
@@ -129,6 +134,18 @@ int TrapKernelHandler(UserContext *user_context) {
             exit_code = user_context->regs[0];
             kExit(exit_code);
             break;
+        case YALNIX_TTY_READ:
+            tty_id = (int)user_context->regs[0];
+            buf = (void *)user_context->regs[1];
+            len = (int)user_context->regs[2];
+            bytes_read = kTtyRead(tty_id, buf, len);
+            user_context->regs[0] = bytes_read;
+            break;
+        case YALNIX_TTY_WRITE:
+            tty_id = (int)user_context->regs[0];
+            buf = (void *)user_context->regs[1];
+            len = (int)user_context->regs[2];
+            kTtyWrite(tty_id, buf, len);
         case YALNIX_PIPE_INIT:
             pipe_idp = (int *)user_context->regs[0];
             rc = kPipeInit(pipe_idp);
@@ -340,6 +357,15 @@ int TrapMemory(UserContext *user_context) {
 
 int TrapMath(UserContext *user_context) { ; }
 
+/**
+ * Helper for terminal trap handlers to wake up waiting procs
+ */
+bool is_waiting_for_term_id(void *elt, const void *key) {
+    pcb_t *pcb = (pcb_t *)elt;
+    int tty_id = *((int *)key);
+    return (pcb->blocked_term == tty_id);
+}
+
 /*
  *  ======================
  *  === TRAPTTYRECEIVE ===
@@ -355,7 +381,57 @@ int TrapMath(UserContext *user_context) { ; }
  *
  */
 
-int TrapTTYReceive(UserContext *user_context) { ; }
+// If more than `TERMINAL_MAX_LEN` bytes are typed into the terminal, we do not support
+// reading every byte. All we support is reading `TERMINAL_MAX_LEN` bytes. For instance,
+// manual testing of typing an excessive amonut of characters and pressing return resulted
+// in reading far fewer characters, which seems on first inspection to be `TERMINAL_MAX_LEN`
+// number of characters.
+
+int TrapTTYReceive(UserContext *user_context) {
+    TracePrintf(2, "Entering `TrapTTYReceive()`...\n");
+
+    int *tty_id = malloc(sizeof(int));
+    if (tty_id == NULL) {
+        TP_ERROR("`malloc()` failed.\n");
+        return ERROR;
+    }
+    *tty_id = user_context->code;
+    term_buf_t *k_buf = g_term_bufs[*tty_id];
+
+    /**
+     * Copy terminal data into kernel buffer. This will overwrite the contents of that
+     * kernel buffer (e.g. from a previous trap). TODO: is this the right behavior?
+     */
+
+    // allocate kernel buffer, if necessary
+    if (k_buf->ptr == NULL) {
+        k_buf->ptr = malloc(TERMINAL_MAX_LINE);
+        if (k_buf->ptr == NULL) {
+            TP_ERROR("`malloc()` for kernel buffer failed.\n");
+            free(tty_id);
+            return ERROR;
+        }
+        k_buf->curr_pos_offset, k_buf->end_pos_offset = 0;  // not really necessary, I think
+    }
+
+    // receive from terminal. This will overwrite whatever is in the kernel buf
+    int bytes_received = TtyReceive(*tty_id, k_buf->ptr, TERMINAL_MAX_LINE);
+    k_buf->end_pos_offset = bytes_received;
+
+    /**
+     * Alert any blocked process waiting on this terminal that it has new input
+     */
+
+    pcb_t *pcb = (pcb_t *)qremove(g_term_blocked_read_queue, is_waiting_for_term_id, (void *)tty_id);
+    if (pcb != NULL) {
+        qput(g_ready_procs_queue, (void *)pcb);
+    }
+
+    free(tty_id);
+
+    TracePrintf(2, "Exiting `TrapTTYReceive()`...\n");
+    return SUCCESS;
+}
 
 /*
  *  =======================
@@ -373,7 +449,31 @@ int TrapTTYReceive(UserContext *user_context) { ; }
  *
  */
 
-int TrapTTYTransmit(UserContext *user_context) { ; }
+int TrapTTYTransmit(UserContext *user_context) {
+    // Place the process that was blocking for this terminal back on the ready queue
+    // so that when it starts running, it will pick up where it left off (e.g. in
+    // 'TtyWrite()`).
+    int *tty_id = malloc(sizeof(int));
+    if (tty_id == NULL) {
+        TP_ERROR("`malloc()` failed.\n");
+        return ERROR;
+    }
+    *tty_id = user_context->code;
+
+    pcb_t *pcb = (pcb_t *)(qremove(g_term_blocked_transmit_queue, is_waiting_for_term_id, tty_id));
+    if (pcb == NULL) {
+        TP_ERROR("Couldn't find process the terminal was waiting on.\n");
+        free(tty_id);
+        return ERROR;
+    } else {
+        free(tty_id);
+    }
+
+    qput(g_ready_procs_queue, pcb);
+
+    // Scheduling doesn't need to happen in this trap-- just return
+    return SUCCESS;
+}
 
 /*
  *  ================

@@ -30,6 +30,11 @@ unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
 queue_t *g_ready_procs_queue;
 queue_t *g_delay_blocked_procs_queue;
 
+queue_t *g_term_blocked_read_queue;
+queue_t *g_term_blocked_write_queue;
+queue_t *g_term_blocked_transmit_queue;
+
+term_buf_t *g_term_bufs[NUM_TERMINALS];
 hashtable_t *g_pipes_htable;
 int g_max_pipes = 50;  // max number of pipes that can be created in one session of the kernel
 int g_pipe_id = 0;     // next pipe created should have this id
@@ -357,12 +362,22 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
      *      - children_procs
      *      - exit_status
      *      - is_wait_blocked
+     *      - term_bufs
      */
 
     init_pcb->zombie_procs = qopen();
     init_pcb->children_procs = qopen();
     init_pcb->exit_status = -1;
     init_pcb->is_wait_blocked = 0;
+    // for (int i = 0; i < NUM_TERMINALS; i++) {
+    //     init_pcb->term_bufs[i] = NULL;
+    // }
+    for (int i = 0; i < NUM_TERMINALS; i++) {
+        g_term_bufs[i] = malloc(sizeof(term_buf_t));
+        g_term_bufs[i]->ptr = NULL;
+        g_term_bufs[i]->curr_pos_offset = 0;
+        g_term_bufs[i]->end_pos_offset = 0;
+    }
 
     init_pcb->pid = helper_new_pid(init_r1_ptable);
     init_pcb->r1_ptable = init_r1_ptable;
@@ -421,8 +436,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     interrupt_vector_table_p[TRAP_ILLEGAL] = TrapIllegal;
     interrupt_vector_table_p[TRAP_MEMORY] = TrapMemory;
     interrupt_vector_table_p[TRAP_MATH] = GenericHandler;
-    interrupt_vector_table_p[TRAP_TTY_RECEIVE] = GenericHandler;
-    interrupt_vector_table_p[TRAP_TTY_TRANSMIT] = GenericHandler;
+    interrupt_vector_table_p[TRAP_TTY_RECEIVE] = TrapTTYReceive;
+    interrupt_vector_table_p[TRAP_TTY_TRANSMIT] = TrapTTYTransmit;
     interrupt_vector_table_p[TRAP_DISK] = GenericHandler;  // TRAP_DISK == 7
 
     // Many IVT entries are assigned a generic handler
@@ -514,6 +529,10 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     g_ready_procs_queue = qopen();
     g_delay_blocked_procs_queue = qopen();
+    g_term_blocked_read_queue = qopen();
+    g_term_blocked_write_queue = qopen();
+    g_term_blocked_transmit_queue = qopen();
+    // g_wait_blocked_procs_queue = qopen();
     g_pipes_htable = hopen(30);
 
     /* E=================== SETUP IDLE PROCESS ==================== */

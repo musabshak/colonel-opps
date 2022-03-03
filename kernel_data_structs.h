@@ -11,6 +11,7 @@
 #define MAX_PIPE_KEYLEN 12
 
 typedef struct ProcessControlBlock pcb_t;
+typedef struct TermBuf term_buf_t;
 
 // S========= EXTERN DECLARATIONS ========== //
 extern pcb_t *g_running_pcb;
@@ -19,12 +20,16 @@ extern pte_t *g_reg0_ptable;
 
 extern queue_t *g_ready_procs_queue;
 extern queue_t *g_delay_blocked_procs_queue;
+extern queue_t *g_term_blocked_transmit_queue;
+extern queue_t *g_term_blocked_read_queue;
+extern queue_t *g_term_blocked_write_queue;
 extern unsigned int *g_frametable;
 
 extern unsigned int g_len_pagetable;
 extern unsigned int g_len_frametable;
 extern unsigned int g_num_kernel_stack_pages;
 
+// extern term_buf_t g_term_bufs[NUM_TERMINALS];
 extern int g_max_pipes;
 extern int g_pipe_id;
 extern hashtable_t *g_pipes_htable;
@@ -61,12 +66,25 @@ typedef struct ProcessControlBlock {
     // --- for kDelay
     int elapsed_clock_ticks;
     int delay_clock_ticks;
+
+    // --- for IO
+    void *term_bufs[NUM_TERMINALS];
+    int blocked_term;  // TODO: do we want a seperate field for waiting for term write/read?
 } pcb_t;
 
 typedef struct ZombiePCB {
     int pid;
     int exit_status;
 } zombie_pcb_t;
+
+typedef struct TermBuf {
+    void *ptr;
+    // `ptr + curr_pos_offset` points to the first byte in the buffer that
+    // has NOT been read/copied
+    int curr_pos_offset;
+    // `ptr + end_pos_offset - 1` points to the last readable byte in the buffer
+    int end_pos_offset;
+} term_buf_t;
 
 typedef struct Pipe {
     int pipe_id;
