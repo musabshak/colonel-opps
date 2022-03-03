@@ -51,6 +51,26 @@ void test_scheduler() {
 }
 
 /**
+ * (17)
+ *
+ * Confirm that clock trap scheduling works (i.e. scheduling works even if
+ * Wait() trap not induced by userland process).
+ *
+ * Fork many processes, each trying to counting up.
+ */
+void test_scheduler2() {
+
+    for (int i = 0; i < 4; i++) {
+        Fork();
+    }
+
+    int j = 0;
+    while (1) {
+        TracePrintf(1, "Process %d counting: %d\n", GetPid(), j++);
+    }
+}
+
+/**
  * This tests basic fork functionality. (1)
  *
  * Forks, parent loops, child forks again, and the child and the child's child both loop. A total
@@ -448,6 +468,10 @@ int main(int argc, char **argv) {
             break;
         case 16:
             test_exit_2();
+            break;
+        case 17:
+            test_scheduler2();
+            break;
         default:
             while (1) {
                 TracePrintf(1, "CP4 TEST RUNNING!\n");
