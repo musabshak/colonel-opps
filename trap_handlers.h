@@ -15,6 +15,6 @@ int TrapDisk(UserContext *user_context);
 int GenericHandler(UserContext *user_context);
 
 // helpers
-int is_waiting_for_term_id(void *elt, const void *key);
+bool is_waiting_for_term_id(void *elt, const void *key);
 
 #endif  // __TRAP_HANDLERS_H

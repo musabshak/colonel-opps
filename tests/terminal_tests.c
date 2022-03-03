@@ -121,8 +121,8 @@ int main() {
 
     // print_hello_world();
     // print_more_than_tmaxline();
-    read_reasonable();
-    // multiple_procs_write_to_same_terminal();
+    // read_reasonable();
+    multiple_procs_write_to_same_terminal();
     // read_from_term_when_line_is_long();
 
     while (1) {

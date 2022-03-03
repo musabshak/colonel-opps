@@ -86,8 +86,6 @@ int TrapKernelHandler(UserContext *user_context) {
         int *status_ptr;  // for kWait()
         int exit_code;    // for kExit()
         int tty_id;       // for kTtyRead() / kTtyWrite()
-        void *buf;
-        int len;
         int bytes_read;
         int *pipe_idp;  // for kPipeInit()
         int pipe_id;    // for kPipeRead/Write()
@@ -362,7 +360,7 @@ int TrapMath(UserContext *user_context) { ; }
 /**
  * Helper for terminal trap handlers to wake up waiting procs
  */
-int is_waiting_for_term_id(void *elt, const void *key) {
+bool is_waiting_for_term_id(void *elt, const void *key) {
     pcb_t *pcb = (pcb_t *)elt;
     int tty_id = *((int *)key);
     return (pcb->blocked_term == tty_id);
