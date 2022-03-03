@@ -150,7 +150,9 @@ int TrapKernelHandler(UserContext *user_context) {
             buf = (void *)user_context->regs[1];
             len = (int)user_context->regs[2];
             kTtyWrite(tty_id, buf, len);
+            break;
         case YALNIX_PIPE_INIT:
+            TracePrintf(2, "PIPE INIT SYSCALL TRAP!\n");
             pipe_idp = (int *)user_context->regs[0];
             rc = kPipeInit(pipe_idp);
             user_context->regs[0] = rc;

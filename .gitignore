@@ -18,3 +18,4 @@ tests/memory_trap_handler_tests
 tests/io_syscalls_tests
 tests/ipc_syscalls_tests
 tests/sync_syscalls_tests
+tests/terminal_tests

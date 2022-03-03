@@ -835,6 +835,7 @@ int release_access_to_term(int tty_id, enum TermAccessKind access_kind) {
  *
  */
 int kPipeInit(int *pipe_idp) {
+    TracePrintf(2, "Entering `kPipeInit()`\n");
 
     /**
      * Verify that user-given pointer is valid (user has permissions to write
