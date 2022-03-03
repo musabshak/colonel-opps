@@ -6,7 +6,7 @@
  *
  */
 
-// #include <stdbool.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,13 +52,12 @@ void qclose(queue_t *qp) {
     free(qp);
 }
 
-// cs58 addition
-int qis_empty(queue_t *qp) {
+bool qis_empty(queue_t *qp) {
     if (qp->front == qp->back && qp->back == NULL) {
-        return 1;
+        return true;
     }
 
-    return 0;
+    return false;
 }
 
 // cs58 addition
@@ -116,7 +115,7 @@ void qapply(queue_t *qp, void (*fn)(void *elementp)) {
     }
 }
 
-void *qsearch(queue_t *qp, int (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
+void *qsearch(queue_t *qp, bool (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
     node_t *np;
     for (np = qp->front; np != NULL; np = np->next) {
         if (searchfn(np->data, skeyp)) {
@@ -126,7 +125,7 @@ void *qsearch(queue_t *qp, int (*searchfn)(void *elementp, const void *keyp), co
     return NULL;
 }
 
-void *qremove(queue_t *qp, int (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
+void *qremove(queue_t *qp, bool (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
     node_t *np;
     node_t *nf;
     for (np = qp->front; np != NULL; np = np->next) {
@@ -152,7 +151,7 @@ void *qremove(queue_t *qp, int (*searchfn)(void *elementp, const void *keyp), co
 }
 
 // cs58 addition
-int qremove_all(queue_t *qp, int (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
+int qremove_all(queue_t *qp, bool (*searchfn)(void *elementp, const void *keyp), const void *skeyp) {
     node_t *np;
     node_t *nf;
 

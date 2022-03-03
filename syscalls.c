@@ -24,6 +24,118 @@ extern term_buf_t *g_term_bufs[NUM_TERMINALS];
 void kExit(int status);
 
 /**
+ * Used as "search" fxn in qremove_all (in kPipeWrite).
+ *
+ * Does two things
+ *      - Puts process on ready queue
+ *      - returns true
+ * Otherwise
+ *      - returns false
+ */
+bool put_proc_on_ready_queue(void *elementp, const void *key) {
+
+    pcb_t *proc = (pcb_t *)elementp;
+
+    qput(g_ready_procs_queue, proc);
+    return true;
+}
+
+/**
+ * Pipe buffer enqueue.
+ *
+ * Returns ERROR if anythign goes wrong, and success if everything goes right.
+ *
+ * Idea: https://www.geeksforgeeks.org/circular-queue-set-1-introduction-array-implementation/
+ */
+
+int circular_enqueue(pipe_t *pipe, char byte_to_write) {
+
+    // Just to be safe, check this
+    if (pipe->curr_num_bytes == PIPE_BUFFER_LEN) {
+        TP_ERROR("Trying to enqueue into a full pipe!\n");
+        return ERROR;
+    }
+
+    if (pipe->front == -1) {  // insert first element
+        pipe->front = 0;
+        pipe->back = 0;
+    } else if (pipe->back == PIPE_BUFFER_LEN - 1) {
+        pipe->back = 0;
+    } else {
+        pipe->back += 1;
+    }
+
+    pipe->buffer[pipe->back] = byte_to_write;
+    pipe->curr_num_bytes += 1;
+
+    return SUCCESS;
+}
+
+/**
+ * Pipe buffer dequeue.
+ *
+ * Writes byte into address pointed to by char_addr.
+ *
+ * Returns ERROR if anything goes wrong, and SUCCESS if everything goes right.
+ *
+ * Idea: https://www.geeksforgeeks.org/circular-queue-set-1-introduction-array-implementation/
+ */
+
+int circular_dequeue(pipe_t *pipe, char *char_addr) {
+
+    // Check that the pipe buffer is not empty, just to be safe
+    if (pipe->curr_num_bytes == 0) {
+        TP_ERROR("Trying to dequeue from an empty pipe!\n");
+        return ERROR;
+    }
+
+    *char_addr = pipe->buffer[pipe->front];  // dequeued char
+    pipe->buffer[pipe->front] = '\0';        // mark dequeued char as NULL
+    pipe->curr_num_bytes--;
+
+    // Update front
+    if (pipe->front == pipe->back) {  // means queue is now empty
+        pipe->front = -1;
+        pipe->back = -1;
+    } else if (pipe->front == PIPE_BUFFER_LEN - 1) {  // circle back to the start of queue
+        pipe->front = 0;
+    } else {
+        pipe->front += 1;
+    }
+
+    return SUCCESS;
+}
+
+/**
+ * Used by hsearch()
+ */
+
+bool search_pipe(void *elementp, const void *searchkeyp) {
+    pipe_t *pipe = (pipe_t *)elementp;
+    const char *search_key_str = searchkeyp;
+
+    char pipe_key[MAX_PIPE_KEYLEN];
+    sprintf(pipe_key, "pipe%d\0", pipe->pipe_id);
+
+    TracePrintf(2, "Comparing strings: %s =? %s\n", pipe_key, search_key_str);
+    if (strcmp(pipe_key, search_key_str) == 0) {
+        TracePrintf(2, "Strings are the same!\n");
+        return true;
+    } else {
+        return false;
+    }
+}
+
+/**
+ * Used by happly()
+ */
+
+void print_pipe(void *elementp) {
+    pipe_t *pipe = elementp;
+    TracePrintf(2, "Pipe id: %d\n", pipe->pipe_id);
+}
+
+/**
  * Checks if the address lies in region 1. (1 means it does, 0 means it doesn't)
  */
 bool is_r1_addr(void *addr) {
@@ -497,6 +609,10 @@ int kWait(int *status_ptr) {
  * If init exits, the system should be halted.
  */
 void kExit(int status) {
+
+    // TODO: should check if `status` here is valid? Someone could try passing an address here
+    // disguised as an int?
+
     pcb_t *caller = g_running_pcb;
     pcb_t *parent = caller->parent;
 
@@ -646,193 +762,408 @@ int release_access_to_term(int tty_id, enum TermAccessKind access_kind) {
     }
 
     free(key);
-
     return SUCCESS;
 }
-
 /**
- * (From manual)
+ * Buffer implementation:
+ *      - Easy way: use currently existing Queue code (linked list implementation).
+ *      - Slicker way: implement a circular array implementation of FIFO queue for pipe buffers.
  *
- * Read the next line of input from terminal `tty_id`, copying it into the buffer
- * referenced by `buf`. The maximum length of the line to be returned is given by `len`.
+ * We do it the slicker way. That is, The pipe is really a Queue ADT implemented as a circular array.
  *
- * Note: The line returned in the buffer is not null-terminated.
+ * Passing an invalid pointer to kPipeInit() does not result in the user program exiting; the syscall
+ * just returns with an ERROR.
  *
- * Return behavior:
- *  - If there are sufficient unread bytes already waiting, the call will return right away,
- *  with those.
- *  - Otherwise, the calling process is blocked until a line of input is available to be
- *  returned.
- *      - If the length of the next available input line is longer than `len` bytes, only the
- *      first `len` bytes of the line are copied to the calling process, and the remaining
- *      bytes of the line are saved by the kernel for the next `TtyRead()` (by this or another
- *      process).
- *      - If the length of the next available input line is shorter than len bytes, only as
- *      many bytes are copied to the calling process as are available in the input line; On
- *      success, the number of bytes actually copied into the calling process’s buffer is
- *      returned; in case of any error, the value ERROR is returned.
+ *
  */
-
-/**
- * If there bytes left in the buffer from the previous read, do we still need to
- * receive from the terminal? This implementation assumes we do NOT.
- *
- * If I understand correctly, WRITING more than `TERMINAL_MAX_LINE` is valid and should
- * be supported, but READING more than `TERMINAL_MAX_LINE` is undefined. So here I
- * exit with error if that is attempted.
- */
-int kTtyRead(int tty_id, void *buf, int len) {
-    TracePrintf(2, "Entering `TtyRead()`...\n");
+int kPipeInit(int *pipe_idp) {
 
     /**
-     * Check if terminal is being used by another process. If so, sleep.
+     * Verify that user-given pointer is valid (user has permissions to write
+     * to what the pointer is pointing to
      */
-    gain_access_to_term(tty_id, Read);
-
-    /**
-     * Validate user inputs
-     */
-
-    if (!(tty_id >= 0 && tty_id < NUM_TERMINALS)) {
-        TP_ERROR("tried to read from an invalid terminal.\n");
-        return ERROR;
-    }
-
-    if (!(is_valid_array(g_running_pcb->r1_ptable, buf, len, PROT_READ | PROT_WRITE))) {
-        TP_ERROR("the `buf` that was passed was not valid.\n");
-        return ERROR;
-    }
-
-    if (len > TERMINAL_MAX_LINE) {
-        TP_ERROR("attempted to read more than `TERMINAL_MAX_LINE` from terminal.\n");
+    if (!is_r1_addr(pipe_idp) || !is_writeable_addr(g_running_pcb->r1_ptable, (void *)pipe_idp)) {
+        TracePrintf(1, "`kPipeInit()` passed an invalid pointer -- syscall now returning ERROR\n");
         return ERROR;
     }
 
     /**
-     * If there isn't an input line from the terminal ready to go, block this process
-     * until there is. We detect this by seeing if the corresponding kernel buf for this
-     * terminal is `NULL`.
+     * Allocate a pipe on kernel heap and initialize it.
      */
-
-    term_buf_t *k_buf = g_term_bufs[tty_id];
-
-    if (k_buf->ptr == NULL) {
-        g_running_pcb->blocked_term = tty_id;
-        schedule(g_term_blocked_read_queue);
+    pipe_t *new_pipe = malloc(sizeof(*new_pipe));
+    if (new_pipe == NULL) {
+        TracePrintf(1, "malloc failed in `kPipeInit`()\n");
     }
 
+    // Initialize pipe
+    new_pipe->pipe_id = assign_pipe_id();
+
+    // Check that max pipe limit has not been reached
+    if (new_pipe->pipe_id == ERROR) {
+        free(new_pipe);
+        return ERROR;
+    }
+
+    new_pipe->curr_num_bytes = 0;
+    new_pipe->front = -1;
+    new_pipe->back = -1;
+    new_pipe->blocked_procs_queue = qopen();
+
     /**
-     * There is now an input line ready to be read. So copy that over.
+     * Put newly created pipe in global pipes hashtable
+     */
+    char pipe_key[MAX_PIPE_KEYLEN];  // 12 should be more than enough to cover a billion pipes (even though
+                                     // g_max_pipes will probably be less)
+
+    sprintf(pipe_key, "pipe%d\0", new_pipe->pipe_id);
+
+    TracePrintf(2, "pipe key: %s; pipe key length: %d\n", pipe_key, strlen(pipe_key));
+
+    int rc = hput(g_pipes_htable, (void *)new_pipe, pipe_key, strlen(pipe_key));
+    if (rc != 0) {
+        TracePrintf(1, "error occurred while putting pipe into hashtable\n");
+        free(new_pipe);
+        return ERROR;
+    }
+
+    TracePrintf(2, "printing pipes hash table\n");
+    happly(g_pipes_htable, print_pipe);
+
+    *pipe_idp = new_pipe->pipe_id;
+
+    /**
+     * (From manual)
+     *
+     * Read the next line of input from terminal `tty_id`, copying it into the buffer
+     * referenced by `buf`. The maximum length of the line to be returned is given by `len`.
+     *
+     * Note: The line returned in the buffer is not null-terminated.
+     *
+     * Return behavior:
+     *  - If there are sufficient unread bytes already waiting, the call will return right away,
+     *  with those.
+     *  - Otherwise, the calling process is blocked until a line of input is available to be
+     *  returned.
+     *      - If the length of the next available input line is longer than `len` bytes, only the
+     *      first `len` bytes of the line are copied to the calling process, and the remaining
+     *      bytes of the line are saved by the kernel for the next `TtyRead()` (by this or another
+     *      process).
+     *      - If the length of the next available input line is shorter than len bytes, only as
+     *      many bytes are copied to the calling process as are available in the input line; On
+     *      success, the number of bytes actually copied into the calling process’s buffer is
+     *      returned; in case of any error, the value ERROR is returned.
      */
 
-    int bytes_remaining_in_kbuf = k_buf->end_pos_offset - k_buf->curr_pos_offset;
+    /**
+     * If there bytes left in the buffer from the previous read, do we still need to
+     * receive from the terminal? This implementation assumes we do NOT.
+     *
+     * If I understand correctly, WRITING more than `TERMINAL_MAX_LINE` is valid and should
+     * be supported, but READING more than `TERMINAL_MAX_LINE` is undefined. So here I
+     * exit with error if that is attempted.
+     */
+    int kTtyRead(int tty_id, void *buf, int len) {
+        TracePrintf(2, "Entering `TtyRead()`...\n");
 
-    // TODO: Handle if above is 0
+        /**
+         * Check if terminal is being used by another process. If so, sleep.
+         */
+        gain_access_to_term(tty_id, Read);
 
-    // Copy over to user buf, clear kernel buf, and return
-    if (bytes_remaining_in_kbuf <= len) {
-        memcpy(buf, k_buf->ptr + k_buf->curr_pos_offset, len);
-        free(k_buf->ptr);  // TODO: abstract this "clearing" into a function
-        k_buf->ptr = NULL;
-        k_buf->curr_pos_offset, k_buf->end_pos_offset = 0;
+        /**
+         * Validate user inputs
+         */
+
+        if (!(tty_id >= 0 && tty_id < NUM_TERMINALS)) {
+            TP_ERROR("tried to read from an invalid terminal.\n");
+            return ERROR;
+        }
+
+        if (!(is_valid_array(g_running_pcb->r1_ptable, buf, len, PROT_READ | PROT_WRITE))) {
+            TP_ERROR("the `buf` that was passed was not valid.\n");
+            return ERROR;
+        }
+
+        if (len > TERMINAL_MAX_LINE) {
+            TP_ERROR("attempted to read more than `TERMINAL_MAX_LINE` from terminal.\n");
+            return ERROR;
+        }
+
+        /**
+         * If there isn't an input line from the terminal ready to go, block this process
+         * until there is. We detect this by seeing if the corresponding kernel buf for this
+         * terminal is `NULL`.
+         */
+
+        term_buf_t *k_buf = g_term_bufs[tty_id];
+
+        if (k_buf->ptr == NULL) {
+            g_running_pcb->blocked_term = tty_id;
+            schedule(g_term_blocked_read_queue);
+        }
+
+        /**
+         * There is now an input line ready to be read. So copy that over.
+         */
+
+        int bytes_remaining_in_kbuf = k_buf->end_pos_offset - k_buf->curr_pos_offset;
+
+        // TODO: Handle if above is 0
+
+        // Copy over to user buf, clear kernel buf, and return
+        if (bytes_remaining_in_kbuf <= len) {
+            memcpy(buf, k_buf->ptr + k_buf->curr_pos_offset, len);
+            free(k_buf->ptr);  // TODO: abstract this "clearing" into a function
+            k_buf->ptr = NULL;
+            k_buf->curr_pos_offset, k_buf->end_pos_offset = 0;
+            return len;
+        }
+
+        // Copy over `len` bytes from the kernel buf, update kernel buf accordingly
+        // to make it available for future reading. Return.
+        else if (bytes_remaining_in_kbuf > len) {
+            memcpy(buf, k_buf->ptr + k_buf->curr_pos_offset, len);
+            k_buf->curr_pos_offset += len;
+            return len;
+        }
+
+        /**
+         * Wake up any processes waiting on this terminal.
+         */
+
+        if (release_access_to_term(tty_id, Read) == ERROR) {
+            return ERROR;
+        }
+
         return len;
     }
 
-    // Copy over `len` bytes from the kernel buf, update kernel buf accordingly
-    // to make it available for future reading. Return.
-    else if (bytes_remaining_in_kbuf > len) {
-        memcpy(buf, k_buf->ptr + k_buf->curr_pos_offset, len);
-        k_buf->curr_pos_offset += len;
-        return len;
-    }
-
     /**
-     * Wake up any processes waiting on this terminal.
+     * Write the contents of the buffer referenced by buf to the terminal tty id. The length
+     * of the buffer in bytes is given by `len`. The calling process is blocked until all
+     * characters from the buffer have been written on the terminal. On success, the number of
+     * bytes written (`len`) is returned; in case of any error, the value `ERROR` is returned.
+     *
+     * Calls to TtyWrite for more than TERMINAL MAX LINE bytes should be supported.
      */
+    int kTtyWrite(int tty_id, void *buf, int len) {
+        TracePrintf(2, "Entering `kTtyWrite()`...\n");
 
-    if (release_access_to_term(tty_id, Read) == ERROR) {
-        return ERROR;
-    }
+        /**
+         * Check if terminal is being used by another process. If so, sleep.
+         */
 
-    return len;
-}
+        gain_access_to_term(tty_id, Write);
 
-/**
- * Write the contents of the buffer referenced by buf to the terminal tty id. The length
- * of the buffer in bytes is given by `len`. The calling process is blocked until all
- * characters from the buffer have been written on the terminal. On success, the number of
- * bytes written (`len`) is returned; in case of any error, the value `ERROR` is returned.
- *
- * Calls to TtyWrite for more than TERMINAL MAX LINE bytes should be supported.
- */
-int kTtyWrite(int tty_id, void *buf, int len) {
-    TracePrintf(2, "Entering `kTtyWrite()`...\n");
+        /**
+         * Valid user input
+         */
 
-    /**
-     * Check if terminal is being used by another process. If so, sleep.
-     */
+        if (!(tty_id >= 0 && tty_id < NUM_TERMINALS)) {
+            TP_ERROR("tried to read from an invalid terminal.\n");
+            return ERROR;
+        }
 
-    gain_access_to_term(tty_id, Write);
+        if (!(is_valid_array(g_running_pcb->r1_ptable, buf, len, PROT_READ | PROT_WRITE))) {
+            TP_ERROR("the `buf` that was passed was not valid.\n");
+            return ERROR;
+        }
 
-    /**
-     * Valid user input
-     */
+        /**
+         * Copy user buf to kernel buf
+         */
 
-    if (!(tty_id >= 0 && tty_id < NUM_TERMINALS)) {
-        TP_ERROR("tried to read from an invalid terminal.\n");
-        return ERROR;
-    }
+        void *kbuf = malloc(len);
+        if (kbuf == NULL) {
+            TP_ERROR("`malloc()` failed.\n");
+            return ERROR;
+        }
 
-    if (!(is_valid_array(g_running_pcb->r1_ptable, buf, len, PROT_READ | PROT_WRITE))) {
-        TP_ERROR("the `buf` that was passed was not valid.\n");
-        return ERROR;
-    }
+        memcpy(kbuf, buf, len);
 
-    /**
-     * Copy user buf to kernel buf
-     */
+        /**
+         * Write from kernel buffer to terminal
+         */
 
-    void *kbuf = malloc(len);
-    if (kbuf == NULL) {
-        TP_ERROR("`malloc()` failed.\n");
-        return ERROR;
-    }
+        void *current_byte = kbuf;
+        int bytes_remaining = len;
 
-    memcpy(kbuf, buf, len);
+        while (bytes_remaining > 0) {
+            if (bytes_remaining < TERMINAL_MAX_LINE) {
+                TtyTransmit(tty_id, current_byte, bytes_remaining);
+                // Block until this operation completes
+                g_running_pcb->blocked_term = tty_id;
+                schedule(g_term_blocked_transmit_queue);
+                break;
+            }
 
-    /**
-     * Write from kernel buffer to terminal
-     */
-
-    void *current_byte = kbuf;
-    int bytes_remaining = len;
-
-    while (bytes_remaining > 0) {
-        if (bytes_remaining < TERMINAL_MAX_LINE) {
-            TtyTransmit(tty_id, current_byte, bytes_remaining);
+            TtyTransmit(tty_id, current_byte, TERMINAL_MAX_LINE);
             // Block until this operation completes
             g_running_pcb->blocked_term = tty_id;
             schedule(g_term_blocked_transmit_queue);
-            break;
+
+            current_byte += TERMINAL_MAX_LINE;
+            bytes_remaining -= TERMINAL_MAX_LINE;
         }
 
-        TtyTransmit(tty_id, current_byte, TERMINAL_MAX_LINE);
-        // Block until this operation completes
-        g_running_pcb->blocked_term = tty_id;
-        schedule(g_term_blocked_transmit_queue);
+        free(kbuf);
 
-        current_byte += TERMINAL_MAX_LINE;
-        bytes_remaining -= TERMINAL_MAX_LINE;
+        /**
+         * Wake up next process waiting on this terminal
+         */
+
+        release_access_to_term(tty_id, Write);
+
+        TracePrintf(2, "Exiting `kTtyWrite()`...\n");
+        return len;
+    }
+    /**
+     * Returns the number of bytes read.
+     *
+     * If syscall fails, some pipe contents may have been partly written into the buffer.
+     */
+    int kPipeRead(int pipe_id, void *buffer, int len) {
+
+        /**
+         * Check that the args are legit (pipe_id, buffer, len).
+         *
+         * Buffer (living in R1 land) needs to have write permissions (it is going to be written into).
+         */
+        if (!is_valid_array(g_running_pcb->r1_ptable, buffer, len, PROT_WRITE)) {
+            TP_ERROR("buffer not valid\n");
+            return ERROR;
+        }
+
+        char *buffer_str = (char *)buffer;
+
+        /**
+         * Get pipe from hashtable
+         */
+        char pipe_key[MAX_PIPE_KEYLEN];
+        sprintf(pipe_key, "pipe%d\0", pipe_id);
+
+        pipe_t *pipe = (pipe_t *)hsearch(g_pipes_htable, search_pipe, pipe_key, strlen(pipe_key));
+        if (pipe == NULL) {
+            TP_ERROR("Failed retrieving pipe %d from pipes hashtable\n", pipe_id);
+            return ERROR;
+        }
+
+        int curr_num_bytes = pipe->curr_num_bytes;
+
+        /**
+         * If pipe is empty, block the caller
+         */
+        while (curr_num_bytes == 0) {
+            TracePrintf(2, "pipe is empty, blocking caller\n");
+            schedule(pipe->blocked_procs_queue);
+            curr_num_bytes = pipe->curr_num_bytes;  // need to update after process wakes back up
+        }
+
+        curr_num_bytes = pipe->curr_num_bytes;  // for if process wakes up again
+
+        /**
+         * If pipe->curr_num_bytes <= len, give all to the caller and return.
+         * If pipe->curr_num_bytes > len, give the first len to caller and return.
+         *
+         */
+        int num_bytes_to_read;  // = min(curr_num_bytes, len)
+        if (curr_num_bytes <= len) {
+            num_bytes_to_read = curr_num_bytes;
+        } else {
+            num_bytes_to_read = len;
+        }
+
+        int rc;
+
+        /**
+         * Call circular_dequeue() num_bytes_to_read times
+         */
+        for (int i = 0; i < num_bytes_to_read; i++) {
+            rc = circular_dequeue(pipe, &buffer_str[i]);
+
+            if (rc != 0) {
+                TP_ERROR("Dequeue failed\n");
+                return ERROR;
+            }
+        }
+
+        return num_bytes_to_read;
     }
 
-    free(kbuf);
-
     /**
-     * Wake up next process waiting on this terminal
+     * If a writer tries to write and the buffer is full, the syscall returns ERROR.
+     *
+     * All blocked processes waiting for bytes on the pipe are woken up by kPipeWrite.
      */
+    int kPipeWrite(int pipe_id, void *buffer, int len) {
 
-    release_access_to_term(tty_id, Write);
+        /**
+         * Check that the args are legit (pipe_id, buffer, len).
+         *
+         * Buffer (living in R1 land) needs to have read permissions (it's going to be read from).
+         */
+        if (!is_valid_array(g_running_pcb->r1_ptable, buffer, len, PROT_READ | PROT_WRITE)) {
+            TP_ERROR("buffer not valid\n");
+            return ERROR;
+        }
 
-    TracePrintf(2, "Exiting `kTtyWrite()`...\n");
-    return len;
-}
+        char *buffer_str = (char *)buffer;
+
+        /**
+         * Get pipe from hashtable
+         */
+        char pipe_key[MAX_PIPE_KEYLEN];
+        sprintf(pipe_key, "pipe%d\0", pipe_id);
+
+        pipe_t *pipe = (pipe_t *)hsearch(g_pipes_htable, search_pipe, pipe_key, strlen(pipe_key));
+        if (pipe == NULL) {
+            TP_ERROR("Failed retrieving pipe %d from pipes hashtable\n", pipe_id);
+            return ERROR;
+        }
+
+        int num_free_bytes = PIPE_BUFFER_LEN - pipe->curr_num_bytes;
+
+        /**
+         * If pipe is full, fail the syscall
+         */
+        if (num_free_bytes == 0) {
+            TP_ERROR("Trying to write to a full pipe\n");
+            return ERROR;
+        }
+
+        /**
+         * Otherwise, write as many as possible
+         */
+
+        int num_bytes_to_write;  // = min(num_free_bytes, len)
+        if (num_free_bytes <= len) {
+            num_bytes_to_write = num_free_bytes;
+        } else {
+            num_bytes_to_write = len;
+        }
+
+        int rc;
+
+        /**
+         * Write into pipe's buffer from input buffer.
+         * Call circular_enqueue(byte) num_bytes_to_write times.
+         */
+        for (int i = 0; i < num_bytes_to_write; i++) {
+            rc = circular_enqueue(pipe, buffer_str[i]);
+
+            if (rc != 0) {
+                TP_ERROR("Enqueue failed\n");
+                return ERROR;
+            }
+        }
+
+        /**
+         * Wake up all processes that were waiting for bytes on this pipe.
+         *
+         * (done similarly as in clockTrap where blocked queue needed to be iterated, and processes
+         * needed to be removed during iteration if they had paid their dues in waiting).
+         */
+
+        qremove_all(pipe->blocked_procs_queue, put_proc_on_ready_queue, NULL);
+        return num_bytes_to_write;
+    }

@@ -8,7 +8,16 @@
 // didn't work when this was in [kernel_data_structs.h]
 extern term_buf_t *g_term_bufs[NUM_TERMINALS];
 
-int pcb_delay_finished(void *elementp, const void *key) {
+/**
+ * Used as "search" fxn in qremove_all (in clock trap handler).
+ *
+ * If process has completed its delay time
+ *      - returns true
+ *      - Puts the process in the ready queue
+ * Otherwise
+ *      - returns false
+ */
+bool pcb_delay_finished(void *elementp, const void *key) {
 
     pcb_t *pcb = (pcb_t *)elementp;
 
@@ -19,7 +28,7 @@ int pcb_delay_finished(void *elementp, const void *key) {
                 pcb->delay_clock_ticks);
 
     if (pcb->elapsed_clock_ticks < pcb->delay_clock_ticks) {
-        return 0;  // false
+        return false;  // false
     }
 
     /**
@@ -33,7 +42,7 @@ int pcb_delay_finished(void *elementp, const void *key) {
     qput(g_ready_procs_queue, (void *)pcb);
 
     // tell qremove_all to remove this pcb from g_delay_blocked_procs_queue
-    return 1;
+    return true;
 }
 
 /*
@@ -80,6 +89,10 @@ int TrapKernelHandler(UserContext *user_context) {
         void *buf;
         int len;
         int bytes_read;
+        int *pipe_idp;  // for kPipeInit()
+        int pipe_id;    // for kPipeRead/Write()
+        void *buf;      // for kPipeRead/Write()
+        int len;        // for kPipeRead/Write()
 
         // `kExec()` args
         char *filename;
@@ -135,6 +148,25 @@ int TrapKernelHandler(UserContext *user_context) {
             buf = (void *)user_context->regs[1];
             len = (int)user_context->regs[2];
             kTtyWrite(tty_id, buf, len);
+        case YALNIX_PIPE_INIT:
+            pipe_idp = (int *)user_context->regs[0];
+            rc = kPipeInit(pipe_idp);
+            user_context->regs[0] = rc;
+            break;
+        case YALNIX_PIPE_READ:
+            pipe_id = user_context->regs[0];
+            buf = (void *)user_context->regs[1];
+            len = user_context->regs[2];
+            rc = kPipeRead(pipe_id, buf, len);
+            user_context->regs[0] = rc;
+
+            break;
+        case YALNIX_PIPE_WRITE:
+            pipe_id = user_context->regs[0];
+            buf = (void *)user_context->regs[1];
+            len = user_context->regs[2];
+            rc = kPipeWrite(pipe_id, buf, len);
+            user_context->regs[0] = rc;
             break;
     }
     TracePrintf(2, "Exiting TrapKernelHandler\n");

@@ -4,8 +4,11 @@
 
 // #pragma once
 
+#include "hash.h"
 #include "queue.h"
 #include "ykernel.h"
+
+#define MAX_PIPE_KEYLEN 12
 
 typedef struct ProcessControlBlock pcb_t;
 typedef struct TermBuf term_buf_t;
@@ -27,6 +30,9 @@ extern unsigned int g_len_frametable;
 extern unsigned int g_num_kernel_stack_pages;
 
 // extern term_buf_t g_term_bufs[NUM_TERMINALS];
+extern int g_max_pipes;
+extern int g_pipe_id;
+extern hashtable_t *g_pipes_htable;
 
 // E========= EXTERN DECLARATIONS ========== //
 
@@ -80,6 +86,15 @@ typedef struct TermBuf {
     int end_pos_offset;
 } term_buf_t;
 
+typedef struct Pipe {
+    int pipe_id;
+    char buffer[PIPE_BUFFER_LEN];  // circular
+    int curr_num_bytes;            // number of current bytes in the pipe
+    int front;                     // index of front element of pipe
+    int back;                      // index of back elemetn of pipe
+    queue_t *blocked_procs_queue;  // blocked processes associated with a particular pipe
+} pipe_t;
+
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used);
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p);
 int find_free_frame(unsigned int *frametable);
@@ -97,6 +112,9 @@ void print_pcb(void *elementp);
 int destroy_pcb(pcb_t *pcb, int exit_status);
 
 int schedule(queue_t *old_process_destination_queue);
+
+int assign_pipe_id();
+int retire_pipe_id(int pipe_id);
 
 // int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable);
 // int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable);

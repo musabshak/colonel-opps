@@ -15,13 +15,13 @@ void print_person(void *elementp) {
     printf("name: %s, age: %d\n", person->name, person->age);
 }
 
-int search_by_age(void *elementp, const void *keyp) {
+bool search_by_age(void *elementp, const void *keyp) {
     person_t *person = (person_t *)elementp;
 
     if (person->age == (uintptr_t)keyp) {
-        return 1;
+        return true;
     } else {
-        return 0;
+        return false;
     }
 }
 

@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
         default:
 
             while (1) {
-                TracePrintf(2, "%s RUNNING!\n", argv[0]);
+                TracePrintf(1, "%s RUNNING!\n", argv[0]);
                 Pause();
             }
     }
