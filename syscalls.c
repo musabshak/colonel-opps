@@ -114,12 +114,32 @@ bool search_pipe(void *elementp, const void *searchkeyp) {
 }
 
 /**
+ * Used by hsearch()
+ */
+
+bool search_lock(void *elementp, const void *searchkeyp) {
+    lock_t *lock = (lock_t *)elementp;
+    const char *search_key_str = searchkeyp;
+
+    char lock_key[MAX_KEYLEN];
+    sprintf(lock_key, "lock%d\0", lock->lock_id);
+
+    TracePrintf(2, "Comparing strings: %s =? %s\n", lock_key, search_key_str);
+    if (strcmp(lock_key, search_key_str) == 0) {
+        TracePrintf(2, "Strings are the same!\n");
+        return true;
+    } else {
+        return false;
+    }
+}
+
+/**
  * Used by happly()
  */
 
 void print_lock(void *elementp) {
     lock_t *lock = elementp;
-    TracePrintf(2, "Pipe id: %d\n", lock->lock_id);
+    TracePrintf(2, "Lock id: %d\n", lock->lock_id);
 }
 
 /**
@@ -997,7 +1017,46 @@ int kLockInit(int *lock_idp) {
  *
  */
 
-int kAcquire(int lock_id) {}
+int kAcquire(int lock_id) {
+    /**
+     * TODO: validate arg
+     */
+
+    /**
+     * Get lock from hashtable
+     */
+    char lock_key[MAX_KEYLEN];
+    sprintf(lock_key, "lock%d\0", lock_id);
+
+    lock_t *lock = (lock_t *)hsearch(g_locks_htable, search_lock, lock_key, strlen(lock_key));
+    if (lock == NULL) {
+        TP_ERROR("Failed retrieving lock %d from locks hashtable\n", lock_id);
+        return ERROR;
+    }
+
+    /**
+     * If lock isn't locked, lock it, set the owner process, and return.
+     */
+    if (!lock->locked) {
+        lock->locked = true;
+        lock->owner_proc = g_running_pcb;
+        return 0;
+    }
+
+    /**
+     * If lock is already locked, check that the acquiring process is not the lock
+     * owner. If it is, return ERROR. If not, add the process to the blocked queue
+     * associated with the lock.
+     */
+    if (lock->owner_proc == g_running_pcb) {
+        TP_ERROR("Process %d already owns lock %d!\n", g_running_pcb->pid, lock->lock_id);
+        return ERROR;
+    }
+
+    qput(lock->blocked_procs_queue, g_running_pcb);
+
+    return 0;
+}
 
 /*
  *  ===============
