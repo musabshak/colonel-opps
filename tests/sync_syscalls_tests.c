@@ -203,6 +203,36 @@ void test_cvar_init() {
     }
 }
 
+/**
+ * (7)
+ *
+ * Test CvarWait/CvarSignal.
+ */
+
+void test_cvar1() {
+    int lock_id, cvar_id;
+
+    LockInit(&lock_id);
+    CvarInit(&cvar_id);
+
+    int pid = Fork();
+    if (pid == 0) {
+        Acquire(lock_id);
+        Delay(5);
+        CvarSignal(cvar_id);
+        Release(lock_id);
+        Exit(0);
+    }
+
+    Acquire(lock_id);
+    CvarWait(cvar_id, lock_id);
+    for (int i = 0; i < 6; i++) {
+        TracePrintf(1, "Process %d counting: %d\n", GetPid(), i);
+        Pause();
+    }
+    Release(lock_id);
+}
+
 int main(int argc, char **argv) {
 
     if (argc < 2) {
@@ -230,6 +260,9 @@ int main(int argc, char **argv) {
             break;
         case 6:
             test_cvar_init();
+            break;
+        case 7:
+            test_cvar1();
             break;
         default:
             while (1) {

@@ -134,6 +134,26 @@ bool search_lock(void *elementp, const void *searchkeyp) {
 }
 
 /**
+ * Used by hsearch()
+ */
+
+bool search_cvar(void *elementp, const void *searchkeyp) {
+    cvar_t *cvar = (cvar_t *)elementp;
+    const char *search_key_str = searchkeyp;
+
+    char cvar_key[MAX_KEYLEN];
+    sprintf(cvar_key, "cvar%d\0", cvar->cvar_id);
+
+    TracePrintf(2, "Comparing strings: %s =? %s\n", cvar_key, search_key_str);
+    if (strcmp(cvar_key, search_key_str) == 0) {
+        TracePrintf(2, "Strings are the same!\n");
+        return true;
+    } else {
+        return false;
+    }
+}
+
+/**
  * Used by happly()
  */
 
@@ -1228,8 +1248,8 @@ int kCvarInit(int *cvar_idp) {
  *  Pseudocode
  *  - Traverse cvar_list_qp to find cvar associated with cvar_id
  *  - Set the following
- *      - cvar.lock_id = lock_id
- *      - cvar.pid = running_process.pid
+ *      - cvar.lock_id = lock_id (don't need this either)
+ *      - cvar.pid = running_process.pid (don't need this - have the blocked queue)
  *  - Call kRelease(lock_id)
  *  - Add running_process to cvar.blocked_processes queue
  *  - ** at this time, cvar_wait method is blocked because the calling process was just
@@ -1237,11 +1257,62 @@ int kCvarInit(int *cvar_idp) {
  *  - ** signal wakes up process **
  *  - Call kAcquire(lock_id)
  *  - return 0
- *
- *
- *
  */
-int kCvarWait(int cvar_id, int lock_id) {}
+int kCvarWait(int cvar_id, int lock_id) {
+    /**
+     * TODO: validate arguments
+     */
+
+    /**
+     * Get cvar from hashtable
+     */
+    char cvar_key[MAX_KEYLEN];
+    sprintf(cvar_key, "cvar%d\0", cvar_id);
+
+    cvar_t *cvar = (cvar_t *)hsearch(g_cvars_htable, search_cvar, cvar_key, strlen(cvar_key));
+    if (cvar == NULL) {
+        TP_ERROR("Failed retrieving cvar %d from cvars hashtable\n", cvar_id);
+        return ERROR;
+    }
+
+    /**
+     * Get lock from hashtable
+     */
+    char lock_key[MAX_KEYLEN];
+    sprintf(lock_key, "lock%d\0", lock_id);
+
+    lock_t *lock = (lock_t *)hsearch(g_locks_htable, search_lock, lock_key, strlen(lock_key));
+    if (lock == NULL) {
+        TP_ERROR("Failed retrieving lock %d from locks hashtable\n", lock_id);
+        return ERROR;
+    }
+
+    /**
+     * Release the lock
+     */
+    int rc;
+    rc = kRelease(lock_id);
+    if (rc != 0) {
+        TP_ERROR("Failed releasing the lock in kCvarWait\n");
+    }
+
+    /**
+     * Make the current process go to sleep, "waiting" for things to change.
+     */
+    schedule(cvar->blocked_procs_queue);
+
+    // Now the process is sleeping. Will be "woken up" by a signal() or broadcast() call.
+
+    /**
+     * Acquire the lock after the process wakes up.
+     */
+    rc = kAcquire(lock_id);
+    if (rc != 0) {
+        TP_ERROR("Failed acquiring the lock in kCvarWait\n");
+    }
+
+    return 0;
+}
 
 /*
  *  ==================
@@ -1259,7 +1330,36 @@ int kCvarWait(int cvar_id, int lock_id) {}
  *  - Add proc to the ready_processes queue
  *  - return 0
  */
-int kCvarSignal(int cvar_id) {}
+int kCvarSignal(int cvar_id) {
+    /**
+     * TODO: validate arguments
+     */
+
+    /**
+     * Get cvar from hashtable
+     */
+    char cvar_key[MAX_KEYLEN];
+    sprintf(cvar_key, "cvar%d\0", cvar_id);
+
+    cvar_t *cvar = (cvar_t *)hsearch(g_cvars_htable, search_cvar, cvar_key, strlen(cvar_key));
+    if (cvar == NULL) {
+        TP_ERROR("Failed retrieving cvar %d from cvars hashtable\n", cvar_id);
+        return ERROR;
+    }
+
+    /**
+     * Find one blocked process associated with cvar and move it to the ready queue.
+     */
+    pcb_t *proc = (pcb_t *)qget(cvar->blocked_procs_queue);
+    if (proc == NULL) {
+        TP_ERROR("Trying to signal a cvar that has no blocked processes associated with it!\n");
+        return ERROR;
+    }
+
+    qput(g_ready_procs_queue, proc);
+
+    return 0;
+}
 
 /*
  *  =====================
@@ -1277,7 +1377,39 @@ int kCvarSignal(int cvar_id) {}
  *  - return 0
  *
  */
-int kCvarBroadcast(int cvar_id) {}
+int kCvarBroadcast(int cvar_id) {
+    /**
+     * TODO: validate arguments
+     */
+
+    /**
+     * Get cvar from hashtable
+     */
+    char cvar_key[MAX_KEYLEN];
+    sprintf(cvar_key, "cvar%d\0", cvar_id);
+
+    cvar_t *cvar = (cvar_t *)hsearch(g_cvars_htable, search_cvar, cvar_key, strlen(cvar_key));
+    if (cvar == NULL) {
+        TP_ERROR("Failed retrieving cvar %d from cvars hashtable\n", cvar_id);
+        return ERROR;
+    }
+
+    /**
+     * Remove ALL blocked process associated with cvar and move them ALL to the ready queue.
+     */
+    pcb_t *proc = (pcb_t *)qget(cvar->blocked_procs_queue);
+    if (proc == NULL) {
+        TP_ERROR("Trying to broadcast a cvar that has no blocked processes associated with it!\n");
+        return ERROR;
+    }
+
+    while (proc != NULL) {
+        qput(g_ready_procs_queue, proc);
+        proc = (pcb_t *)qget(cvar->blocked_procs_queue);
+    }
+
+    return 0;
+}
 
 /*
  *  ===============

@@ -45,10 +45,10 @@ typedef struct ProcessControlBlock {
     // --- userland
     UserContext uctxt;
     void *user_brk;
-    unsigned int user_text_pg0;
-    unsigned int user_data_pg0;
-    void *user_data_end;
-    void *user_stack_base;
+    unsigned int user_text_pg0;  // populated in LoadProgram
+    unsigned int user_data_pg0;  // populated in LoadProgram
+    void *user_data_end;         // populated in LoadProgram
+    void *user_stack_base;       // populated in LoadProgram; updated by memoryTrapHandler()
 
     // --- kernelland
     KernelContext kctxt;
