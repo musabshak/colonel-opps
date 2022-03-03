@@ -139,6 +139,47 @@ void test_locks1() {
     Exit(0);
 }
 
+/**
+ * (5)
+ *
+ * Test kAcquire and kRelease with many processes.
+ *
+ * Fork many processes. Each process counts to five before giving up the lock.
+ *
+ */
+
+void test_locks2() {
+    int lock_id;
+
+    /**
+     * Create a lock
+     */
+    TracePrintf(1, "Initializing lock ... \n");
+    LockInit(&lock_id);
+
+    /**
+     * Fork many processes;
+     */
+    for (int i = 0; i < 5; i++) {
+        Fork();
+    }
+
+    Acquire(lock_id);
+
+    for (int i = 1; i <= 5; i++) {
+        TracePrintf(1, "Process %d counting: %d\n", GetPid(), i);
+        Pause();
+    }
+
+    Release(lock_id);
+
+    int status;
+
+    for (int i = 0; i < 5; i++) {
+        Wait(&status);
+    }
+}
+
 int main(int argc, char **argv) {
 
     if (argc < 2) {
@@ -160,6 +201,9 @@ int main(int argc, char **argv) {
             break;
         case 4:
             test_locks1();
+            break;
+        case 5:
+            test_locks2();
             break;
         default:
             while (1) {
