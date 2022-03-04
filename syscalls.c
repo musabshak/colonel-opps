@@ -17,6 +17,7 @@
  */
 int term_read_status[NUM_TERMINALS] = {0, 0, 0, 0};
 int term_write_status[NUM_TERMINALS] = {0, 0, 0, 0};
+bool tty_transmit_in_progress = false;
 
 // putting this in [kernel_data_structs.h] caused issues
 extern term_buf_t *g_term_bufs[NUM_TERMINALS];
@@ -753,8 +754,17 @@ void term_queue_set(int idx, enum TermAccessKind queue_kind, int val) {
 void gain_access_to_term(int tty_id, enum TermAccessKind access_kind) {
     // Sleep if the terminal is marked with a different PID than the one of this process,
     // and if it is not not being used
-    while (term_queue_get(tty_id, access_kind) != g_running_pcb->pid &&
-           term_queue_get(tty_id, access_kind) != 0) {
+    bool can_gain_access;
+    if (access_kind == Read) {
+        can_gain_access = term_queue_get(tty_id, access_kind) == g_running_pcb->pid ||
+                          term_queue_get(tty_id, access_kind) == 0;
+    } else if (access_kind == Write) {
+        can_gain_access = (term_queue_get(tty_id, access_kind) == g_running_pcb->pid ||
+                           term_queue_get(tty_id, access_kind) == 0) &&
+                          tty_transmit_in_progress == false;
+    }
+
+    while (can_gain_access == false) {
         g_running_pcb->blocked_term = tty_id;
 
         if (access_kind == Read) {
@@ -766,6 +776,15 @@ void gain_access_to_term(int tty_id, enum TermAccessKind access_kind) {
                         g_running_pcb->pid, tty_id);
             schedule(g_term_blocked_write_queue);
         }
+
+        if (access_kind == Read) {
+            can_gain_access = term_queue_get(tty_id, access_kind) == g_running_pcb->pid ||
+                              term_queue_get(tty_id, access_kind) == 0;
+        } else if (access_kind == Write) {
+            can_gain_access = (term_queue_get(tty_id, access_kind) == g_running_pcb->pid ||
+                               term_queue_get(tty_id, access_kind) == 0) &&
+                              tty_transmit_in_progress == false;
+        }
     }
     // woke up with access to terminal-- free to continue
     if (access_kind == Read) {
@@ -774,6 +793,7 @@ void gain_access_to_term(int tty_id, enum TermAccessKind access_kind) {
     } else if (access_kind == Write) {
         TracePrintf(2, "PID %d has write access to terminal %d.\n", g_running_pcb->pid, tty_id);
         term_write_status[tty_id] = g_running_pcb->pid;
+        tty_transmit_in_progress = true;
     }
 }
 
@@ -792,6 +812,7 @@ int release_access_to_term(int tty_id, enum TermAccessKind access_kind) {
     } else if (access_kind == Write) {
         TracePrintf(2, "PID %d releasing write access to terminal %d.\n", g_running_pcb->pid, tty_id);
         term_write_status[tty_id] = 0;
+        tty_transmit_in_progress = false;
     }
 
     /**
@@ -812,7 +833,7 @@ int release_access_to_term(int tty_id, enum TermAccessKind access_kind) {
             qput(g_ready_procs_queue, (void *)pcb);
         }
     } else if (access_kind == Write) {
-        pcb_t *pcb = qremove(g_term_blocked_write_queue, is_waiting_for_term_id, (void *)key);
+        pcb_t *pcb = qget(g_term_blocked_write_queue);
         if (pcb != NULL) {
             TracePrintf(2, "PID %d woke up from terminal write blocked queue.\n", pcb->pid);
             qput(g_ready_procs_queue, (void *)pcb);
