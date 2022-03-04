@@ -276,7 +276,18 @@ int TrapClock(UserContext *user_context) {
  *
  */
 
-int TrapIllegal(UserContext *user_context) { ; }
+int TrapIllegal(UserContext *user_context) {
+    TracePrintf(2, "Entering `TrapIllegal()`...\n");
+    int caller_pid = g_running_pcb->pid;
+    if (caller_pid != 0) {
+        TracePrintf(2, "Killing PID %d.\n", caller_pid);
+        kExit(ERROR);
+    } else {
+        // this is init that trapped here
+        TracePrintf(2, "`init` process error, halting CPU.\n");
+        Halt();
+    }
+}
 
 /*
  *  ==================
@@ -397,7 +408,18 @@ int TrapMemory(UserContext *user_context) {
  *
  */
 
-int TrapMath(UserContext *user_context) { ; }
+int TrapMath(UserContext *user_context) {
+    TracePrintf(2, "Entering `TrapMath()`...\n");
+    int caller_pid = g_running_pcb->pid;
+    if (caller_pid != 0) {
+        TracePrintf(2, "Killing PID %d.\n", caller_pid);
+        kExit(ERROR);
+    } else {
+        // this is init that trapped here
+        TracePrintf(2, "`init` process error, halting CPU.\n");
+        Halt();
+    }
+}
 
 /**
  * Helper for terminal trap handlers to wake up waiting procs
@@ -528,6 +550,17 @@ int TrapTTYTransmit(UserContext *user_context) {
  *
  */
 
-int TrapDisk(UserContext *user_context) { ; }
+int TrapDisk(UserContext *user_context) {
+    TracePrintf(2, "Entering `TrapDisk()`...\n");
+    int caller_pid = g_running_pcb->pid;
+    if (caller_pid != 0) {
+        TracePrintf(2, "Killing PID %d.\n", caller_pid);
+        kExit(ERROR);
+    } else {
+        // this is init that trapped here
+        TracePrintf(2, "`init` process error, halting CPU.\n");
+        Halt();
+    }
+}
 
 int GenericHandler(UserContext *user_context) { ; }
