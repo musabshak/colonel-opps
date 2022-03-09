@@ -119,13 +119,13 @@ void test_fork2() {
     int pid;
 
     for (int i = 0; i < 10; i++) {
-        TracePrintf(1, "Pid: %d about to fork\n", GetPid());
+        TracePrintf(1, "Pid %d about to fork\n", GetPid());
         int rc = Fork();
-        TracePrintf(1, "fork returned rc: %d\n", rc);
+        TracePrintf(1, "Pid %d fork returned rc: %d\n", GetPid(), rc);
     }
 
     while (1) {
-        TracePrintf(1, "Pid: %d running\n", GetPid());
+        TracePrintf(1, "Pid %d running\n", GetPid());
         Pause();
     }
 }

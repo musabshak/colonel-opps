@@ -12,3 +12,5 @@ core
 # Exclude all non-source files in tests/
 tests/*
 !tests/*.c
+
+trace.txt

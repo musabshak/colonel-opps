@@ -114,8 +114,12 @@ int TrapKernelHandler(UserContext *user_context) {
             rc = kDelay(clock_ticks);
             break;
         case YALNIX_FORK:
-            kFork();
-            user_context->regs[0] = g_running_pcb->uctxt.regs[0];
+            if (kFork() == ERROR) {
+                user_context->regs[0] = ERROR;
+            } else {
+                user_context->regs[0] = g_running_pcb->uctxt.regs[0];
+            }
+
             break;
         case YALNIX_EXEC:
             filename = (char *)user_context->regs[0];

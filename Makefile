@@ -11,7 +11,7 @@ SEAN_TESTS = sean_bigstack.c sean_forktest.c sean_zero.c
 K_SRC_DIR = .
 
 # What are the kernel c and include files?
-K_SRCS =  kernel.c trap_handlers.c k_common.c queue.c load_program.c scheduler.c address_validation.c hash.c $(SYSCALLS)
+K_SRCS =  kernel.c trap_handlers.c k_common.c queue.c load_program.c scheduler.c address_validation.c hash.c $(SYSCALLS) mbuilder.c
 K_INCS = 
 
 # Where's your user source?
