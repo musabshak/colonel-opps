@@ -5,6 +5,7 @@
 #	of years past...
 
 SYSCALLS = syscalls/basic_proc_coord.c syscalls/io_syscalls.c syscalls/ipc_syscalls.c syscalls/sync_syscalls.c
+SEAN_TESTS = sean_bigstack.c sean_forktest.c sean_zero.c
 
 # Where's your kernel source?
 K_SRC_DIR = .
@@ -17,7 +18,7 @@ K_INCS =
 U_SRC_DIR = tests
 
 # What are the user c and include files?
-U_SRCS = init.c cp3_tests.c cp4_tests.c exec_test.c grow_ustack_toomuch.c cp5_tests.c memory_trap_handler_tests.c io_syscalls_tests.c ipc_syscalls_tests.c terminal_tests.c sync_syscalls_tests.c torture.c
+U_SRCS = init.c cp3_tests.c cp4_tests.c exec_test.c grow_ustack_toomuch.c cp5_tests.c memory_trap_handler_tests.c io_syscalls_tests.c ipc_syscalls_tests.c terminal_tests.c sync_syscalls_tests.c torture.c $(SEAN_TESTS)
 U_INCS = 
 
 
