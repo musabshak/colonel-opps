@@ -1,12 +1,12 @@
 #include <stdbool.h>
 
-#include "kernel_data_structs.h"
+#include "k_common.h"
 #include "load_program.h"
 #include "printing.h"
 #include "trap_handlers.h"
 #include "ykernel.h"
 
-// putting this in [kernel_data_structs.h] caused issues
+// putting this in [k_common.h] caused issues
 
 void kExit(int status);
 

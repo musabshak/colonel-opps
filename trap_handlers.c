@@ -1,11 +1,11 @@
 #include "address_validation.h"
-#include "kernel_data_structs.h"
+#include "k_common.h"
 #include "printing.h"
 #include "queue.h"
 #include "syscalls.h"
 #include "ykernel.h"
 
-// didn't work when this was in [kernel_data_structs.h]
+// didn't work when this was in [k_common.h]
 extern term_buf_t *g_term_bufs[NUM_TERMINALS];
 
 /**

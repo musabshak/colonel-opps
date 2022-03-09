@@ -8,7 +8,7 @@
 
 #include <stdlib.h>
 
-#include "kernel_data_structs.h"
+#include "k_common.h"
 #include "queue.h"
 
 extern unsigned int *g_frametable;

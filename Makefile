@@ -10,7 +10,7 @@ SYSCALLS = syscalls/basic_proc_coord.c syscalls/io_syscalls.c syscalls/ipc_sysca
 K_SRC_DIR = .
 
 # What are the kernel c and include files?
-K_SRCS =  kernel.c trap_handlers.c kernel_data_structs.c queue.c load_program.c scheduler.c address_validation.c hash.c $(SYSCALLS)
+K_SRCS =  kernel.c trap_handlers.c k_common.c queue.c load_program.c scheduler.c address_validation.c hash.c $(SYSCALLS)
 K_INCS = 
 
 # Where's your user source?

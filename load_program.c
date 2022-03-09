@@ -14,7 +14,7 @@
  * ==>> #include anything you need for your kernel here
  */
 
-#include "kernel_data_structs.h"
+#include "k_common.h"
 
 /*
  *  Load a program into an existing address space.  The program comes from

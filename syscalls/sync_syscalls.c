@@ -1,5 +1,5 @@
 #include "address_validation.h"
-#include "kernel_data_structs.h"
+#include "k_common.h"
 
 /**
  * Used by hsearch()

@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <ykernel.h>
 
-#include "kernel_data_structs.h"
+#include "k_common.h"
 
 int LoadProgram(char *name, char *args[], pcb_t *proc);
 

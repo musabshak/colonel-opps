@@ -3,7 +3,7 @@
 #include <ykernel.h>
 
 #include "address_validation.h"
-#include "kernel_data_structs.h"
+#include "k_common.h"
 #include "trap_handlers.h"
 
 extern term_buf_t *g_term_bufs[NUM_TERMINALS];

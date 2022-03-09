@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-#include "kernel_data_structs.h"
+#include "k_common.h"
 
 bool is_above_ubrk(pcb_t *proc, void *addr);
 bool is_above_ubrk_redzone(pcb_t *proc, void *addr);

@@ -1,4 +1,4 @@
-#include "kernel_data_structs.h"
+#include "k_common.h"
 
 #include <stdbool.h>
 

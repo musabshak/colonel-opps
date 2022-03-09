@@ -7,7 +7,7 @@
  */
 
 #include "hash.h"
-#include "kernel_data_structs.h"
+#include "k_common.h"
 #include "load_program.h"
 #include "queue.h"
 #include "trap_handlers.h"

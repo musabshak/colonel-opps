@@ -1,8 +1,6 @@
 
-#ifndef __KERNEL_DATA_STRUCTS_H
-#define __KERNEL_DATA_STRUCTS_H
 
-// #pragma once
+#pragma once
 
 #include "hash.h"
 #include "printing.h"
@@ -148,5 +146,3 @@ int retire_cvar_id(int cvar_id);
 
 // int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable);
 // int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable);
-
-#endif  // __KERNEL_DATA_STRUCTS_H
