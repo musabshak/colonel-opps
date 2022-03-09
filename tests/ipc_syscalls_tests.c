@@ -406,6 +406,80 @@ void test_pipe_read_write5() {
     }
 }
 
+/**
+ * (9)
+ *
+ * Test that circular array wrap-around happens properly.
+ */
+void test_pipe_read_write6() {
+
+    int rc, pipe_id, num_bytes_written, num_bytes_read;
+    int PIPE_BUFFER_LEN = 256;
+
+    char write_buf[PIPE_BUFFER_LEN + 1];
+    char read_buf[PIPE_BUFFER_LEN + 1];
+    write_buf[PIPE_BUFFER_LEN] = '\0';
+    read_buf[PIPE_BUFFER_LEN] = '\0';
+
+    char *write_buf2 = "so many edge cases to test gah";
+    char len2 = strlen(write_buf2);
+    char read_buf2[len2 + 10];
+
+    char *tmp = write_buf;
+
+    // Fill up write_buf completely
+    for (int i = 0; i < PIPE_BUFFER_LEN - 3; i++) {
+        tmp += sprintf(tmp, "X");
+    }
+
+    TracePrintf(1, "write_buf: %s\n", write_buf);
+
+    TracePrintf(1, "Initializing a new pipe\n");
+    rc = PipeInit(&pipe_id);
+    if (rc != 0) {
+        TracePrintf(1, "Error in `PipeInit` syscall\n");
+    } else {
+        TracePrintf(1, "Pipe %d initialized successfully!\n", pipe_id);
+    }
+
+    TracePrintf(1, "Writing some bytes to a new pipe. Bytes: %s\n", write_buf);
+    num_bytes_written = PipeWrite(pipe_id, (void *)write_buf, PIPE_BUFFER_LEN - 3);
+    if (num_bytes_written == -1) {
+        TracePrintf(1, "PipeWrite syscall failed\n");
+    } else {
+        TracePrintf(1, "Just wrote %d bytes into pipe %d\n", num_bytes_written, pipe_id);
+    }
+
+    TracePrintf(1, "Reading some bytes from the same pipe\n");
+    num_bytes_read = PipeRead(pipe_id, (void *)read_buf, PIPE_BUFFER_LEN - 6);
+    if (num_bytes_read == -1) {
+        TracePrintf(1, "PipeWrite syscall failed\n");
+    } else {
+        TracePrintf(1, "Just read %d bytes from pipe %d. Bytes: %s\n", num_bytes_read, pipe_id, read_buf);
+    }
+
+    TracePrintf(1, "Writing into pipe again. Bytes: %s\n", write_buf2);
+    num_bytes_written = PipeWrite(pipe_id, (void *)write_buf2, len2);
+    if (num_bytes_written == -1) {
+        TracePrintf(1, "PipeWrite syscall failed\n");
+    } else {
+        TracePrintf(1, "Just wrote %d bytes into pipe %d\n", num_bytes_written, pipe_id);
+    }
+
+    TracePrintf(1, "Reading some bytes from the same pipe\n");
+    num_bytes_read = PipeRead(pipe_id, (void *)read_buf2, len2 + 3);
+    if (num_bytes_read == -1) {
+        TracePrintf(1, "PipeWrite syscall failed\n");
+    } else {
+        TracePrintf(1, "Just read %d bytes from pipe %d. Bytes: %s\n", num_bytes_read, pipe_id, read_buf2);
+    }
+
+    while (1) {
+        TracePrintf(1, "PIPE TEST RUNNING\n");
+        Pause();
+    }
+}
+
 int main(int argc, char **argv) {
 
     if (argc < 2) {
@@ -439,6 +513,9 @@ int main(int argc, char **argv) {
             break;
         case 8:
             test_pipe_read_write5();
+            break;
+        case 9:
+            test_pipe_read_write6();
             break;
         default:
 
