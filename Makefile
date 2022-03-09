@@ -4,7 +4,7 @@
 #	Prepared by Sean Smith and Adam Salem and various Yalnix developers
 #	of years past...
 
-SYSCALLS = syscalls/basic_proc_coord.c syscalls/io_syscalls.c syscalls/ipc_syscalls.c syscalls/sync_syscalls.c
+SYSCALLS = syscalls/proc_syscalls.c syscalls/io_syscalls.c syscalls/ipc_syscalls.c syscalls/sync_syscalls.c
 SEAN_TESTS = sean_bigstack.c sean_forktest.c sean_zero.c
 
 # Where's your kernel source?
