@@ -379,6 +379,13 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
  *
  * Currently implemented naively (via a global counter). Overflow of pipe_ids
  * protected by g_max_pipes.
+ *
+ * Pipe ids are necessarily a multiple of PIPE_ID_K (3) because pipe ids are incremented
+ * by 3 each time. This is so we're able to distinguish between pipes, locks, and cvars.
+ *
+ * So the number of max allowed pipes is actually g_max_pipes/PIPE_ID_K.
+ *
+ * Similar notes apply for assign_lock_id() and assign_cvar_id().
  */
 int assign_pipe_id() {
     if (g_pipe_id == g_max_pipes) {
@@ -388,8 +395,8 @@ int assign_pipe_id() {
         return ERROR;
     }
 
-    g_pipe_id += 1;
-    return g_pipe_id - 1;
+    g_pipe_id += PIPE_ID_K;
+    return g_pipe_id - PIPE_ID_K;
 }
 
 /**
@@ -414,8 +421,8 @@ int assign_lock_id() {
         return ERROR;
     }
 
-    g_lock_id += 1;
-    return g_lock_id - 1;
+    g_lock_id += LOCK_ID_K;
+    return g_lock_id - LOCK_ID_K;
 }
 
 /**
@@ -440,8 +447,8 @@ int assign_cvar_id() {
         return ERROR;
     }
 
-    g_cvar_id += 1;
-    return g_cvar_id - 1;
+    g_cvar_id += CVAR_ID_K;
+    return g_cvar_id - CVAR_ID_K;
 }
 
 /**
@@ -451,6 +458,7 @@ int assign_cvar_id() {
  */
 int retire_cvar_id(int cvar_id) { return 0; }
 
+// ====================================================================
 /**
  * Helper function called by SetKernelBrk(void *addr) in the case that addr > g_kernel_brk,
  * also analagously by `Brk()`.

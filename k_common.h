@@ -9,6 +9,10 @@
 
 #define MAX_KEYLEN 12
 
+#define PIPE_ID_K 3  // pipe id constant
+#define LOCK_ID_K 5
+#define CVAR_ID_K 7
+
 typedef struct ProcessControlBlock pcb_t;
 typedef struct TermBuf term_buf_t;
 
