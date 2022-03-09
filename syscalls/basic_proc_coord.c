@@ -1,10 +1,12 @@
 #include <stdbool.h>
 
+#include "address_validation.h"
 #include "kernel_data_structs.h"
 #include "load_program.h"
-#include "printing.h"
 #include "trap_handlers.h"
 #include "ykernel.h"
+
+void kExit(int status);
 
 int kFork() {
     TracePrintf(2, "Entering kFork\n");

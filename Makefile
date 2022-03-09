@@ -4,13 +4,13 @@
 #	Prepared by Sean Smith and Adam Salem and various Yalnix developers
 #	of years past...
 
-
+SYSCALLS = syscalls/basic_proc_coord.c syscalls/io_syscalls.c syscalls/ipc_syscalls.c syscalls/sync_syscalls.c
 
 # Where's your kernel source?
 K_SRC_DIR = .
 
 # What are the kernel c and include files?
-K_SRCS =  kernel.c trap_handlers.c kernel_data_structs.c queue.c load_program.c scheduler.c address_validation.c hash.c syscalls/*
+K_SRCS =  kernel.c trap_handlers.c kernel_data_structs.c queue.c load_program.c scheduler.c address_validation.c hash.c $(SYSCALLS)
 K_INCS = 
 
 # Where's your user source?

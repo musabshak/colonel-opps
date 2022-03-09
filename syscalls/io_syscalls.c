@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <ykernel.h>
 
+#include "address_validation.h"
 #include "kernel_data_structs.h"
 #include "trap_handlers.h"
 
