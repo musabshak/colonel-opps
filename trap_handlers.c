@@ -334,6 +334,15 @@ int TrapMemory(UserContext *user_context) {
                 (unsigned int)(user_context->addr) >> PAGESHIFT);
     TracePrintf(2, "TrapMemory() called with code %d.\n", user_context->code);
 
+    unsigned int code = user_context->code;
+    if (code == 0 || code == 2) {
+        TP_ERROR(
+            "trap memory given a code 0 (addr outside virtual address range) or 2 (access violates page "
+            "protections)\n");
+        kExit(-1);
+        return ERROR;
+    }
+
     /**
      * Determine if the trap is an implicit request to grow the user's stack. This
      * happens when the address is
