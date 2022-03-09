@@ -424,6 +424,7 @@ void test_pipe_read_write6() {
     char *write_buf2 = "so many edge cases to test gah";
     char len2 = strlen(write_buf2);
     char read_buf2[len2 + 10];
+    memset(read_buf2, 0, sizeof(read_buf2));
 
     char *tmp = write_buf;
 
