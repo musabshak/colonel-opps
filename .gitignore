@@ -8,14 +8,7 @@ yalnix
 DISK
 core
 .nfs*
-tests/init
-tests/cp3_tests
-tests/cp4_tests
-tests/cp5_tests
-tests/exec_test
-tests/grow_ustack_toomuch
-tests/memory_trap_handler_tests
-tests/io_syscalls_tests
-tests/ipc_syscalls_tests
-tests/sync_syscalls_tests
-tests/terminal_tests
+
+# Exclude all non-source files in tests/
+tests/*
+!tests/*.c
