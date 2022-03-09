@@ -1,3 +1,11 @@
+/**
+ * Authors: Varun Malladi and Musab Shakeel
+ * Date: 2/5/2022
+ *
+ * This file contains different shared kernel code.
+ *
+ */
+
 #include "k_common.h"
 
 #include <stdbool.h>
@@ -8,15 +16,20 @@
 
 void mark_parent_as_null(void *pcb_p) {
     pcb_t *pcb = (pcb_t *)pcb_p;
-
     pcb->parent = NULL;
 }
 
+/**
+ * Used by kExit().
+ */
 void free_zombie_pcb(void *zombie_p) {
     zombie_pcb_t *zombie = (zombie_pcb_t *)zombie;
     free(zombie);
 }
 
+/**
+ * Used by KCCopy.
+ */
 int copy_page_contents(unsigned int source_page, unsigned int target_page) {
 
     memcpy((void *)(target_page << PAGESHIFT), (void *)(source_page << PAGESHIFT), PAGESIZE);
@@ -36,12 +49,10 @@ void print_zombie_pcb(void *elementp) {
 
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     TracePrintf(2, "Entering KCCopy\n");
-    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
 
     pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
 
     // Copy the current kernel context into the new process
-    // new_pcb->kctxt = *kc_in;
     memcpy(&(new_pcb->kctxt), kc_in, sizeof(KernelContext));
 
     unsigned int page_below_kstack = g_len_pagetable - g_num_kernel_stack_pages - 1;
@@ -92,7 +103,6 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     WriteRegister(REG_TLB_FLUSH, page_below_kstack_addr);
 
     TracePrintf(2, "Exiting KCCopy\n");
-    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
     return kc_in;
 }
 
@@ -102,16 +112,16 @@ KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p)
     pcb_t *curr_pcb = ((pcb_t *)curr_pcb_p);
     pcb_t *new_pcb = ((pcb_t *)new_pcb_p);
 
-    // Save current kernel context in current process's pcb (saving current state of
-    // current process in it's pcb so we can return to it later).
-    // curr_pcb->kctxt = *kc_in;
+    /**
+     * Save current kernel context in current process's pcb (saving current state of
+     * current process in it's pcb so we can return to it later).
+     *
+     * Could also probably use:
+     *      curr_pcb->kctxt = *kc_in;
+     */
     if (curr_pcb_p != NULL) {
         memcpy(&(curr_pcb->kctxt), kc_in, sizeof(KernelContext));
     }
-
-    // TEMPORARY
-    // new_pcb->kstack_frame_idxs[0] = 127;
-    // new_pcb->kstack_frame_idxs[1] = 126;
 
     // Update mapping of kernel stack in R0 ptable to reflect new kernel's stack frames
     for (int i = 0; i < g_num_kernel_stack_pages; i++) {
