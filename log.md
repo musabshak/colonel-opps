@@ -1,4 +1,13 @@
-### Outstanding Questions
+### Implementation notes
+- We assume init cloning into idle (init is process 0)
+- We use a generic queue (singly linked list implementation)
+    - For g_delay_blocked_procs_queue, where we need to iterate through the queue to increment the elapsed_ticks for each process, and then potentially remove a PCB* from the queue, we use the qremove_all() generic queue method. qremove_all() takes in a "search" function that is applied to each PCB* in the queue. We write the "search" function cleverly ... 
+- We create a separate ZombiePCB struct to store in the zombie_queue associated with each process (instead of storing the entire PCB)
+- Pipes use a circular array queue implementation
+- Hashtables used for storing cvars/pipes/locks (for O(1) lookup)
+- Sophisticated Fork() failure handling (unwinding carefully, if Fork() fails)
+
+
 
 
 ### Todo other
@@ -18,21 +27,18 @@
 - ~Add levels to traceprints (userland + kernelland)~
 - ~Add all global variables as externs in k_common.c~
 - Check user arg in kExit()
+    - Do we need to validate int arguments? Don't think so 
 - May need to update process "queues" to "hashtables" while implementing sync stuff
+    - Turned out to be not necessary
 - Improve assign_pipe_id() and retire_pipe_id() code
 - Incorporate malloc_builder into main branch
 
-### Implementation notes
-- We assume init cloning into idle (init is process 0)
-- We use a generic queue (singly linked list implementation)
-    - For g_delay_blocked_procs_queue, where we need to iterate through the queue to increment the elapsed_ticks for each process, and then potentially remove a PCB* from the queue, we use the qremove_all() generic queue method. qremove_all() takes in a "search" function that is applied to each PCB* in the queue. We write the "search" function cleverly ... 
-- We create a separate ZombiePCB struct to store in the zombie_queue associated with each process (instead of storing the entire PCB)
-- Pipes use a circular array queue implementation
-- Hashtables used for storing cvars/pipes/locks (for O(1) lookup)
-- Sophisticated Fork() failure handling (unwinding carefully, if Fork fails)
 
 
-## Bugs
+
+## Bug Log
+A log of bugs encountered (and squashed) over the course of development. Separated by checkpoints.
+
 ### Checkpoint 3
 - u_long type not found (used in load_info.h, included in load_program.c)
     - Include hardware.h in load_program.c
@@ -48,6 +54,7 @@
 - Our previous invariant was: if the brk is on the zeroth byte of a page then that page is already allocated in the pagetable
     - We realized this a little late but this invariant does not make *any* sense. Brk is the first *unallocated* byte -- if we allocate the page that the brk is on, the brk is no longer the brk - ugh!
     - Fixing this invariant led to some pesky bugs - because of the invariant, when we started allocating pages in the pagetable, we would start one page above the current page (because we assumed that the current page was already allocaetd); we needed to start *on* the current page. Similarly, when deallocating, we started at the current page (needed to start one below the current page).
+
 
 
 ### Checkpoint 2
@@ -101,8 +108,8 @@
 
 
 
-## Todos
-### Todo cp3
+## Checkpoint Overviews
+### cp3
 - Write userland init program source (init.c)
 - Parse KernelStart arguments
     - If none specified, load ./init into R1 ptable
@@ -140,8 +147,7 @@
     - Delay
 
 
-
-### Todo cp2
+### cp2
 Overview  
 - Kernel should boot and run idle in user mode
     - "Running idle": a while loop
