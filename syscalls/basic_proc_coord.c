@@ -223,7 +223,7 @@ void kExit(int status) {
     pcb_t *caller = g_running_pcb;
     pcb_t *parent = caller->parent;
 
-    TracePrintf(2, "PID %d exiting with status %d.\n", caller->pid, status);
+    TracePrintf(1, "PID %d exiting with status %d.\n", caller->pid, status);
 
     if (g_running_pcb->pid == 0) {
         TracePrintf(1, "Oh no, init process exited; the CPU will now halt\n");

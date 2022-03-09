@@ -110,6 +110,27 @@ void test_fork() {
 }
 
 /**
+ * (18)
+ *
+ * Fork, a lot.
+ */
+void test_fork2() {
+
+    int pid;
+
+    for (int i = 0; i < 10; i++) {
+        TracePrintf(1, "Pid: %d about to fork\n", GetPid());
+        int rc = Fork();
+        TracePrintf(1, "fork returned rc: %d\n", rc);
+    }
+
+    while (1) {
+        TracePrintf(1, "Pid: %d running\n", GetPid());
+        Pause();
+    }
+}
+
+/**
  * (2)
  *
  * Tries to load a program normally.
@@ -471,6 +492,9 @@ int main(int argc, char **argv) {
             break;
         case 17:
             test_scheduler2();
+            break;
+        case 18:
+            test_fork2();
             break;
         default:
             while (1) {
