@@ -17,7 +17,7 @@
 /* S=== GLOBALS === */
 /* ================ */
 
-int g_virtual_mem_enabled = 0;              // 1 if virtual memory enabled, 0 otherwise
+int g_virtual_mem_enabled = 0;              // If virtual memory enabled: 1. Otherwise: 0.
 void *g_kernel_brk;                         // Global variable storing kernel brk
 unsigned int g_len_frametable;              // Number of frames in physical memory, populated by KernelStart
 unsigned int g_len_pagetable = MAX_PT_LEN;  // Number of pages in R0 or R1 pagetable
@@ -27,24 +27,30 @@ pte_t *g_reg0_ptable;                       // Pagetable for kernel structures s
 pcb_t *g_running_pcb;                       // Pcb of process that is currently running
 pcb_t *g_idle_pcb;
 unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
+
+// process queues
 queue_t *g_ready_procs_queue;
 queue_t *g_delay_blocked_procs_queue;
 
+// terminal queues
 queue_t *g_term_blocked_read_queue;
 queue_t *g_term_blocked_write_queue;
 queue_t *g_term_blocked_transmit_queue;
 
+// terminals
 term_buf_t *g_term_bufs[NUM_TERMINALS];
 hashtable_t *g_pipes_htable;
 int g_max_pipes = 50 * PIPE_ID_K;  // max number of pipes that can be created in one session of the kernel
 int g_pipe_id = 0;                 // next pipe created should have this id
 int g_pipe_id_constant = PIPE_ID_K;
 
+// locks
 hashtable_t *g_locks_htable;
 int g_max_locks = 50 * LOCK_ID_K;
 int g_lock_id = 0;
 int g_lock_id_constant = LOCK_ID_K;
 
+// cvars
 hashtable_t *g_cvars_htable;
 int g_max_cvars = 50 * CVAR_ID_K;
 int g_cvar_id = 0;
@@ -344,17 +350,17 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     /* S=================== TEST SetKernelBrk ==================== */
 
-    TracePrintf(2, "current brk: %x (p#: %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
+    // TracePrintf(2, "current brk: %x (p#: %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
 
-    TracePrintf(2, "mallocing\n");
+    // TracePrintf(2, "mallocing\n");
     // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
-    void *my_p = malloc(PAGESIZE * 40);
+    // void *my_p = malloc(PAGESIZE * 40);
 
-    TracePrintf(2, "freeing\n");
-    free(my_p);
+    // TracePrintf(2, "freeing\n");
+    // free(my_p);
     // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
 
-    TracePrintf(2, "current brk: %x (p#: %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
+    // TracePrintf(2, "current brk: %x (p#: %d)\n", g_kernel_brk, (unsigned int)g_kernel_brk >> PAGESHIFT);
 
     /* E=================== TEST SetKernelBrk ==================== */
 
@@ -392,10 +398,10 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     init_pcb->pid = helper_new_pid(init_r1_ptable);
     init_pcb->r1_ptable = init_r1_ptable;
-    // init_pcb->uctxt = *uctxt;
-    memcpy(&(init_pcb->uctxt), uctxt,
-           sizeof(UserContext));  // !!!! On the way into a handler (Transition 5), copy the current
-                                  // UserContext into the PCB of the current proceess.
+
+    // !!!! On the way into a handler (Transition 5), copy the current
+    // UserContext into the PCB of the current proceess.
+    memcpy(&(init_pcb->uctxt), uctxt, sizeof(UserContext));
 
     // TODO: convert to for loop
     init_pcb->kstack_frame_idxs[0] = g_len_pagetable - 1;
@@ -413,8 +419,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     TracePrintf(2, "num args: %d\n", num_args);
 
     // Can't give too many arguments
-    if (num_args > 10) {
-        TracePrintf(1, "Can't give more than 9 arguments to your program!\n");
+    if (num_args > 20) {
+        TracePrintf(1, "Can't give more than 20 arguments to your program!\n");
         return;
     }
 
@@ -497,10 +503,10 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Populate idlePCB
     g_idle_pcb->r1_ptable = idle_r1_ptable;
-    // g_idle_pcb->uctxt = *uctxt;
-    memcpy(&(g_idle_pcb->uctxt), uctxt,
-           sizeof(UserContext));  // !!!! On the way into a handler (Transition 5), copy the current
-                                  // UserContext into the PCB of the current proceess.
+
+    // !!!! On the way into a handler (Transition 5), copy the current
+    // UserContext into the PCB of the current proceess.
+    memcpy(&(g_idle_pcb->uctxt), uctxt, sizeof(UserContext));
     g_idle_pcb->pid = helper_new_pid(idle_r1_ptable);  // hardware defined function for generating PID
     g_idle_pcb->user_text_pg0 = 0;
     g_idle_pcb->user_data_pg0 = 0;
