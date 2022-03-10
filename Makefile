@@ -13,7 +13,7 @@ OTHER_TSTS = cp3_tests.c cp4_tests.c grow_ustack_toomuch.c cp5_tests.c memory_tr
 K_SRC_DIR = src
 
 # What are the kernel c and include files?
-K_SRCS =  kernel.c trap_handlers.c k_common.c queue.c load_program.c scheduler.c address_validation.c hash.c $(SYSCALLS) mbuilder.c
+K_SRCS = kernel.c trap_handlers.c k_common.c queue.c load_program.c scheduler.c address_validation.c hash.c $(SYSCALLS) mbuilder.c
 K_INCS = 
 
 # Where's your user source?
@@ -109,7 +109,7 @@ no-core:
 	rm -f core.*
 
 $(KERNEL_ALL): $(KERNEL_OBJS) $(KERNEL_LIBS) $(KERNEL_INCS)
-	$(LINK_KERNEL) -o $@ $(KERNEL_OBJS) $(KERNEL_LDFLAGS)
+	$(LINK_KERNEL) -o $@ $(KERNEL_OBJS) $(KERNEL_LDFLAGS) 
 
 $(USER_APPS): $(USER_OBJS) $(USER_INCS)
 	$(ETCDIR)/yuserbuild.sh $@ $(DDIR58) $@.o
