@@ -1,4 +1,13 @@
-
+/**
+ * k_common.h
+ *
+ * Authors: Varun Malladi and Musab Shakeel
+ * Date: 2/2022
+ *
+ * Header file for k_common.c. This file additionally externs global variables declared in kernel.c. These
+ * globals are used in several different kernel source files (i.e. several different source files #include
+ * "k_common.h").
+ */
 
 #pragma once
 
@@ -7,9 +16,9 @@
 #include "queue.h"
 #include "ykernel.h"
 
-#define MAX_KEYLEN 12
+#define MAX_KEYLEN 12  // for pipe/lock/cvar key ("pipe132") for hashtable
 
-#define PIPE_ID_K 3  // pipe id constant
+#define PIPE_ID_K 3  // increment pipe/lock/cvar ids by prime numbers (to be able to distinguish b/w them)
 #define LOCK_ID_K 5
 #define CVAR_ID_K 7
 
