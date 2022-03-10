@@ -1,9 +1,24 @@
-/*
+/**
+ * load_program.c
+ *
+ * Authors: Template provided by Sean Smith
+ * Editors: Musab Shakeel and Varun Malladi
+ *
+ * This file defines a function - LoadProgram - that loads an executable program into a
+ * process' R1 ptable. LoadProgram is used to load the init program, and to load a new program
+ * in Exec() syscalls.
+ *
+ * Code edited by Varun/Musab is prefaced by ==>> comments.
+ *
+ *
  * ==>> This is a TEMPLATE for how to write your own LoadProgram function.
  * ==>> Places where you must change this file to work with your kernel are
  * ==>> marked with "==>>".  You must replace these lines with your own code.
  * ==>> You might also want to save the original annotations as comments.
+ *
+ *
  */
+
 #include <fcntl.h>
 #include <hardware.h>
 #include <load_info.h>
@@ -154,7 +169,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
      * DONE
      */
     if (cp2 == NULL) {
-        TracePrintf(1, "Malloc failed.\n");
+        TP_ERROR("Malloc failed.\n");
         return ERROR;
     }
 
@@ -210,7 +225,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     for (int i = 0; i < li.t_npg; i++) {
         int frame_idx = frames_found[i];
         if (frame_idx < 0) {
-            TracePrintf(1, "No free frames.\n");
+            TP_ERROR("No free frames.\n");
             free(frames_found);
             return ERROR;
         }
@@ -239,7 +254,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     for (int i = 0; i < data_npg; i++) {
         int frame_idx = frames_found[i];
         if (frame_idx < 0) {
-            TracePrintf(1, "No free frames.\n");
+            TP_ERROR("No free frames.\n");
             free(frames_found);
             return ERROR;
         }
@@ -267,7 +282,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     for (int i = 0; i < stack_npg; i++) {
         int frame_idx = frames_found[i];
         if (frame_idx < 0) {
-            TracePrintf(1, "No free frames.\n");
+            TP_ERROR("No free frames.\n");
             free(frames_found);
             return ERROR;
         }
@@ -351,11 +366,12 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
     proc->uctxt.pc = (caddr_t)(li.entry);
 
     /**
+     * ==>>
      *
      * custom code: store r1 ptable information (user_brk, user_text_pg0, user_data_pg0) in pcb
      */
 
-    // Note that the page numbers are not relative in the following lines of code
+    // Note that the page numbers are NOT relative in the following lines of code
 
     TracePrintf(2, "proc num data pages: %d\n", data_npg);
     TracePrintf(2, "proc data_pg1: %d\n", data_pg1);
