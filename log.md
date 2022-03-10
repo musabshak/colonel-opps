@@ -1,13 +1,13 @@
 ### Implementation notes
-- We assume init cloning into idle (init is process 0)
-- We use a generic queue (singly linked list implementation)
-    - For g_delay_blocked_procs_queue, where we need to iterate through the queue to increment the elapsed_ticks for each process, and then potentially remove a PCB* from the queue, we use the qremove_all() generic queue method. qremove_all() takes in a "search" function that is applied to each PCB* in the queue. We write the "search" function cleverly ... 
-- We create a separate ZombiePCB struct to store in the zombie_queue associated with each process (instead of storing the entire PCB)
-- Pipes use a circular array queue implementation
-- Hashtables used for storing cvars/pipes/locks (for O(1) lookup)
-- Sophisticated Fork() failure handling (unwinding carefully, if Fork() fails)
+- ~We assume init cloning into idle (init is process 0)~
+- ~We use a generic queue (singly linked list implementation)~
+    - ~For g_delay_blocked_procs_queue, where we need to iterate through the queue to increment the elapsed_ticks for each process, and then potentially remove a PCB* from the queue, we use the qremove_all() generic queue method. qremove_all() takes in a "search" function that is applied to each PCB* in the queue. We write the "search" function cleverly ... ~
+- ~We create a separate ZombiePCB struct to store in the zombie_queue associated with each process (instead of storing the entire PCB)~
+- ~Pipes use a circular array queue implementation~
+- ~Hashtables used for storing cvars/pipes/locks (for O(1) lookup)~
+- ~Sophisticated Fork() failure handling (unwinding carefully, if Fork() fails)~
 - If a process Exits, but was holding a lock, that's problematic
-- Do not have a queue of processes associated with the kWait() syscall
+- ~Do not have a queue of processes associated with the kWait() syscall~
 - max pipes/locks/cvars: 50 (can change at top of kernel.c)
 - Can improve assign_pipe_id() and retire_pipe_id() code (just use a global counter)
 - Can improve frametable code
