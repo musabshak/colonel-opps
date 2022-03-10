@@ -1,3 +1,24 @@
+/**
+ * sync_syscalls.c
+ *
+ * Authors: Musab Shakeel
+ * Date: Late February 2022
+ *
+ * This file contains syscalls related to process synchronization:
+ *      - kLockInit()
+ *      - kAcquire()
+ *      - kRelease()
+ *
+ *      - kCvarInit()
+ *      - kCvarWait()
+ *      - kCvarSignal()
+ *      - kCvarBroadcast()
+ *
+ *      - kReclaim()
+ *
+ * This file also contains relevant helper functions required by above syscalls.
+ */
+
 #include "address_validation.h"
 #include "k_common.h"
 
@@ -165,9 +186,6 @@ int kLockInit(int *lock_idp) {
  */
 
 int kAcquire(int lock_id) {
-    /**
-     * TODO: validate arg
-     */
 
     /**
      * Get lock from hashtable
@@ -229,9 +247,6 @@ int kAcquire(int lock_id) {
  */
 
 int kRelease(int lock_id) {
-    /**
-     * TODO: validate arg
-     */
 
     /**
      * Get lock from hashtable
@@ -383,10 +398,6 @@ int kCvarInit(int *cvar_idp) {
  */
 int kCvarWait(int cvar_id, int lock_id) {
     /**
-     * TODO: validate arguments
-     */
-
-    /**
      * Get cvar from hashtable
      */
     char cvar_key[MAX_KEYLEN];
@@ -454,9 +465,6 @@ int kCvarWait(int cvar_id, int lock_id) {
  *  - return 0
  */
 int kCvarSignal(int cvar_id) {
-    /**
-     * TODO: validate arguments
-     */
 
     /**
      * Get cvar from hashtable
@@ -501,9 +509,6 @@ int kCvarSignal(int cvar_id) {
  *
  */
 int kCvarBroadcast(int cvar_id) {
-    /**
-     * TODO: validate arguments
-     */
 
     /**
      * Get cvar from hashtable

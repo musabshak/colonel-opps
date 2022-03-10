@@ -2,7 +2,7 @@
  * proc_syscalls.c
  *
  * Authors: Varun Malladi and Musab Shakeel
- * Date: Febryary 2022
+ * Date: February 2022
  *
  * This file contains syscalls related to basic process coordination:
  *      - kGetPid()
