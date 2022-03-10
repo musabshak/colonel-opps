@@ -1,8 +1,9 @@
 /* queue.c -- A generic queue implementation
  *
  * Author: Musab Shakeel
+ * Date: Fall 2019
  *
- * Refer to the queue.h interface for function documentation
+ * Refer to the queue.h interface for function documentation.
  *
  */
 

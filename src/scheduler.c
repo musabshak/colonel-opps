@@ -1,3 +1,13 @@
+/**
+ * scheduler.c
+ *
+ * Author: Musab Shakeel
+ * Date: February 2022
+ *
+ * This file defines the round robin scheduler used in colonel-opps.
+ *
+ */
+
 #include "k_common.h"
 #include "ykernel.h"
 
@@ -34,7 +44,7 @@ int schedule(queue_t *old_process_destination_queue) {
           g_running_pcb->pid == g_idle_pcb->pid)) {
         rc = qput(old_process_destination_queue, (void *)g_running_pcb);
         if (rc != 0) {
-            TracePrintf(1, "Failed to return previously running process to specified queue.\n");
+            TP_ERROR("Failed to return previously running process to specified queue.\n");
             return ERROR;
         }
     }
@@ -42,7 +52,7 @@ int schedule(queue_t *old_process_destination_queue) {
     // Invoke KCSwitch()
     rc = KernelContextSwitch(KCSwitch, g_running_pcb, new_pcb);
     if (rc != 0) {
-        TracePrintf(1, "Failed to switch kernel context.\n");
+        TP_ERROR("Failed to switch kernel context.\n");
         return ERROR;
     }
 
