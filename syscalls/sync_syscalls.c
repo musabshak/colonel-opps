@@ -88,7 +88,7 @@ int kLockInit(int *lock_idp) {
      * to what the pointer is pointing to)
      */
     if (!is_r1_addr(lock_idp) || !is_writeable_addr(g_running_pcb->r1_ptable, (void *)lock_idp)) {
-        TracePrintf(1, "`kLockInit()` passed an invalid pointer -- syscall now returning ERROR\n");
+        TP_ERROR("`kLockInit()` passed an invalid pointer -- syscall now returning ERROR\n");
         return ERROR;
     }
 
@@ -97,7 +97,8 @@ int kLockInit(int *lock_idp) {
      */
     lock_t *new_lock = malloc(sizeof(*new_lock));
     if (new_lock == NULL) {
-        TracePrintf(1, "malloc failed in `kLockInit`()\n");
+        free(new_lock);
+        TP_ERROR("malloc failed in `kLockInit`()\n");
         return ERROR;
     }
 
@@ -311,7 +312,8 @@ int kCvarInit(int *cvar_idp) {
      */
     cvar_t *new_cvar = malloc(sizeof(*new_cvar));
     if (new_cvar == NULL) {
-        TracePrintf(1, "malloc failed in `kCvarInit`()\n");
+        free(new_cvar);
+        TP_ERROR("malloc failed in `kCvarInit`()\n");
         return ERROR;
     }
 
@@ -340,7 +342,7 @@ int kCvarInit(int *cvar_idp) {
 
     int rc = hput(g_cvars_htable, (void *)new_cvar, cvar_key, strlen(cvar_key));
     if (rc != 0) {
-        TracePrintf(1, "error occurred while putting cvar into hashtable\n");
+        TP_ERROR("error occurred while putting cvar into hashtable\n");
         free(new_cvar);
         return ERROR;
     }
