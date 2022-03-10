@@ -6,24 +6,17 @@
 - ~Pipes use a circular array queue implementation~
 - ~Hashtables used for storing cvars/pipes/locks (for O(1) lookup)~
 - ~Sophisticated Fork() failure handling (unwinding carefully, if Fork() fails)~
-- If a process Exits, but was holding a lock, that's problematic
+- ~If a process Exits, but was holding a lock, that's problematic~
 - ~Do not have a queue of processes associated with the kWait() syscall~
-- max pipes/locks/cvars: 50 (can change at top of kernel.c)
-- Can improve assign_pipe_id() and retire_pipe_id() code (just use a global counter)
+- ~max pipes/locks/cvars: 50 (can change at top of kernel.c)~
+- ~Can give max 30 args to kernel~
+- ~Can improve assign_pipe_id() and retire_pipe_id() code (just use a global counter)~
 - Can improve frametable code
-    - Use a queue of frames instead of bitvector
-    - Even if use bitvector, can store an additional field "num_frames_available_right_now" so before allocating multiple
-    frames, we can check if we have physical memory availabile in order to perform a particular syscall/operation
-- Can give max 30 args to kernel
+    - ~Use a queue of frames instead of bitvector~
+    - ~Even if use bitvector, can store an additional field "num_frames_available_right_now" so before allocating multiple frames, we can check if we have physical memory availabile in order to perform a particular syscall/operation~
+    
 
-### Questions
-- Would love feedback on code structure/style
-
-
-### Done
-
-
-### Random thoughts
+### Dealing with phyical memory running out
 Places where we may run out of physical memory (basically anywhere find_free_frame() is called in a loop)
     - setKernelBrk (raising kernel heap) X
         - Halt()
@@ -39,9 +32,7 @@ Places where we may run out of physical memory (basically anywhere find_free_fra
     - kExec X
         - Theoretically should not run out of memory since we just tore down a process?
 
-Other
-- Could have stored num_free_frames currently available, as a frametable attribute - slicker than find_n_free_frames?
-    
+
 
 
 ### Todo other
@@ -51,8 +42,7 @@ Other
     - Clarify linking concepts
 - Write test_KCCopy function
 - Rigorously test SetKernelBrk, Brk functions
-- Clean kernel code
-- Refactor h_raise_brk/h_lower_brk and raise_brk_user/lower_brk_user into same function
+- ~Clean kernel code~
 - ~Properly write code for updating clock ticks in blocked processes queue~
 - ~Reformat scheduler such that scheduler takes in which queue to add the running process to before context switching~ 
     - ~Move some logic to clockTrapHandler (for updating g_delay_blocked_queue)~
@@ -61,11 +51,9 @@ Other
 - ~Add levels to traceprints (userland + kernelland)~
 - ~Add all global variables as externs in k_common.c~
 - Check user arg in kExit()
-    - Do we need to validate int arguments? Don't think so 
-- May need to update process "queues" to "hashtables" while implementing sync stuff
-    - Turned out to be not necessary
+    - Do we need to validate int arguments? Don't think so
 - Improve assign_pipe_id() and retire_pipe_id() code
-- Incorporate malloc_builder into main branch
+- ~Incorporate malloc_builder into main branch~
 
 
 

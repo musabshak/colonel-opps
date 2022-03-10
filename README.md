@@ -15,17 +15,52 @@ Here, we provide an overview of some implementation details that the course staf
     - All malloced memory is carefully freed before `Fork()` exits with ERROR
     - TODO VARUN
     - Refer to documentation for `malloc builder` provided in `docs/mbuilder.md`
-- We were careful to ensure graceful handling of cases where processes run out of physical memory. Refer to the next subsection
+- We were careful to ensure graceful handling of cases where processes run out of physical memory. Refer to the next subsection `Dealing with running out of physical memory`
 - There is no blocked process queue associated with the `kWait()` syscall (no need for a queue, we just mark the PCB with the attribute: `is_wait_blocked`)
+- Our `kReclaim()` implementation is not very sophisticated
+    - If the blocked process queues associated with the pipe/lock/cvar are not empty, the reclaim call fails
+    - If a lock that is currently locked is being reclaimed, the call fails.
 - Other minor notes
     - Kernel supports a maximum of 50 pipes, 50 locks, 50cvars (at any given point in time). This may be changed by modifying the constants in `kernel.c`.
     - You may call `yalnix` with a maximum of 30 arguments (arbitrary).
 
 
-
 ### Dealing with running out of physical memory
+We (to our knowledge) gracefully handle scenarios where we run out of physical memory.  
+
+Places where we may run out of physical memory (basically anywhere find_free_frame() is called in a loop)
+    - `setKernelBrk` (while raising kernel heap) 
+        - We `Halt()` the CPU.
+    - `kBrk` (while raising user heap) 
+        - No memory leaks (no frames that will permanently remain marked as "used")
+        - The user process is exited with ERROR.
+    - `MemoryTrap` (while raising user stack) 
+        - No memory leaks (no frames that will permanently remain marked as "used")
+        - The user process is exited with ERROR.
+    - `kFork` (while allocating frames for the new process - R1 ptable, kernel stack)
+        - No memory leaks (no frames that will permanently remain marked as "used")
+        - User's `Fork()` call returns with failure
+    - `kExec` 
+        - Should not run out of memory since we just cleared memory from an earlier process but ...
+        - Process that exec-ed exits with ERROR.
+
+
+
+
 
 ### Things we could improve
+- Can improve how we track our free frames
+    - Currently use a bitvector
+    - Ideally, we would track free frames using a linked list (as suggested in the manual)
+    - Even with the current bitvector implementation, we could have been slightly more sophisticated. We could have stored a `num_frames_currently_available` attribute with the bitvector. This would have made checking if enough physical memory is available for a process (before we created the process) easy. Currently our use of `find_n_free_frames()` solves the issue of atomic failure but it's more verbose than it needs to be.
+- Our `assign_pipe_id()` and `retire_pipe_id()` (and equivalent functions for locks, cvars) are naive
+    - We maintain global ID counters for pipes/locks/cvars. We use prime numbers for pipe/lock/cvar ids to be
+    able to distinguish between the three, given an ID
+    - There is no mechanism in place to reclaim a previously assigned id for future use
+    - To prevent issues caused by a really large number of pipes/locks/cvars being created, we restrict
+    the maximum number of of pipes/locks/cvars to a finite, small number (currently 50)
+- Can make `kReclaim()` more sophisticated
+- For pipe syscalls, can make buffer grow if pipe is full when `kPipeWrite()` tries to write
     
 
 
