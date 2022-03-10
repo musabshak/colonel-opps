@@ -4,7 +4,10 @@
  * Authors: Varun Malladi and Musab Shakeel
  * Date: 2/5/2022
  *
- * This file contains the executable kernel code for the colonel-opps OS.
+ * This file contains
+ *      - Declarations of several global variables used in different source files across colonel-opps.
+ *        These global variables are externed in k_common.h.
+ *      - The SetKernelBrk() and KernelStart() routines (and associated helper functions).
  *
  */
 
@@ -32,7 +35,7 @@ unsigned int g_num_kernel_stack_pages = KERNEL_STACK_MAXSIZE / PAGESIZE;
 
 // process queues
 queue_t *g_ready_procs_queue;
-queue_t *g_delay_blocked_procs_queue;
+queue_t *g_delay_blocked_procs_queue;  // blocked processes associated with the kDelay() syscall
 
 // terminal queues
 queue_t *g_term_blocked_read_queue;
@@ -41,6 +44,8 @@ queue_t *g_term_blocked_transmit_queue;
 
 // terminals
 term_buf_t *g_term_bufs[NUM_TERMINALS];
+
+// pipes
 hashtable_t *g_pipes_htable;
 int g_max_pipes = 50 * PIPE_ID_K;  // max number of pipes that can be created in one session of the kernel
 int g_pipe_id = PIPE_ID_K;         // next pipe created should have this id
@@ -60,7 +65,9 @@ int g_cvar_id_constant = CVAR_ID_K;
 
 /* E=== GLOBALS === */
 
-// Imitate a userland program for checkpoint 2.
+/**
+ * Imitate a userland program.
+ */
 void doIdle(void) {
     while (1) {
         TracePrintf(1, "DOIDLE RUNNING!\n");
@@ -96,7 +103,7 @@ int h_raise_brk(void *new_brk) {
         int free_frame_idx = find_free_frame(g_frametable);
 
         // If physical memory runs out during setKernelBrk(), halt the CPU.
-        // Don't care about the "memory leak".
+        // Don't care about the "memory leak" since we're halting the CPU.
         if (free_frame_idx < 0) {
             Halt();
             return ERROR;
@@ -105,7 +112,7 @@ int h_raise_brk(void *new_brk) {
         g_frametable[free_frame_idx] = 1;  // mark frame as used
 
         // !!! Fixed bug: (current_page + i + 1) => assumes current_page has already been allocated
-        // But we no longer make that assumption
+        // but we no longer make that assumption
         unsigned int next_page = current_page + i;
         g_reg0_ptable[next_page].valid = 1;
         g_reg0_ptable[next_page].prot = PROT_READ | PROT_WRITE;
@@ -172,9 +179,7 @@ int SetKernelBrk(void *new_brk) {
     // Fail if new_brk lies anywhere but the region above kernel data and below kernel stack.
     // Leave 1 page between kernel heap and stack (red zone!)
     if (!(new_brk_int <= (KERNEL_STACK_BASE - PAGESIZE) && new_brk_int >= last_addr_above_data)) {
-        TracePrintf(1,
-                    "oh no .. trying to extend kernel brk into kernel stack (or kernel "
-                    "data/text)\n");
+        TP_ERROR("Trying to extend kernel brk into kernel stack (or kernel data/text)\n");
         return ERROR;
     }
 
@@ -247,6 +252,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // Parse arguments
     TracePrintf(2, "Entering KernelStart\n");
 
+    // initialize previously declared globals
     g_len_frametable = pmem_size / PAGESIZE;
     g_kernel_brk = _kernel_orig_brk;  // _k_orig_brk is populated by hardware
     g_virtual_mem_enabled = 0;
@@ -264,19 +270,19 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     g_reg0_ptable = malloc(sizeof(pte_t) * MAX_PT_LEN);
     if (g_reg0_ptable == NULL) {
-        TracePrintf(1, "Malloc failed\n");
+        TP_ERROR("Malloc failed\n");
         return;
     }
 
     pte_t *init_r1_ptable = malloc(sizeof(pte_t) * MAX_PT_LEN);
     if (init_r1_ptable == NULL) {
-        TracePrintf(1, "Malloc failed\n");
+        TP_ERROR("Malloc failed\n");
         return;
     }
 
     g_frametable = malloc(sizeof(int) * g_len_frametable);
     if (g_frametable == NULL) {
-        TracePrintf(1, "Malloc failed\n");
+        TP_ERROR("Malloc failed\n");
         return;
     }
 
@@ -326,7 +332,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         g_reg0_ptable[i].prot = permission;
         g_reg0_ptable[i].pfn = i;
 
-        // Importaint: update frametable to mark assigned frame as occupied
+        // Important: update frametable to mark assigned frame as occupied
         g_frametable[i] = 1;
     }
 
@@ -377,23 +383,58 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
      */
 
     pcb_t *init_pcb = malloc(sizeof(*init_pcb));
+    if (init_pcb == NULL) {
+        TP_ERROR("Malloc failed\n");
+        return;
+    }
 
     /**
      * Need to initialize the following new pcb attributes:
-     *      - zombie_procs
-     *      - children_procs
-     *      - exit_status
-     *      - is_wait_blocked
+     *      - pid X
+     *
+     *      - uctxt X
+     *      - user_brk ?
+     *      - user_text_pg0 ?
+     *      - user_data_pg0 ?
+     *      - user_data_end ?
+     *      - user_stack_base ?
+     *
+     *      - kctxt ?
+     *      - kstack_frame_idxs X
+     *
+     *      - parent X
+     *      - r1_ptable X
+     *
+     *      - zombie_procs X
+     *      - children_procs X
+     *      - is_wait_blocked X
+     *      - exit_status X
+     *      - last_dying_child_exit_code X
+     *      - last_dying_child_pid X
+     *
+     *      - elapsed_clock_ticks X
+     *      - delay_clock_ticks X
+     *
      *      - term_bufs
+     *
+     * TODO: define a separate fxn to do this
      */
+
+    init_pcb->pid = helper_new_pid(init_r1_ptable);
+
+    init_pcb->parent = NULL;
+    init_pcb->r1_ptable = init_r1_ptable;
 
     init_pcb->zombie_procs = qopen();
     init_pcb->children_procs = qopen();
-    init_pcb->exit_status = -1;
     init_pcb->is_wait_blocked = 0;
-    // for (int i = 0; i < NUM_TERMINALS; i++) {
-    //     init_pcb->term_bufs[i] = NULL;
-    // }
+    init_pcb->exit_status = -1;
+    init_pcb->last_dying_child_exit_code = -42;
+    init_pcb->last_dying_child_pid = -42;
+
+    init_pcb->elapsed_clock_ticks = -42;
+    init_pcb->delay_clock_ticks = -42;
+
     for (int i = 0; i < NUM_TERMINALS; i++) {
         g_term_bufs[i] = malloc(sizeof(term_buf_t));
         g_term_bufs[i]->ptr = NULL;
@@ -401,18 +442,17 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         g_term_bufs[i]->end_pos_offset = 0;
     }
 
-    init_pcb->pid = helper_new_pid(init_r1_ptable);
-    init_pcb->r1_ptable = init_r1_ptable;
-
-    // !!!! On the way into a handler (Transition 5), copy the current
-    // UserContext into the PCB of the current proceess.
+    // !!! On the way into a handler (Transition 5), copy the current UserContext into the PCB of the current
+    // process.
     memcpy(&(init_pcb->uctxt), uctxt, sizeof(UserContext));
 
     // TODO: convert to for loop
     init_pcb->kstack_frame_idxs[0] = g_len_pagetable - 1;
     init_pcb->kstack_frame_idxs[1] = g_len_pagetable - 2;
 
-    /* Parse cmd_args to figure out which process to init with */
+    /**
+     * Parse cmd_args to figure out which process to init with
+     */
     unsigned int num_args = 0;
 
     char **tmp = cmd_args;
@@ -424,8 +464,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     TracePrintf(2, "num args: %d\n", num_args);
 
     // Can't give too many arguments
-    if (num_args > 20) {
-        TracePrintf(1, "Can't give more than 20 arguments to your program!\n");
+    if (num_args > 30) {
+        TP_ERROR("Can't give more than 30 arguments to your kernel!\n");
         return;
     }
 
@@ -436,9 +476,6 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     TracePrintf(2, "first process name: %s\n", first_process_name);
 
     LoadProgram(first_process_name, cmd_args, init_pcb);
-
-    // print_r0_page_table(g_reg0_ptable, g_len_pagetable, g_frametable);
-    // print_r1_page_table(init_r1_ptable, g_len_pagetable);
 
     /* S=================== SETUP IVT ==================== */
     TracePrintf(2, "Setting up IVT\n");
@@ -483,11 +520,10 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     }
 
     /**
-     * Need to initialize the following new pcb attributes:
-     *      - zombie_procs
-     *      - children_procs
-     *      - exit_status
-     *      - is_wait_blocked
+     * Initialize idle PCB.
+     *
+     * TODO: could define a separate PCB struct for idle PCB - idle doesn't need all the extra attributes and
+     * pointers.
      */
 
     g_idle_pcb->zombie_procs = qopen();
@@ -509,8 +545,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
     // Populate idlePCB
     g_idle_pcb->r1_ptable = idle_r1_ptable;
 
-    // !!!! On the way into a handler (Transition 5), copy the current
-    // UserContext into the PCB of the current proceess.
+    // !!!! On the way into a handler (Transition 5), copy the current UserContext into the PCB of the current
+    // process.
     memcpy(&(g_idle_pcb->uctxt), uctxt, sizeof(UserContext));
     g_idle_pcb->pid = helper_new_pid(idle_r1_ptable);  // hardware defined function for generating PID
     g_idle_pcb->user_text_pg0 = 0;
@@ -520,7 +556,7 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     int idx = find_free_frame(g_frametable);
     if (idx == -1) {
-        TracePrintf(1, "find_free_frame() failed while allocating frames for idle's user_stack\n");
+        TP_ERROR("find_free_frame() failed while allocating frames for idle's user_stack\n");
         return;
     }
 
@@ -535,26 +571,24 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
         int idx = find_free_frame(g_frametable);
 
         if (idx == -1) {
-            TracePrintf(1, "find_free_frame() failed while allocating frames for idle's kernel_stack\n");
+            TP_ERROR("find_free_frame() failed while allocating frames for idle's kernel_stack\n");
             return;
         }
         g_idle_pcb->kstack_frame_idxs[i] = idx;
         g_frametable[idx] = 1;
     }
 
-    // // Stack values increment in 4 bytes. Intel is little-endian; sp needs to point to
-    // // 0x1ffffc (and not 0x1fffff)
-    g_idle_pcb->uctxt.sp = (void *)(VMEM_LIMIT - 4);  // !!!!!!!!!!
-    g_idle_pcb->uctxt.pc = doIdle;                    // !!!!!!!!!!
+    // Stack values increment in 4 bytes. Intel is little-endian; sp needs to point to
+    // 0x1ffffc (and not 0x1fffff)
+    g_idle_pcb->uctxt.sp = (void *)(VMEM_LIMIT - 4);  // !!!
+    g_idle_pcb->uctxt.pc = doIdle;                    // !!!
 
-    // print_r1_page_table(idle_r1_ptable, g_len_pagetable);
-
+    // Open global process queues
     g_ready_procs_queue = qopen();
     g_delay_blocked_procs_queue = qopen();
     g_term_blocked_read_queue = qopen();
     g_term_blocked_write_queue = qopen();
     g_term_blocked_transmit_queue = qopen();
-    // g_wait_blocked_procs_queue = qopen();
     g_pipes_htable = hopen(30);
     g_locks_htable = hopen(30);
     g_cvars_htable = hopen(30);
@@ -568,8 +602,8 @@ void KernelStart(char *cmd_args[], unsigned int pmem_size, UserContext *uctxt) {
 
     // Should the following copy the entire saved user_context (and not just the pc and sp pointers?)
     // I think it doesn't matter here because the context-switching is between init and idle
-    uctxt->pc = g_running_pcb->uctxt.pc;  // !!!!!!!!!!
-    uctxt->sp = g_running_pcb->uctxt.sp;  // !!!!!!!!!!
+    uctxt->pc = g_running_pcb->uctxt.pc;  // !!!
+    uctxt->sp = g_running_pcb->uctxt.sp;  // !!!
 
     TracePrintf(2, "g_running_pcb's pid: %d\n", g_running_pcb->pid);
     TracePrintf(2, "Exiting KernelStart\n");

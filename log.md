@@ -7,6 +7,14 @@
 - Hashtables used for storing cvars/pipes/locks (for O(1) lookup)
 - Sophisticated Fork() failure handling (unwinding carefully, if Fork() fails)
 - If a process Exits, but was holding a lock, that's problematic
+- Do not have a queue of processes associated with the kWait() syscall
+- max pipes/locks/cvars: 50 (can change at top of kernel.c)
+- Can improve assign_pipe_id() and retire_pipe_id() code (just use a global counter)
+- Can improve frametable code
+    - Use a queue of frames instead of bitvector
+    - Even if use bitvector, can store an additional field "num_frames_available_right_now" so before allocating multiple
+    frames, we can check if we have physical memory availabile in order to perform a particular syscall/operation
+- Can give max 30 args to kernel
 
 ### Random thoughts
 Places where we may run out of physical memory (basically anywhere find_free_frame() is called in a loop)

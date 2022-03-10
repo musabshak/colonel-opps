@@ -7,7 +7,7 @@
 SYSCALLS = syscalls/proc_syscalls.c syscalls/io_syscalls.c syscalls/ipc_syscalls.c syscalls/sync_syscalls.c
 SEAN_TESTS = sean_bigstack.c sean_forktest.c sean_zero.c
 SYSCALL_TESTS = exec_test.c io_syscalls_tests.c ipc_syscalls_tests.c terminal_tests.c sync_syscalls_tests.c reclaim_tests.c
-OTHER_TSTS = cp3_tests.c cp4_tests.c grow_ustack_toomuch.c cp5_tests.c memory_trap_handler_tests.c  torture.c
+OTHER_TESTS = cp3_tests.c cp4_tests.c grow_ustack_toomuch.c cp5_tests.c memory_trap_handler_tests.c  torture.c
 
 # Where's your kernel source?
 K_SRC_DIR = src
