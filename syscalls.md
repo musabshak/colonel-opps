@@ -77,3 +77,45 @@ and the latter to 0. Then we call the scheduler, telling it to put the caller on
 queue. (On clock traps, this queue is traversed it puts the process back on the ready 
 queue if it has delayed for long enough.) Once we wake up, we know that we have finished 
 delaying so we return.
+
+## IO 
+
+### Gaining access to termnial
+There are two manners in which a process will be trying to gain access to a terminal: either 
+it is trying to read to that terminal, or it is trying to write to that terminal. 
+
+The usage of terminals is modeled by two arrays (one for read, one for write). Each entry 
+corresponds to a terminal, and the value of that entry is either 0, which represents that 
+no one is using that terminal, or it contains the PID of the process that is using the terminal
+currently. We also have a bit that keeps track of if anyone is writing (to any) terminal. 
+This was a workaround to a situation we ran into where the kernel crashed because we attempted
+to call `TtyTransmit()` while it was already doing something. 
+
+- If caller is trying to read, check if the corresponding entry in the read array is equal to 
+the caller's PID or equal to 0. If so, caller can access the terminal, so update the read 
+array and return. Otherwise, we need to block, so schedule and put the caller on the queue 
+for processes waiting to read a terminal. When it wakes up, check again if it is OK to give 
+the caller access, etc. If the caller can gain access, do the steps at the beginning of this 
+point.
+- If the caller is trying to write, not only do we make the same checks as in the read case
+(but this time for the write array), we also check the "in writing" bit, as we discussed 
+two paragraphs back. Everything else is analagous.
+
+### Releasing access to terminal
+Set the corresponding entry in the read/write array to 0, and then go through the corresponding
+blocked terminal queue and wake up any processes waiting to use that terminal it was just 
+using.
+
+### TtyRead
+Validate arguments and gain access to terminal. Then check if the kernel buffer which receives
+data from the hardware and stores it actually has anything in it. If it doesn't, then the 
+data hasn't come in yet, so we need to block. Put it on the blocked read terminal queue. 
+When it wakes up, there is stuff to read, so copy it over from the kernel buf to the user buf.
+Then release access to the terminal.
+
+### TtyWrite
+Validate arguments and gain access to terminal. Copy user buf in to a kernel buf. Write from 
+the kernel buf to the terminal using `TtyTransmit()` in chunks. When calling that function 
+on a chunk, call the scheduler so other programs to run. When the transmit finishes, a trap 
+will be invoked and this process will be put back on the ready queue so that when it runs it
+will resume as if it just finished that transmit call. Release access to terminal and return.
