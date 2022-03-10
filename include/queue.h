@@ -1,13 +1,13 @@
 /**
- * Imported from 19F ENGS 50
- * Author: Musab Shakeel + Selim Hassairi
+ * queue.h -- public interface to the queue module.
+ *
+ * Authors: Musab Shakeel, Selim Hassairi
+ * Date: Fall 2019 (ENGS 50)
  *
  */
 
 #pragma once
-/*
- * queue.h -- public interface to the queue module
- */
+
 #include <stdbool.h>
 #include <stdint.h>
 

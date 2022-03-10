@@ -21,15 +21,7 @@
 
 
 ### Done
-- kernel.c
-- k_common.c
-- k_common.h
-- load_program.c
-- queue.c
-- hash.c
-- scheduler.c
-- trap_handlers.c
-- proc_syscalls.c
+
 
 ### Random thoughts
 Places where we may run out of physical memory (basically anywhere find_free_frame() is called in a loop)

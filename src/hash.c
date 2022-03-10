@@ -1,9 +1,8 @@
 /* hash.c -- A generic hash table implementation, allowing arbitrary
  * key structures.
  *
- * Authors: Musab Shakeel & Selim Hassari
- * Course: ENGS 50
- * Date: Fall 2019
+ * Authors: Musab Shakeel, Selim Hassairi
+ * Date: Fall 2019 (ENGS 50)
  *
  * Description:
  * Implements a hash table as a queue of queues. Any type of data can be
