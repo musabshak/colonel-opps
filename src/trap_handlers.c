@@ -1,3 +1,15 @@
+/**
+ * trap_handlers.c
+ *
+ * Authors: Varun Malladi and Musab Shakeel
+ * Date: 2/5/2022
+ *
+ * This file defines trap handlers used in colonel-opps, and any associated helper functions.
+ *
+ * Trap handlers are functions pointed to by pointers in the interrupt vector table
+ *
+ */
+
 #include "address_validation.h"
 #include "k_common.h"
 #include "printing.h"
@@ -46,10 +58,6 @@ bool pcb_delay_finished(void *elementp, const void *key) {
 }
 
 /*
-Trap handlers are functions pointed to by pointers in the interrupt vector table
-*/
-
-/*
  *  ===================
  *  === TRAP KERNEL ===
  *  ===================
@@ -65,7 +73,7 @@ Trap handlers are functions pointed to by pointers in the interrupt vector table
  *
  *  - The code numbers are found in include/yalnix.h
  *
- *  This handler really only needs to call the appropriate kernel syscall subroutine,
+ * This handler really only needs to call the appropriate kernel syscall subroutine,
  * based on the kernel code received in user_context->code field. The only implementation
  * design of significance is how arguments are parsed from *user_context and passed into
  * the syscall, and how the syscall return value is passed back to userland via
@@ -86,20 +94,18 @@ int TrapKernelHandler(UserContext *user_context) {
         int *status_ptr;  // for kWait()
         int exit_code;    // for kExit()
         int tty_id;       // for kTtyRead() / kTtyWrite()
-        int bytes_read;
-        int *pipe_idp;  // for kPipeInit()
-        int pipe_id;    // for kPipeRead/Write()
-        void *buf;      // for kPipeRead/Write()
-        int len;        // for kPipeRead/Write()
-        int *lock_idp;  // for kLockInit()
-        int lock_id;    // for kAcquire/kRelease()
-        int *cvar_idp;  // for kCvarInit()
-        int cvar_id;    // for cvar syscalls
-        int id;         // for kReclaim()
-
-        // `kExec()` args
-        char *filename;
-        char **argvec;
+        int bytes_read;   // for kTTyRead()
+        int *pipe_idp;    // for kPipeInit()
+        int pipe_id;      // for kPipeRead/Write()
+        void *buf;        // for kPipeRead/Write()
+        int len;          // for kPipeRead/Write()
+        int *lock_idp;    // for kLockInit()
+        int lock_id;      // for kAcquire/kRelease()
+        int *cvar_idp;    // for kCvarInit()
+        int cvar_id;      // for cvar syscalls
+        int id;           // for kReclaim()
+        char *filename;   // for kExec()
+        char **argvec;    // for kExec()
 
         case YALNIX_GETPID:
             pid = kGetPid();
@@ -120,7 +126,6 @@ int TrapKernelHandler(UserContext *user_context) {
             } else {
                 user_context->regs[0] = g_running_pcb->uctxt.regs[0];
             }
-
             break;
         case YALNIX_EXEC:
             filename = (char *)user_context->regs[0];
@@ -157,7 +162,6 @@ int TrapKernelHandler(UserContext *user_context) {
             kTtyWrite(tty_id, buf, len);
             break;
         case YALNIX_PIPE_INIT:
-            TracePrintf(2, "PIPE INIT SYSCALL TRAP!\n");
             pipe_idp = (int *)user_context->regs[0];
             rc = kPipeInit(pipe_idp);
             user_context->regs[0] = rc;
@@ -168,7 +172,6 @@ int TrapKernelHandler(UserContext *user_context) {
             len = user_context->regs[2];
             rc = kPipeRead(pipe_id, buf, len);
             user_context->regs[0] = rc;
-
             break;
         case YALNIX_PIPE_WRITE:
             pipe_id = user_context->regs[0];
@@ -276,30 +279,6 @@ int TrapClock(UserContext *user_context) {
 }
 
 /*
- *  ===================
- *  === TRAPILLEGAL ===
- *  ===================
- *
- *  OS response (manual, p. 36):
- *      Abort the currently running Yalnix user process but continue running
- *      other processes.
- *
- */
-
-int TrapIllegal(UserContext *user_context) {
-    TracePrintf(2, "Entering `TrapIllegal()`...\n");
-    int caller_pid = g_running_pcb->pid;
-    if (caller_pid != 0) {
-        TracePrintf(2, "Killing PID %d.\n", caller_pid);
-        kExit(ERROR);
-    } else {
-        // this is init that trapped here
-        TracePrintf(2, "`init` process error, halting CPU.\n");
-        Halt();
-    }
-}
-
-/*
  *  ==================
  *  === TRAPMEMORY ===
  *  ==================
@@ -403,33 +382,50 @@ int TrapMemory(UserContext *user_context) {
     free(frames_found);
 
     // Update PCB to reflect this change
+
     // varun: do we do this even if we haven't put anything on the newly allocated pages?
     // (or are we only going to reach this code if those pages are going to be populated
     // right away)
+    // musab: hmm good question, not sure. let's keep this comment here.
     g_running_pcb->user_stack_base = (void *)DOWN_TO_PAGE((unsigned int)addr);
 
     return SUCCESS;
 }
 
 /*
- *  ================
- *  === TRAPMATH ===
- *  ================
+ *  ===================
+ *  === TRAPILLEGAL ===
+ *  ===================
  *
- *  From manual (p. 36):
+ *  OS response (manual, p. 36):
+ *      Abort the currently running Yalnix user process but continue running
+ *      other processes.
  *
  */
+
+int TrapIllegal(UserContext *user_context) {
+    TracePrintf(2, "Entering `TrapIllegal()`...\n");
+    int caller_pid = g_running_pcb->pid;
+    if (caller_pid != 0) {
+        TP_ERROR("Killing PID %d.\n", caller_pid);
+        kExit(ERROR);
+    } else {
+        // this is init that trapped here
+        TP_ERROR("`init` process error, halting CPU.\n");
+        Halt();
+    }
+}
 
 int TrapMath(UserContext *user_context) {
     TracePrintf(2, "Entering `TrapMath()`...\n");
     int caller_pid = g_running_pcb->pid;
     if (caller_pid != 0) {
-        TracePrintf(2, "Killing PID %d.\n", caller_pid);
+        TP_ERROR("Killing PID %d.\n", caller_pid);
         kExit(ERROR);
     } else {
         // this is init that trapped here
-        TracePrintf(2, "`init` process error, halting CPU.\n");
-        Halt();
+        TP_ERROR("`init` process error, halting CPU.\n");
+        Halt();  // shouldn't be necessary - kExit Halts() if init process exiting
     }
 }
 
@@ -566,11 +562,11 @@ int TrapDisk(UserContext *user_context) {
     TracePrintf(2, "Entering `TrapDisk()`...\n");
     int caller_pid = g_running_pcb->pid;
     if (caller_pid != 0) {
-        TracePrintf(2, "Killing PID %d.\n", caller_pid);
+        TP_ERROR("Killing PID %d.\n", caller_pid);
         kExit(ERROR);
     } else {
         // this is init that trapped here
-        TracePrintf(2, "`init` process error, halting CPU.\n");
+        TP_ERROR("`init` process error, halting CPU.\n");
         Halt();
     }
 }
