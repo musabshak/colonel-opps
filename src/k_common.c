@@ -2,7 +2,7 @@
  * Authors: Varun Malladi and Musab Shakeel
  * Date: 2/5/2022
  *
- * This file contains different shared kernel code.
+ * This file contains definitions for routines used by functions spread across different source files.
  *
  */
 
