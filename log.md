@@ -24,6 +24,7 @@
 - kernel.c
 - k_common.c
 - k_common.h
+- load_program.c
 
 ### Random thoughts
 Places where we may run out of physical memory (basically anywhere find_free_frame() is called in a loop)
