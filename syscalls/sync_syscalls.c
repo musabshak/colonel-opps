@@ -532,6 +532,124 @@ int kCvarBroadcast(int cvar_id) {
     return 0;
 }
 
+/**
+ * Called by kReclaim(). Frees resources associated with the specified pipe.
+ */
+int destroy_pipe(int pipe_id) {
+
+    /**
+     * Get pipe from hashtable
+     */
+    char pipe_key[MAX_KEYLEN];
+    sprintf(pipe_key, "pipe%d\0", pipe_id);
+
+    pipe_t *pipe = (pipe_t *)hsearch(g_pipes_htable, search_pipe, pipe_key, strlen(pipe_key));
+    if (pipe == NULL) {
+        TP_ERROR("Failed retrieving pipe %d from pipes hashtable. Your pipe may not exist.\n", pipe_id);
+        return ERROR;
+    }
+
+    /**
+     * Fail to destroy pipe if there are processes waiting in the blocked queue.
+     */
+    if (!qis_empty(pipe->blocked_procs_queue)) {
+        TP_ERROR(
+            "Failed to destroy pipe because there exist blocked processes waiting for input on this pipe\n");
+        return ERROR;
+    }
+
+    /**
+     * Remove pipe from hashtable, close the blocked procs queue, and free the pipe struct.
+     */
+    pipe = (pipe_t *)hremove(g_pipes_htable, search_pipe, pipe_key, strlen(pipe_key));
+    if (pipe == NULL) {
+        TP_ERROR("Failed removing pipe %d from pipes hashtable. Your pipe may not exist.\n", pipe_id);
+        return ERROR;
+    }
+    qclose(pipe->blocked_procs_queue);
+    free(pipe);
+}
+
+/**
+ * Called by kReclaim(). Frees resources associated with the specified lock.
+ */
+int destroy_lock(int lock_id) {
+
+    /**
+     * Get lock from hashtable
+     */
+    char lock_key[MAX_KEYLEN];
+    sprintf(lock_key, "lock%d\0", lock_id);
+
+    lock_t *lock = (lock_t *)hsearch(g_locks_htable, search_lock, lock_key, strlen(lock_key));
+    if (lock == NULL) {
+        TP_ERROR("Failed retrieving lock %d from locks hashtable. Your lock may not exist.\n", lock_id);
+        return ERROR;
+    }
+
+    /**
+     * Fail to destroy lock if lock is locked, or there are processes waiting in the blocked queue.
+     */
+    if (lock->locked) {
+        TP_ERROR("Failed to destroy lock because the lock is currently locked\n");
+        return ERROR;
+    }
+    if (!qis_empty(lock->blocked_procs_queue)) {
+        TP_ERROR("Failed to destroy lock because there exist blocked processes associated with this lock\n");
+        return ERROR;
+    }
+
+    /**
+     * Remove lock from lock hashtable, close the blocked queue, and free the lock struct.
+     */
+    lock = (lock_t *)hremove(g_locks_htable, search_lock, lock_key, strlen(lock_key));
+    if (lock == NULL) {
+        TP_ERROR("Failed removing lock %d from locks hashtable. Your lock may not exist.\n", lock_id);
+        return ERROR;
+    }
+
+    qclose(lock->blocked_procs_queue);
+    free(lock);
+}
+
+/**
+ * Called by kReclaim(). Frees resources associated with the specified cvar.
+ */
+int destroy_cvar(int cvar_id) {
+
+    /**
+     * Get cvar from hashtable
+     */
+    char cvar_key[MAX_KEYLEN];
+    sprintf(cvar_key, "cvar%d\0", cvar_id);
+
+    cvar_t *cvar = (cvar_t *)hsearch(g_cvars_htable, search_cvar, cvar_key, strlen(cvar_key));
+    if (cvar == NULL) {
+        TP_ERROR("Failed retrieving cvar %d from cvars hashtable\n", cvar_id);
+        return ERROR;
+    }
+
+    /**
+     * Fail to destroy cvar if blocked procs queue is not empty.
+     */
+    if (!qis_empty(cvar->blocked_procs_queue)) {
+        TP_ERROR("Failed to destroy cvar because there exist blocked processes associated with this cvar\n");
+        return ERROR;
+    }
+
+    /**
+     * Remove cvar from cvar hashtable, close the blocked queue, and free the cvar struct.
+     */
+    cvar = (cvar_t *)hremove(g_cvars_htable, search_cvar, cvar_key, strlen(cvar_key));
+    if (cvar == NULL) {
+        TP_ERROR("Failed removing cvar %d from cvars hashtable. Your cvar may not exist\n", cvar_id);
+        return ERROR;
+    }
+
+    qclose(cvar->blocked_procs_queue);
+    free(cvar);
+}
+
 /*
  *  ===============
  *  === RECLAIM ===
@@ -544,19 +662,23 @@ int kCvarBroadcast(int cvar_id) {
  *      If you feel additional specification is necessary to handle unusual
  *      scenarios, then create and document it.
  *
- *  Thoughts
- *  - Not sure how to determine whether its a lock/cvar/pipe being reclaimed, based on id alone
- *  since we're maintaing separate counters for
- *      - Suggestions: increment lock_id in multiples of 3, cvar_id in multiples of 5, pipe_id in multiples of
- * 7
+ *  If id % 3 == 0: pipe
+ *  If id % 5 == 0: lock
+ *  If id % 7 == 0: cvar
  *
- *  Pseudocode
- *  - Determine whether to look in the lock_list_qp or cvar_list_qp or pipe_list_qp
- *      - if id % 3 == 0: look in lock_qp
- *      - elif id % 5 == 0: look in cvar_list_qp
- *      - elif id % 7 == 0: look in pipe_list_qp
- *  - If lock
- *      - Go through lock.blocked_processes, remove each process from queue, and kill process?
+ *  If the blocked process queues associated with the pipe/lock/cvar are not empty, the reclaim
+ *  call fails. If a lock that is currently locked is being reclaimed, the call fails.
  *
  */
-int kReclaim(int id) {}
+int kReclaim(int id) {
+    int rc;
+    if ((id % PIPE_ID_K) == 0) {
+        rc = destroy_pipe(id);
+    } else if ((id % LOCK_ID_K) == 0) {
+        rc = destroy_lock(id);
+    } else if ((id % CVAR_ID_K) == 0) {
+        rc = destroy_cvar(id);
+    }
+
+    return rc;
+}

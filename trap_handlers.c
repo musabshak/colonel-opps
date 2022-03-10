@@ -95,6 +95,7 @@ int TrapKernelHandler(UserContext *user_context) {
         int lock_id;    // for kAcquire/kRelease()
         int *cvar_idp;  // for kCvarInit()
         int cvar_id;    // for cvar syscalls
+        int id;         // for kReclaim()
 
         // `kExec()` args
         char *filename;
@@ -210,6 +211,11 @@ int TrapKernelHandler(UserContext *user_context) {
             cvar_id = user_context->regs[0];
             lock_id = user_context->regs[1];
             rc = kCvarWait(cvar_id, lock_id);
+            user_context->regs[0] = rc;
+            break;
+        case YALNIX_RECLAIM:
+            id = user_context->regs[0];
+            rc = kReclaim(id);
             user_context->regs[0] = rc;
             break;
     }
