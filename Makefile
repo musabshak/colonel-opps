@@ -6,9 +6,11 @@
 
 SYSCALLS = syscalls/proc_syscalls.c syscalls/io_syscalls.c syscalls/ipc_syscalls.c syscalls/sync_syscalls.c
 SEAN_TESTS = sean_bigstack.c sean_forktest.c sean_zero.c
+SYSCALL_TESTS = exec_test.c io_syscalls_tests.c ipc_syscalls_tests.c terminal_tests.c sync_syscalls_tests.c reclaim_tests.c
+OTHER_TSTS = cp3_tests.c cp4_tests.c grow_ustack_toomuch.c cp5_tests.c memory_trap_handler_tests.c  torture.c
 
 # Where's your kernel source?
-K_SRC_DIR = .
+K_SRC_DIR = src
 
 # What are the kernel c and include files?
 K_SRCS =  kernel.c trap_handlers.c k_common.c queue.c load_program.c scheduler.c address_validation.c hash.c $(SYSCALLS) mbuilder.c
@@ -18,7 +20,7 @@ K_INCS =
 U_SRC_DIR = tests
 
 # What are the user c and include files?
-U_SRCS = reclaim_tests.c init.c cp3_tests.c cp4_tests.c exec_test.c grow_ustack_toomuch.c cp5_tests.c memory_trap_handler_tests.c io_syscalls_tests.c ipc_syscalls_tests.c terminal_tests.c sync_syscalls_tests.c torture.c $(SEAN_TESTS)
+U_SRCS = init.c $(SYSCALL_TESTS) $(SEAN_TESTS) $(OTHER_TESTS) 
 U_INCS = 
 
 
@@ -92,7 +94,7 @@ CPPFLAGS= -D_FILE_OFFSET_BITS=64 -m32 -fno-builtin -I. -I$(INCDIR) -g -DLINUX -f
 all: $(ALL)	
 
 clean:
-	rm -f *.o *~ TTYLOG* TRACE $(YALNIX_OUTPUT) $(USER_APPS) $(KERNEL_OBJS) $(USER_OBJS) core.* ~/core DISK
+	rm -f *.o *~ TTYLOG* TRACE $(YALNIX_OUTPUT) $(USER_APPS) $(KERNEL_OBJS) $(USER_OBJS) core.* ~/core DISK queue_test
 
 count:
 	wc $(KERNEL_SRCS) $(USER_SRCS)

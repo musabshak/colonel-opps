@@ -21,7 +21,7 @@ Places where we may run out of physical memory (basically anywhere find_free_fra
     - kFork (allocating frames for the new process - R1 ptable, kernel stack) X
         - Release frames assigned before memory ran out
         - Fail Fork() call
-    - kExec
+    - kExec X
         - Theoretically should not run out of memory since we just tore down a process?
 
 Other
