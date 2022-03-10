@@ -24,6 +24,163 @@ int get_num_valid_pages(pte_t *ptable) {
     return num_valid_pages;
 }
 
+int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
+    TracePrintf(2, "Calling h_raise_brk w/ arg: %x (page %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
+
+    unsigned int current_page = ((unsigned int)current_brk >> PAGESHIFT) - MAX_PT_LEN;
+    unsigned int new_page = ((unsigned int)new_brk >> PAGESHIFT) - MAX_PT_LEN;
+
+    unsigned int num_pages_to_raise = new_page - current_page;
+    unsigned int new_brk_int = (unsigned int)new_brk;
+
+    // Check if `new_brk` is not 0th byte of page. Then, since we are rounding the
+    // brk up to the next page we want to allocate the page the new_brk is
+    // on.
+    if (new_brk_int != (new_brk_int & PAGEMASK)) {
+        num_pages_to_raise += 1;
+    }
+
+    int *frames_found = find_n_free_frames(g_frametable, num_pages_to_raise);
+    if (frames_found == NULL) {  // ran out of physical memory
+        TP_ERROR("Ran out of physical memory while raising user brk. Exiting process now\n");
+        kExit(-1);
+    }
+
+    // Allocate new pages in R0 ptable (find free frames for each page etc.)
+    for (int i = 0; i < num_pages_to_raise; i++) {
+        int free_frame_idx = frames_found[i];
+
+        // no free frames were found [should never run into this given above find_n_free_frames() code]
+        if (free_frame_idx < 0) {
+            free(frames_found);
+            return ERROR;
+        }
+
+        // (current_page + i + 1) => assumes current_page has already been allocated
+        unsigned int next_page = current_page + i;
+        ptable[next_page].valid = 1;
+        ptable[next_page].prot = PROT_READ | PROT_WRITE;
+        ptable[next_page].pfn = free_frame_idx;
+    }
+
+    free(frames_found);
+    return 0;
+}
+
+int lower_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
+    TracePrintf(2, "Calling h_lower_brk\n");
+
+    unsigned int current_page = ((unsigned int)current_brk >> PAGESHIFT) - MAX_PT_LEN;
+    unsigned int new_page = ((unsigned int)new_brk >> PAGESHIFT) - MAX_PT_LEN;
+
+    unsigned int num_pages_to_lower = current_page - new_page;
+    unsigned int new_brk_int = (unsigned int)new_brk;
+
+    if (new_brk_int != (new_brk_int & PAGEMASK)) {
+        num_pages_to_lower -= 1;
+    }
+
+    // "Frees" pages from R0 pagetable (marks those frames as unused, etc.)
+    for (int i = 0; i < num_pages_to_lower; i++) {
+        unsigned int prev_page = current_page - i - 1;
+        unsigned int idx_to_free = g_reg0_ptable[prev_page].pfn;
+        g_frametable[idx_to_free] = 0;  // mark frame as un-used
+
+        ptable[prev_page].valid = 0;
+        ptable[prev_page].prot = PROT_NONE;
+        ptable[prev_page].pfn = 0;  // should never be touched
+    }
+
+    return 0;
+}
+
+void mark_parent_as_null(void *pcb_p) {
+    pcb_t *pcb = (pcb_t *)pcb_p;
+    pcb->parent = NULL;
+}
+
+/**
+ * Used by kExit().
+ */
+void free_zombie_pcb(void *zombie_p) {
+    zombie_pcb_t *zombie = (zombie_pcb_t *)zombie;
+    free(zombie);
+}
+
+void print_zombie_pcb(void *elementp) {
+    pcb_t *my_pcb = (pcb_t *)elementp;
+    TracePrintf(2, "zombie pid: %d \n", my_pcb->pid);
+}
+
+/*
+ * If the parent is not `NULL`, this will `malloc()` a new `zombie_pcb_t` and place it
+ * in the parent's zombie queue.
+ */
+int destroy_pcb(pcb_t *pcb, int exit_status) {
+    /* Retire pid */
+    helper_retire_pid(pcb->pid);
+
+    /* Free r1 pagetable */
+    pte_t *r1_ptable = pcb->r1_ptable;
+
+    for (int i = 0; i < g_len_pagetable; i++) {
+        if (r1_ptable[i].valid == 1) {
+            // Mark physical frame as available
+            int frame_idx = r1_ptable[i].pfn;
+            TracePrintf(2, "i: %d frame_idx: %d\n", i, frame_idx);
+            g_frametable[frame_idx] = 0;
+        }
+    }
+
+    /* Retire pid */
+    helper_retire_pid(pcb->pid);
+    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_1);
+    WriteRegister(REG_TLB_FLUSH, TLB_FLUSH_KSTACK);
+
+    free(r1_ptable);
+
+    /* Free kernel stack frames */
+    for (int i = 0; i < g_num_kernel_stack_pages; i++) {
+        // Mark physical frames as available
+        int frame_idx = pcb->kstack_frame_idxs[i];
+        g_frametable[frame_idx] = 0;
+    }
+
+    /* Mark all children's parent as `NULL` and free children queue */
+    if (pcb->children_procs != NULL) {
+        pcb_t *child_pcb;
+        qapply(pcb->children_procs, mark_parent_as_null);
+
+        qclose(pcb->children_procs);
+    }
+
+    /* Free zombie queue */
+    if (pcb->zombie_procs != NULL) {
+        qapply(pcb->zombie_procs, free_zombie_pcb);
+        qclose(pcb->zombie_procs);
+    }
+
+    /* Store pid and exit code as zombie, if necessary */
+    if (pcb->parent != NULL) {
+        zombie_pcb_t *zombie = malloc(sizeof(zombie_pcb_t));
+        zombie->pid = pcb->pid;
+        zombie->exit_status = exit_status;
+
+        // Allocate zombie queue to parent if necessary
+        if (pcb->parent->zombie_procs == NULL) {
+            pcb->parent->zombie_procs = qopen();
+        }
+
+        qput(pcb->parent->zombie_procs, (void *)zombie);
+        qapply(pcb->parent->zombie_procs, print_zombie_pcb);
+    }
+
+    /* Finally, free pcb struct */
+    free(pcb);
+
+    return SUCCESS;
+}
+
 int kFork() {
     TracePrintf(2, "Entering kFork\n");
 
