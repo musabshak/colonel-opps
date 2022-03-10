@@ -1,3 +1,17 @@
+/**
+ * ipc_syscalls.c
+ *
+ * Authors: Musab Shakeel
+ * Date: Late February 2022
+ *
+ * This file contains syscalls related to inter-process communication (so basically just pipes):
+ *      - kPipeInit()
+ *      - kPipeRead()
+ *      - kPipeWrite()
+ *
+ * This file also contains relevant helper functions required by above syscalls.
+ */
+
 #include "address_validation.h"
 #include "k_common.h"
 
