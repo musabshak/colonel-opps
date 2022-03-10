@@ -10,7 +10,7 @@
 
 ### Random thoughts
 Places where we may run out of physical memory (basically anywhere find_free_frame() is called in a loop)
-    - setKernelBrk (raising kernel heap)
+    - setKernelBrk (raising kernel heap) X
         - Halt()
     - kBrk (raising user heap)
         - Release frames assigned before memory ran out

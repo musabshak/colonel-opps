@@ -14,6 +14,8 @@
 #include "queue.h"
 #include "ykernel.h"
 
+void kExit(int status);
+
 void mark_parent_as_null(void *pcb_p) {
     pcb_t *pcb = (pcb_t *)pcb_p;
     pcb->parent = NULL;
@@ -257,12 +259,17 @@ int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
         num_pages_to_raise += 1;
     }
 
+    int *frames_found = find_n_free_frames(g_frametable, num_pages_to_raise);
+    if (frames_found == NULL) {  // ran out of physical memory
+        TP_ERROR("Ran out of physical memory while raising user brk. Exiting process now\n");
+        kExit(-1);
+    }
+
     // Allocate new pages in R0 ptable (find free frames for each page etc.)
     for (int i = 0; i < num_pages_to_raise; i++) {
-        int free_frame_idx = find_free_frame(g_frametable);
-        g_frametable[free_frame_idx] = 1;  // mark frame as used
+        int free_frame_idx = frames_found[i];
 
-        // no free frames were found
+        // no free frames were found [should never run into this given above find_n_free_frames() code]
         if (free_frame_idx < 0) {
             return ERROR;
         }
