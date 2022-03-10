@@ -688,8 +688,7 @@ int destroy_cvar(int cvar_id) {
  *
  */
 int kReclaim(int id) {
-    int rc;
-    TracePrintf(1, "id: %d res = %d\n", id, id % PIPE_ID_K);
+    int rc = -1;
     if ((id % PIPE_ID_K) == 0) {
         rc = destroy_pipe(id);
     } else if ((id % LOCK_ID_K) == 0) {

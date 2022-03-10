@@ -22,7 +22,7 @@ void test_reclaim1() {
 
     TracePrintf(1, "Calling Reclaim() on a pipe\n");
     rc = Reclaim(pipe_id);
-    TracePrintf(1, "rc: %d\n", rc);
+    TracePrintf(1, "rc: %d\n\n", rc);
 
     TracePrintf(1, "Calling Reclaim() on an already reclaimed pipe\n");
     rc = Reclaim(pipe_id);
@@ -30,7 +30,7 @@ void test_reclaim1() {
 
     TracePrintf(1, "Calling Reclaim() on a lock\n");
     rc = Reclaim(lock_id);
-    TracePrintf(1, "rc: %d\n", rc);
+    TracePrintf(1, "rc: %d\n\n", rc);
 
     TracePrintf(1, "Calling Reclaim() on an already reclaimed lock\n");
     rc = Reclaim(lock_id);
@@ -38,7 +38,7 @@ void test_reclaim1() {
 
     TracePrintf(1, "Calling Reclaim() on a cvar\n");
     rc = Reclaim(cvar_id);
-    TracePrintf(1, "rc: %d\n", rc);
+    TracePrintf(1, "rc: %d\n\n", rc);
 
     TracePrintf(1, "Calling Reclaim() on an already reclaimed cvar\n");
     rc = Reclaim(cvar_id);
