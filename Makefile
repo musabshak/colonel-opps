@@ -76,7 +76,7 @@ LINK_KERNEL = $(LINK.c)
 
 USER_LIBS = $(LIBDIR)/libuser.a
 ASFLAGS = -D__ASM__
-CPPFLAGS= -D_FILE_OFFSET_BITS=64 -m32 -fno-builtin -I. -I$(INCDIR) -g -DLINUX -fno-stack-protector
+CPPFLAGS= -D_FILE_OFFSET_BITS=64 -m32 -fno-builtin -I./include -I$(INCDIR) -g -DLINUX -fno-stack-protector
 
 
 ##########################
@@ -109,7 +109,7 @@ no-core:
 	rm -f core.*
 
 $(KERNEL_ALL): $(KERNEL_OBJS) $(KERNEL_LIBS) $(KERNEL_INCS)
-	$(LINK_KERNEL) -o $@ $(KERNEL_OBJS) $(KERNEL_LDFLAGS) 
+	$(LINK_KERNEL) -o $@ $(KERNEL_OBJS) $(KERNEL_LDFLAGS)
 
 $(USER_APPS): $(USER_OBJS) $(USER_INCS)
 	$(ETCDIR)/yuserbuild.sh $@ $(DDIR58) $@.o
