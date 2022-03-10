@@ -537,6 +537,8 @@ int kCvarBroadcast(int cvar_id) {
  */
 int destroy_pipe(int pipe_id) {
 
+    happly(g_pipes_htable, print_pipe);
+
     /**
      * Get pipe from hashtable
      */
@@ -568,12 +570,18 @@ int destroy_pipe(int pipe_id) {
     }
     qclose(pipe->blocked_procs_queue);
     free(pipe);
+
+    happly(g_pipes_htable, print_pipe);
+
+    return 0;
 }
 
 /**
  * Called by kReclaim(). Frees resources associated with the specified lock.
  */
 int destroy_lock(int lock_id) {
+
+    happly(g_locks_htable, print_lock);
 
     /**
      * Get lock from hashtable
@@ -610,6 +618,10 @@ int destroy_lock(int lock_id) {
 
     qclose(lock->blocked_procs_queue);
     free(lock);
+
+    happly(g_locks_htable, print_lock);
+
+    return 0;
 }
 
 /**
@@ -617,6 +629,7 @@ int destroy_lock(int lock_id) {
  */
 int destroy_cvar(int cvar_id) {
 
+    happly(g_cvars_htable, print_cvar);
     /**
      * Get cvar from hashtable
      */
@@ -648,6 +661,10 @@ int destroy_cvar(int cvar_id) {
 
     qclose(cvar->blocked_procs_queue);
     free(cvar);
+
+    happly(g_cvars_htable, print_cvar);
+
+    return 0;
 }
 
 /*
@@ -672,6 +689,7 @@ int destroy_cvar(int cvar_id) {
  */
 int kReclaim(int id) {
     int rc;
+    TracePrintf(1, "id: %d res = %d\n", id, id % PIPE_ID_K);
     if ((id % PIPE_ID_K) == 0) {
         rc = destroy_pipe(id);
     } else if ((id % LOCK_ID_K) == 0) {

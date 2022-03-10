@@ -41,19 +41,19 @@ queue_t *g_term_blocked_transmit_queue;
 term_buf_t *g_term_bufs[NUM_TERMINALS];
 hashtable_t *g_pipes_htable;
 int g_max_pipes = 50 * PIPE_ID_K;  // max number of pipes that can be created in one session of the kernel
-int g_pipe_id = 0;                 // next pipe created should have this id
+int g_pipe_id = PIPE_ID_K;         // next pipe created should have this id
 int g_pipe_id_constant = PIPE_ID_K;
 
 // locks
 hashtable_t *g_locks_htable;
 int g_max_locks = 50 * LOCK_ID_K;
-int g_lock_id = 0;
+int g_lock_id = LOCK_ID_K;
 int g_lock_id_constant = LOCK_ID_K;
 
 // cvars
 hashtable_t *g_cvars_htable;
 int g_max_cvars = 50 * CVAR_ID_K;
-int g_cvar_id = 0;
+int g_cvar_id = CVAR_ID_K;
 int g_cvar_id_constant = CVAR_ID_K;
 
 /* E=== GLOBALS === */
