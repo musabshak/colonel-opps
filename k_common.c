@@ -271,6 +271,7 @@ int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
 
         // no free frames were found [should never run into this given above find_n_free_frames() code]
         if (free_frame_idx < 0) {
+            free(frames_found);
             return ERROR;
         }
 
@@ -281,6 +282,7 @@ int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
         ptable[next_page].pfn = free_frame_idx;
     }
 
+    free(frames_found);
     return 0;
 }
 

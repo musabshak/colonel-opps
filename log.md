@@ -12,10 +12,10 @@
 Places where we may run out of physical memory (basically anywhere find_free_frame() is called in a loop)
     - setKernelBrk (raising kernel heap) X
         - Halt()
-    - kBrk (raising user heap)
+    - kBrk (raising user heap) X
         - Release frames assigned before memory ran out
         - kExit(-1)
-    - MemoryTrap (raising user stack)
+    - MemoryTrap (raising user stack) X
         - Release frames assigned before memory ran out
         - kExit(-1)
     - kFork (allocating frames for the new process - R1 ptable, kernel stack)

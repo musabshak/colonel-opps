@@ -380,7 +380,7 @@ int TrapMemory(UserContext *user_context) {
     // TODO: use malloc builder here (!!)
     int *frames_found = find_n_free_frames(g_frametable, num_pages_to_grow);
     if (frames_found == NULL) {
-        TP_ERROR("Failed to grow user stack (ran out of physical memory).\n");
+        TP_ERROR("Failed to grow user stack (ran out of physical memory). Exiting process now.\n");
         kExit(-1);
     }
 
