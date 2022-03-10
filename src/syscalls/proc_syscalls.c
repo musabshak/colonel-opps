@@ -1,3 +1,21 @@
+/**
+ * proc_syscalls.c
+ *
+ * Authors: Varun Malladi and Musab Shakeel
+ * Date: Febryary 2022
+ *
+ * This file contains syscalls related to basic process coordination:
+ *      - kGetPid()
+ *      - kBrk()
+ *      - kDelay()
+ *      - kFork()
+ *      - kExec()
+ *      - kExit()
+ *      - kWait()
+ *
+ * This file also contains relevant helper functions required by above syscalls.
+ */
+
 #include <stdbool.h>
 
 #include "address_validation.h"
@@ -24,6 +42,10 @@ int get_num_valid_pages(pte_t *ptable) {
     return num_valid_pages;
 }
 
+/**
+ * Helper function called by kBrk(). Very similar to h_raise_brk() used by setKernelBrk() but has enough
+ * differences to warrant having as a separate function.
+ */
 int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
     TracePrintf(2, "Calling h_raise_brk w/ arg: %x (page %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
 
@@ -67,6 +89,10 @@ int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
     return 0;
 }
 
+/**
+ * Helper function called by kBrk(). Very similar to h_lower_brk() used by setKernelBrk() but has enough
+ * differences to warrant having as a separate function.
+ */
 int lower_brk_user(void *new_brk, void *current_brk, pte_t *ptable) {
     TracePrintf(2, "Calling h_lower_brk\n");
 
@@ -112,9 +138,12 @@ void print_zombie_pcb(void *elementp) {
     TracePrintf(2, "zombie pid: %d \n", my_pcb->pid);
 }
 
-/*
+/**
+ * Called by kExit().
+ *
  * If the parent is not `NULL`, this will `malloc()` a new `zombie_pcb_t` and place it
  * in the parent's zombie queue.
+ *
  */
 int destroy_pcb(pcb_t *pcb, int exit_status) {
     /* Retire pid */
@@ -181,6 +210,13 @@ int destroy_pcb(pcb_t *pcb, int exit_status) {
     return SUCCESS;
 }
 
+/**
+ * Deals with a failing kFork() gracefully. If the kFork() call fails somewhere in the middle of the routine,
+ * care is taken to ensure that all malloced pointers are freed and that there are no memory leaks. This is
+ * done by "winding" and "unwinding" a malloc_builder object. Essentially, all malloced pointers are put on a
+ * queue, and if Fork() fails at any point, we iterate over the queue and free all the pointers. Refer to
+ * documentation on malloc_builder for more details.
+ */
 int kFork() {
     TracePrintf(2, "Entering kFork\n");
 
@@ -550,6 +586,13 @@ int kGetPid() {
     return g_running_pcb->pid;
 }
 
+/**
+ * Handles running out of physical memory gracefully. The user process that made tha kBrk() call is exited.
+ * Care is taken to ensure there is no "memory leak" (i.e. that the the failure is atomic - ie there aren't
+ * free frames forever marked used if the kBrk() call fails halfway through finding free frames).
+ *
+ * Uses two helper functions - raise_brk_user() and lower_brk_user().
+ */
 int kBrk(void *new_brk) {
     TracePrintf(2, "Calling Brk w/ arg: 0x%x (page: %d)\n", new_brk, (unsigned int)new_brk >> PAGESHIFT);
 

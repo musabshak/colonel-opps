@@ -28,6 +28,7 @@
 - queue.c
 - hash.c
 - scheduler.c
+- trap_handlers.c
 
 ### Random thoughts
 Places where we may run out of physical memory (basically anywhere find_free_frame() is called in a loop)
@@ -46,7 +47,7 @@ Places where we may run out of physical memory (basically anywhere find_free_fra
         - Theoretically should not run out of memory since we just tore down a process?
 
 Other
-- Could have stored num_free_frames currently available - slicker than find_n_free_frames?
+- Could have stored num_free_frames currently available, as a frametable attribute - slicker than find_n_free_frames?
     
 
 
