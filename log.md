@@ -6,6 +6,7 @@
 - Pipes use a circular array queue implementation
 - Hashtables used for storing cvars/pipes/locks (for O(1) lookup)
 - Sophisticated Fork() failure handling (unwinding carefully, if Fork() fails)
+- If a process Exits, but was holding a lock, that's problematic
 
 
 

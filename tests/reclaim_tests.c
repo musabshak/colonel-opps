@@ -16,6 +16,7 @@
  */
 void test_reclaim1() {
     int pipe_id, lock_id, cvar_id, rc;
+
     PipeInit(&pipe_id);
     LockInit(&lock_id);
     CvarInit(&cvar_id);
@@ -53,10 +54,76 @@ void test_reclaim1() {
  * (2)
  *
  * Test
+ *  - Calling reclaim on a locked lock
  *  - Calling reclaim on a pipe/lock/cvar that have associated blocked processes
- *  - calling reclaim on a locked lock
+ *
  */
-void test_reclaim2() {}
+void test_reclaim2() {
+    int pipe_id, lock_id, cvar_id, rc;
+    int buf_len = 50;
+    char read_buf[buf_len];
+
+    PipeInit(&pipe_id);
+    LockInit(&lock_id);
+    CvarInit(&cvar_id);
+
+    TracePrintf(1, "Acquiring lock\n");
+    rc = Acquire(lock_id);
+    TracePrintf(1, "rc: %d\n\n", rc);
+
+    TracePrintf(1, "Reclaiming a locked lock\n");
+    rc = Reclaim(lock_id);
+    TracePrintf(1, "rc: %d\n\n", rc);
+
+    int pid = Fork();
+    if (pid == 0) {
+        PipeRead(pipe_id, (void *)read_buf, buf_len);
+        Exit(0);
+    }
+
+    /**
+     * Test reclaiming pipe w/ blocked processes.
+     */
+    Delay(3);  // make sure child process reads
+    TracePrintf(1, "Reclaiming a pipe with associated blocked procs\n");
+    rc = Reclaim(pipe_id);
+    TracePrintf(1, "rc: %d\n\n", rc);
+
+    /**
+     * Test reclaiming lock w/ blocked procceses.
+     */
+    pid = Fork();
+    if (pid == 0) {
+        int i = 0;
+        while (i < 2) {
+            Fork();
+            i += 1;
+        }
+        Acquire(lock_id);
+        Exit(0);
+    }
+    Delay(3);
+
+    Release(lock_id);
+
+    TracePrintf(1, "Reclaiming a lock with associated blocked procs\n");
+    rc = Reclaim(lock_id);
+    TracePrintf(1, "rc: %d\n\n", rc);
+
+    /**
+     * Test reclaiming cvar w/ blocked processes.
+     */
+    pid = Fork();
+    if (pid == 0) {
+        CvarWait(cvar_id, lock_id);
+    }
+
+    Delay(2);
+
+    TracePrintf(1, "Reclaiming a cvar with associated blocked procs\n");
+    rc = Reclaim(cvar_id);
+    TracePrintf(1, "rc: %d\n\n", rc);
+}
 
 int main(int argc, char **argv) {
 
