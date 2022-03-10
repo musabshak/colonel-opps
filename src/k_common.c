@@ -1,8 +1,11 @@
 /**
+ * k_common.c
+ *
  * Authors: Varun Malladi and Musab Shakeel
  * Date: 2/5/2022
  *
- * This file contains definitions for routines used by functions spread across different source files.
+ * This file contains definitions for helper functions used by other functions that are spread across
+ * multiple source files.
  *
  */
 
@@ -31,6 +34,11 @@ void print_pcb(void *elementp) {
     TracePrintf(2, "pid: %d \n", my_pcb->pid);
 }
 
+/**
+ * Store current kctxt into new_pcb->kctxt. Also, copy current kernel stack contents into new_pcb's
+ * kernel stack frames. Since the new pcb's kernel stack frames have not been mapped onto yet, use a trick.
+ * The trick is to temporarily map page_below_kstack onto new_pcb's kernel stack frames one by one.
+ */
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     TracePrintf(2, "Entering KCCopy\n");
 
@@ -53,7 +61,7 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
 
         g_reg0_ptable[page_below_kstack].pfn = new_pcb->kstack_frame_idxs[i];
 
-        // !!!!!!!! Flush temporarily used page
+        // !!! Flush temporarily used page
         WriteRegister(REG_TLB_FLUSH, page_below_kstack_addr);
 
         // Copy page contents
@@ -90,6 +98,10 @@ KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used) {
     return kc_in;
 }
 
+/**
+ * Store current kernel context into curr_pcb->kctxt, and restore previously saved kernel context
+ * from new_pcb->kctxt.
+ */
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p) {
 
     TracePrintf(2, "Entering KCSwitch\n");
@@ -201,6 +213,9 @@ void retire_frames(int *frametable, int *frame_idxs) {
     }
 }
 
+/**
+ * Print R0 page table nicely. *Really* useful for debugging.
+ */
 void print_r0_page_table(pte_t *ptable, int size, int *frametable) {
 
     TracePrintf(2, "Printing R0 page table\n\n");
@@ -213,6 +228,9 @@ void print_r0_page_table(pte_t *ptable, int size, int *frametable) {
     TracePrintf(2, "\n");
 }
 
+/**
+ * Print R1 page table nicely. *Really* useful for debugging.
+ */
 void print_r1_page_table(pte_t *ptable, int size) {
 
     TracePrintf(2, "Printing R1 page table\n\n");
