@@ -168,11 +168,6 @@ int kTtyRead(int tty_id, void *buf, int len) {
     TracePrintf(2, "Entering `TtyRead()`...\n");
 
     /**
-     * Check if terminal is being used by another process. If so, sleep.
-     */
-    gain_access_to_term(tty_id, Read);
-
-    /**
      * Validate user inputs
      */
 
@@ -190,6 +185,11 @@ int kTtyRead(int tty_id, void *buf, int len) {
         TP_ERROR("attempted to read more than `TERMINAL_MAX_LINE` from terminal.\n");
         return ERROR;
     }
+
+    /**
+     * Check if terminal is being used by another process. If so, sleep.
+     */
+    gain_access_to_term(tty_id, Read);
 
     /**
      * If there isn't an input line from the terminal ready to go, block this process
@@ -210,10 +210,8 @@ int kTtyRead(int tty_id, void *buf, int len) {
 
     int bytes_remaining_in_kbuf = k_buf->end_pos_offset - k_buf->curr_pos_offset;
 
-    // TODO: Handle if above is 0
-
     // Copy over to user buf, clear kernel buf, and return
-    if (bytes_remaining_in_kbuf <= len) {
+    if (bytes_remaining_in_kbuf <= len && bytes_remaining_in_kbuf > 0) {
         memcpy(buf, k_buf->ptr + k_buf->curr_pos_offset, len);
         free(k_buf->ptr);  // TODO: abstract this "clearing" into a function
         k_buf->ptr = NULL;
@@ -252,12 +250,6 @@ int kTtyWrite(int tty_id, void *buf, int len) {
     TracePrintf(2, "Entering `kTtyWrite()`...\n");
 
     /**
-     * Check if terminal is being used by another process. If so, sleep.
-     */
-
-    gain_access_to_term(tty_id, Write);
-
-    /**
      * Valid user input
      */
 
@@ -270,6 +262,12 @@ int kTtyWrite(int tty_id, void *buf, int len) {
         TP_ERROR("the `buf` that was passed was not valid.\n");
         return ERROR;
     }
+
+    /**
+     * Check if terminal is being used by another process. If so, sleep.
+     */
+
+    gain_access_to_term(tty_id, Write);
 
     /**
      * Copy user buf to kernel buf

@@ -279,9 +279,6 @@ int kExec(char *filename, char **argvec) {
  */
 void kExit(int status) {
 
-    // TODO: should check if `status` here is valid? Someone could try passing an address here
-    // disguised as an int?
-
     pcb_t *caller = g_running_pcb;
     pcb_t *parent = caller->parent;
 
@@ -311,33 +308,6 @@ void kExit(int status) {
 
     g_running_pcb = NULL;  // the pcb g_running_pcb was previosuly pointing to, has been destroyed
     schedule(NULL);
-
-    /**
-     * For every child pcb in g_running_pcb->children_procs, mark child_pcb->parent = NULL.
-     */
-
-    /**
-     * If g_running_pcb->parent == NULL (orphan process), do not need to save or report exit status.
-     * Proceed to freeing all resources associated with process.
-     */
-
-    /**
-     * If g_running_pcb->parent->is_wait_blocked == 0:
-     *      - Put g_running_pcb into parent->zombie_procs
-     *      - Free all resources other than pcb->exit_status and pcb->pid
-     *      - The remaining pcb resources are freed when parent calls kWait eventually
-     */
-
-    /**
-     * If g_running_pcb->parent->is_wait_blocked == 1:
-     *      - (parent is actively waiting to hear news about child dying)
-     *      - (doesn't make sense to put child in zombie queue)
-     *      - Somehow need to wake up parent and tell parent the pid and the exit status
-     *          - Populate parent->last_dying_child_pid, parent->last_dying_child_status
-     *          - Remove parent from g_wait_blocked_queue
-     *          - Put parent into g_ready_procs_queue
-     *      - Free all resources associated with g_running_pcb
-     */
 }
 
 /**
