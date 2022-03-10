@@ -130,8 +130,8 @@ int kLockInit(int *lock_idp) {
 
     int rc = hput(g_locks_htable, (void *)new_lock, lock_key, strlen(lock_key));
     if (rc != 0) {
-        TracePrintf(1, "error occurred while putting lock into hashtable\n");
         free(new_lock);
+        TP_ERROR("error occurred while putting lock into hashtable\n");
         return ERROR;
     }
 
@@ -342,8 +342,8 @@ int kCvarInit(int *cvar_idp) {
 
     int rc = hput(g_cvars_htable, (void *)new_cvar, cvar_key, strlen(cvar_key));
     if (rc != 0) {
-        TP_ERROR("error occurred while putting cvar into hashtable\n");
         free(new_cvar);
+        TP_ERROR("error occurred while putting cvar into hashtable\n");
         return ERROR;
     }
 
