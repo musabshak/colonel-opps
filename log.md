@@ -16,6 +16,15 @@
     frames, we can check if we have physical memory availabile in order to perform a particular syscall/operation
 - Can give max 30 args to kernel
 
+### Questions
+- Would love feedback on code structure/style
+
+
+### Done
+- kernel.c
+- k_common.c
+- k_common.h
+
 ### Random thoughts
 Places where we may run out of physical memory (basically anywhere find_free_frame() is called in a loop)
     - setKernelBrk (raising kernel heap) X

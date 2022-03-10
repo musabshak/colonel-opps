@@ -132,6 +132,7 @@ typedef struct Cvar {
 
 KernelContext *KCCopy(KernelContext *kc_in, void *new_pcb_p, void *not_used);
 KernelContext *KCSwitch(KernelContext *kc_in, void *curr_pcb_p, void *new_pcb_p);
+
 int find_free_frame(unsigned int *frametable);
 int *find_n_free_frames(unsigned int *frametable, int num_frames);
 void retire_frames(int *frametable, int *frame_idxs);
@@ -139,11 +140,7 @@ void retire_frames(int *frametable, int *frame_idxs);
 void print_r0_page_table(pte_t *ptable, int size, int *frametable);
 void print_r1_page_table(pte_t *ptable, int size);
 
-int raise_brk_user(void *new_brk, void *current_brk, pte_t *ptable);
-int lower_brk_user(void *new_brk, void *current_brk, pte_t *ptable);
-
 void print_pcb(void *elementp);
-
 int destroy_pcb(pcb_t *pcb, int exit_status);
 
 int schedule(queue_t *old_process_destination_queue);
@@ -159,6 +156,3 @@ int retire_cvar_id(int cvar_id);
 
 void print_pipe(void *elementp);
 bool search_pipe(void *elementp, const void *searchkeyp);
-
-// int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable);
-// int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable);
