@@ -458,6 +458,35 @@ int assign_cvar_id() {
  */
 int retire_cvar_id(int cvar_id) { return 0; }
 
+/**
+ * Used by happly()
+ */
+
+void print_pipe(void *elementp) {
+    pipe_t *pipe = elementp;
+    TracePrintf(2, "Pipe id: %d\n", pipe->pipe_id);
+}
+
+/**
+ * Used by hsearch()
+ */
+
+bool search_pipe(void *elementp, const void *searchkeyp) {
+    pipe_t *pipe = (pipe_t *)elementp;
+    const char *search_key_str = searchkeyp;
+
+    char pipe_key[MAX_KEYLEN];
+    sprintf(pipe_key, "pipe%d\0", pipe->pipe_id);
+
+    TracePrintf(2, "Comparing strings: %s =? %s\n", pipe_key, search_key_str);
+    if (strcmp(pipe_key, search_key_str) == 0) {
+        TracePrintf(2, "Strings are the same!\n");
+        return true;
+    } else {
+        return false;
+    }
+}
+
 // ====================================================================
 /**
  * Helper function called by SetKernelBrk(void *addr) in the case that addr > g_kernel_brk,

@@ -148,5 +148,8 @@ int retire_lock_id(int lock_id);
 int assign_cvar_id();
 int retire_cvar_id(int cvar_id);
 
+void print_pipe(void *elementp);
+bool search_pipe(void *elementp, const void *searchkeyp);
+
 // int h_raise_brk(void *new_brk, void **curr_brk, pte_t *ptable);
 // int h_lower_brk(void *new_brk, void **curr_brk, pte_t *ptable);
