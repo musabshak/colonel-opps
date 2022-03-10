@@ -104,7 +104,7 @@ int kPipeInit(int *pipe_idp) {
      * to what the pointer is pointing to)
      */
     if (!is_r1_addr(pipe_idp) || !is_writeable_addr(g_running_pcb->r1_ptable, (void *)pipe_idp)) {
-        TracePrintf(1, "`kPipeInit()` passed an invalid pointer -- syscall now returning ERROR\n");
+        TP_ERROR("`kPipeInit()` passed an invalid pointer -- syscall now returning ERROR\n");
         return ERROR;
     }
 
@@ -113,7 +113,8 @@ int kPipeInit(int *pipe_idp) {
      */
     pipe_t *new_pipe = malloc(sizeof(*new_pipe));
     if (new_pipe == NULL) {
-        TracePrintf(1, "malloc failed in `kPipeInit`()\n");
+        free(new_pipe);
+        TP_ERROR("malloc failed in `kPipeInit`()\n");
         return ERROR;
     }
 
@@ -143,8 +144,8 @@ int kPipeInit(int *pipe_idp) {
 
     int rc = hput(g_pipes_htable, (void *)new_pipe, pipe_key, strlen(pipe_key));
     if (rc != 0) {
-        TracePrintf(1, "error occurred while putting pipe into hashtable\n");
         free(new_pipe);
+        TP_ERROR("error occurred while putting pipe into hashtable\n");
         return ERROR;
     }
 
