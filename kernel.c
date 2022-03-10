@@ -92,12 +92,15 @@ int h_raise_brk(void *new_brk) {
     // Allocate new pages in R0 ptable (find free frames for each page etc.)
     for (int i = 0; i < num_pages_to_raise; i++) {
         int free_frame_idx = find_free_frame(g_frametable);
-        g_frametable[free_frame_idx] = 1;  // mark frame as used
 
-        // no free frames were found
+        // If physical memory runs out during setKernelBrk(), halt the CPU.
+        // Don't care about the "memory leak".
         if (free_frame_idx < 0) {
+            Halt();
             return ERROR;
         }
+
+        g_frametable[free_frame_idx] = 1;  // mark frame as used
 
         // !!! Fixed bug: (current_page + i + 1) => assumes current_page has already been allocated
         // But we no longer make that assumption

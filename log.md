@@ -8,7 +8,25 @@
 - Sophisticated Fork() failure handling (unwinding carefully, if Fork() fails)
 - If a process Exits, but was holding a lock, that's problematic
 
+### Random thoughts
+Places where we may run out of physical memory (basically anywhere find_free_frame() is called in a loop)
+    - setKernelBrk (raising kernel heap)
+        - Halt()
+    - kBrk (raising user heap)
+        - Release frames assigned before memory ran out
+        - kExit(-1)
+    - MemoryTrap (raising user stack)
+        - Release frames assigned before memory ran out
+        - kExit(-1)
+    - kFork (allocating frames for the new process - R1 ptable, kernel stack)
+        - Release frames assigned before memory ran out
+        - Fail Fork() call
+    - kExec
+        - Theoretically should not run out of memory since we just tore down a process?
 
+Other
+- Could have stored num_free_frames currently available - slicker than find_n_free_frames?
+    
 
 
 ### Todo other

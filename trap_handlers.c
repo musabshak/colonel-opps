@@ -409,13 +409,6 @@ int TrapMemory(UserContext *user_context) {
     g_running_pcb->user_stack_base = (void *)DOWN_TO_PAGE((unsigned int)addr);
 
     return SUCCESS;
-
-    // musab: can get this via pcb->user_stack_base. also need to update pcb->user_stack_base
-    // (need to b/c kBrk needs to know the updated user_stack_base, and it finds the stack base from
-    // pcb->user_stack_base)
-
-    // musab: general comment - ideally, reduce if/else nesting (at the very least, the outter most
-    // if statement can be separated with a NOT, resulting in exit at the beginning)
 }
 
 /*
