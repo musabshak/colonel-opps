@@ -18,7 +18,7 @@ Places where we may run out of physical memory (basically anywhere find_free_fra
     - MemoryTrap (raising user stack) X
         - Release frames assigned before memory ran out
         - kExit(-1)
-    - kFork (allocating frames for the new process - R1 ptable, kernel stack)
+    - kFork (allocating frames for the new process - R1 ptable, kernel stack) X
         - Release frames assigned before memory ran out
         - Fail Fork() call
     - kExec

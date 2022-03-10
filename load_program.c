@@ -200,10 +200,18 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
      *
      * DONE
      */
+
+    int *frames_found = find_n_free_frames(g_frametable, li.t_npg);
+    if (frames_found == NULL) {  // ran out of physical memory
+        TP_ERROR("Ran out of physical memory (called by kExec). Returning ERROR.\n");
+        return ERROR;
+    }
+
     for (int i = 0; i < li.t_npg; i++) {
-        int frame_idx = find_free_frame(g_frametable);
+        int frame_idx = frames_found[i];
         if (frame_idx < 0) {
             TracePrintf(1, "No free frames.\n");
+            free(frames_found);
             return ERROR;
         }
 
@@ -212,6 +220,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
         r1_ptable[text_pg1 + i].pfn = frame_idx;
         g_frametable[frame_idx] = 1;
     }
+    free(frames_found);
 
     /*
      * ==>> Then, data. Allocate "data_npg" physical pages and map them starting at
@@ -221,10 +230,17 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
      *
      * DONE
      */
+    frames_found = find_n_free_frames(g_frametable, data_npg);
+    if (frames_found == NULL) {  // ran out of physical memory
+        TP_ERROR("Ran out of physical memory (called by kExec). Returning ERROR.\n");
+        return ERROR;
+    }
+
     for (int i = 0; i < data_npg; i++) {
-        int frame_idx = find_free_frame(g_frametable);
+        int frame_idx = frames_found[i];
         if (frame_idx < 0) {
             TracePrintf(1, "No free frames.\n");
+            free(frames_found);
             return ERROR;
         }
 
@@ -233,6 +249,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
         r1_ptable[data_pg1 + i].pfn = frame_idx;
         g_frametable[frame_idx] = 1;
     }
+    free(frames_found);
 
     /*
      * ==>> Then, stack. Allocate "stack_npg" physical pages and map them to the top
@@ -242,10 +259,16 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
      *
      * DONE
      */
+    frames_found = find_n_free_frames(g_frametable, stack_npg);
+    if (frames_found == NULL) {  // ran out of physical memory
+        TP_ERROR("Ran out of physical memory (called by kExec). Returning ERROR.\n");
+        return ERROR;
+    }
     for (int i = 0; i < stack_npg; i++) {
-        int frame_idx = find_free_frame(g_frametable);
+        int frame_idx = frames_found[i];
         if (frame_idx < 0) {
             TracePrintf(1, "No free frames.\n");
+            free(frames_found);
             return ERROR;
         }
 
@@ -254,6 +277,7 @@ int LoadProgram(char *name, char *args[], pcb_t *proc)
         r1_ptable[MAX_PT_LEN - 1 - i].pfn = frame_idx;
         g_frametable[frame_idx] = 1;
     }
+    free(frames_found);
 
     /*
      * ==>> (Finally, make sure that there are no stale region1 mappings left in the TLB!)
