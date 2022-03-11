@@ -172,15 +172,33 @@ void write_to_multiple_terms_at_once() {
     print_more_than_tmaxline2(0);
 }
 
-int main() {
+int main(int argc, char **argv) {
     TracePrintf(1, "TERMINAL_TESTS RUNNING!\n");
 
-    // print_hello_world();
-    // print_more_than_tmaxline();
-    // read_reasonable();
-    // multiple_procs_write_to_same_terminal();
-    // read_from_term_when_line_is_long();
-    write_to_multiple_terms_at_once();
+    int test_num = atoi(argv[1]);
+    switch (test_num) {
+        case 1:
+            print_hello_world();
+            break;
+        case 2:
+            print_more_than_tmaxline();
+            break;
+        case 3:
+            read_reasonable();
+            break;
+        case 4:
+            multiple_procs_write_to_same_terminal();
+            break;
+        case 5:
+            read_from_term_when_line_is_long();
+            break;
+        case 6:
+            write_to_multiple_terms_at_once();
+            break;
+        default:
+            TracePrintf(1, "Shouldn't be here...\n");
+            break;
+    }
 
     while (1) {
         TracePrintf(1, "TERMINAL_TESTS RUNNING!\n");
