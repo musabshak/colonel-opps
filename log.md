@@ -1,3 +1,18 @@
+### Final testing completed
+- ipc_syscalls_tests.c X
+- sync_syscalls_tests.c X
+- reclaim_tests.c X
+- memory_trap_handler_tests.c
+- cp3_tests.c X
+- cp4_tests.c X
+- cp5_tests.c X
+- sean_bigstack.c X 
+- sean_forktest.c X
+- sean_zero.c X
+- torture.c X
+
+
+
 ### Implementation notes
 - ~We assume init cloning into idle (init is process 0)~
 - ~We use a generic queue (singly linked list implementation)~
@@ -12,15 +27,10 @@
 - ~max pipes/locks/cvars: 50 (can change at top of kernel.c)~
 - ~Can give max 30 args to kernel~
 - ~Can improve assign_pipe_id() and retire_pipe_id() code (just use a global counter)~
-- Can improve frametable code
+- ~Can improve frametable code~
     - ~Use a queue of frames instead of bitvector~
     - ~Even if use bitvector, can store an additional field "num_frames_available_right_now" so before allocating multiple frames, we can check if we have physical memory availabile in order to perform a particular syscall/operation~
-- Reading more than `TERMINAL_MAX_LINES` is undefined, so if this is attempted with 
-`TtyRead` then we immediately return with error.
-- Typing more than `TERMINAL_MAX_LINES` (bytes of) characters into the terminal is not 
-defined-- we do not gaurentee that the entire line will be accepted. 
-    - Not to be confused with writing more than that many character with `TtyWrite`, which is
-    supported.
+
     
 
 ### Dealing with phyical memory running out

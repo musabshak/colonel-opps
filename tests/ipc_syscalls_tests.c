@@ -274,7 +274,7 @@ void test_pipe_read_write3() {
 /**
  * (7)
  *
- * Test that a processes waiting for bytes on an empty pipe get woken up after someone writes to that pipe.
+ * Test that a process waiting for bytes on an empty pipe get woken up after someone writes to that pipe.
  */
 void test_pipe_read_write4() {
     int rc, pipe_id, num_bytes_written, num_bytes_read;

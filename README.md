@@ -2,7 +2,7 @@
 Authors: Musab Shakeel and Varun Malladi  
 Course: CS 58 
 
-## Notes (for the course staff))
+## Notes (for the course staff)
 Verbose documentation detailing design choices for many of the syscalls is available in `docs/syscalls.md`.
 Here, we provide an overview of some implementation details that the course staff may find relevant (for understanding behavior of some syscalls and/or for grading purposes).
 
@@ -19,6 +19,10 @@ Here, we provide an overview of some implementation details that the course staf
 - Our `kReclaim()` implementation is not very sophisticated
     - If the blocked process queues associated with the pipe/lock/cvar are not empty, the reclaim call fails
     - If a lock that is currently locked is being reclaimed, the call fails.
+- Reading more than `TERMINAL_MAX_LINES` is undefined, so if this is attempted with 
+`TtyRead` then we immediately return with error.
+- Typing more than `TERMINAL_MAX_LINES` (bytes of) characters into the terminal is not defined -- we do not gaurantee that the entire line will be accepted.
+    - Not to be confused with writing more than that many character with `TtyWrite`, which is supported.
 - Other minor notes
     - Kernel supports a maximum of 50 pipes, 50 locks, 50cvars (at any given point in time). This may be changed by modifying the constants in `kernel.c`.
     - You may call `yalnix` with a maximum of 30 arguments (arbitrary).

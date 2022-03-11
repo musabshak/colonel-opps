@@ -7,22 +7,33 @@
 
 #include <yuser.h>
 
+/**
+ * (10)
+ */
 void test_implicitly_grow_ustack() {
-    TracePrintf(2, "Implicitly growing user stack by a reasonable amount...\n");
+    TracePrintf(1, "Implicitly growing user stack by a reasonable amount...\n");
 
-    int on_stack_1[10000];
-    for (int i = 0; i < 10000; i++) {
-        on_stack_1[i] = 0;
+    int on_stack_1[90000];
+    for (int i = 0; i < 90000; i++) {
+        on_stack_1[i] = 3;
+        TracePrintf(1, "on_stack_1[%d] == %d\n", i, on_stack_1[i]);
     }
 
-    TracePrintf(2, "User stack implicitly grew!\n");
+    for (int i = 0; i < 90000; i++) {
+        TracePrintf(1, "on_stack_1[%d] == %d\n", i, on_stack_1[i]);
+    }
+
+    TracePrintf(1, "User stack implicitly grew!\n");
 
     while (1) {
-        TracePrintf(2, "CP4_TEST RUNNING!\n");
+        TracePrintf(1, "CP5_TEST RUNNING!\n");
         Pause();
     }
 }
 
+/**
+ * (11)
+ */
 void test_implicitly_grow_ustack_toomuch() {
     int pid = Fork();
     if (pid == 0) {
@@ -48,6 +59,9 @@ void test_implicitly_grow_ustack_toomuch() {
     }
 }
 
+/**
+ * (18)
+ */
 void test_terminal() {
     int pid = Fork();
     if (pid == 0) {

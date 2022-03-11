@@ -164,14 +164,18 @@ void test_locks2() {
         Fork();
     }
 
+    TracePrintf(1, "Process %d acquiring lock\n", GetPid());
     Acquire(lock_id);
+    TracePrintf(1, "Process %d acquired lock\n", GetPid());
 
     for (int i = 1; i <= 5; i++) {
         TracePrintf(1, "Process %d counting: %d\n", GetPid(), i);
         Pause();
     }
 
+    TracePrintf(1, "Process %d releasing lock\n", GetPid());
     Release(lock_id);
+    TracePrintf(1, "Process %d released lock\n", GetPid());
 
     int status;
 
@@ -253,6 +257,7 @@ void test_cvar2() {
         Delay(3);
         Acquire(lock_id);
         Delay(5);
+        // CvarSignal(cvar_id);
         CvarBroadcast(cvar_id);
         Release(lock_id);
 
