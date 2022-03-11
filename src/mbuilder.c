@@ -1,7 +1,11 @@
 /**
- * mem_management.c
+ * mem_builder.c
  *
- * Functions helpful for memory management.
+ * Authors: Varun Malladi
+ * Date: Late February 2022
+ *
+ * Struct and associated methods that makes it easier to allocate and deallocate multiple
+ * pointers. For details, see 'mbuilder.md'.
  */
 
 #include "mbuilder.h"
@@ -23,6 +27,11 @@ extern unsigned int *g_frametable;
  */
 typedef queue_t m_builder_t;
 
+/**
+ * The malloc builder is a queue of pointers, but since we need to handle (e.g. for
+ * purposes of deallocating) differents kinds in different ways, we need to store that
+ * data along with the pointer itself.
+ */
 typedef struct WidePtr {
     void *ptr;
     enum MemKind kind;
