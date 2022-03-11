@@ -1,3 +1,12 @@
+/**
+ * io_syscalls.c
+ *
+ * Authors: Varun Malladi
+ * Date: Late February 2022
+ *
+ * Contains the TtyRead and TtyWrite syscalls, as well as helper functions, structures,
+ * etc.
+ */
 
 #include <stdbool.h>
 #include <ykernel.h>
@@ -19,10 +28,16 @@ extern term_buf_t *g_term_bufs[NUM_TERMINALS];
  */
 int term_read_status[NUM_TERMINALS] = {0, 0, 0, 0};
 int term_write_status[NUM_TERMINALS] = {0, 0, 0, 0};
+
+// This was created to handle the case where a process tried to write to a different terminal
+// while `TtyTransmit` was in progress (initiated by another process, for another terminal)
 bool tty_transmit_in_progress = false;
 
 enum TermAccessKind { Read, Write };
 
+/**
+ * Return the value at index `idx` of the read/write status arrays above.
+ */
 int term_queue_get(int idx, enum TermAccessKind queue_kind) {
     if (queue_kind == Read) {
         return term_read_status[idx];
@@ -31,6 +46,9 @@ int term_queue_get(int idx, enum TermAccessKind queue_kind) {
     }
 }
 
+/**
+ * Set the value at index `idx` of the read/write status arrays above.
+ */
 void term_queue_set(int idx, enum TermAccessKind queue_kind, int val) {
     if (queue_kind == Read) {
         term_read_status[idx] = val;
@@ -55,6 +73,8 @@ void gain_access_to_term(int tty_id, enum TermAccessKind access_kind) {
                           tty_transmit_in_progress == false;
     }
 
+    // We use a while loop in case of when we wake up, another process took control of the
+    // terminal before this process could
     while (can_gain_access == false) {
         g_running_pcb->blocked_term = tty_id;
 
@@ -68,6 +88,7 @@ void gain_access_to_term(int tty_id, enum TermAccessKind access_kind) {
             schedule(g_term_blocked_write_queue);
         }
 
+        // Woke up after sleep-- check if we can gain access now
         if (access_kind == Read) {
             can_gain_access = term_queue_get(tty_id, access_kind) == g_running_pcb->pid ||
                               term_queue_get(tty_id, access_kind) == 0;
@@ -77,7 +98,9 @@ void gain_access_to_term(int tty_id, enum TermAccessKind access_kind) {
                               tty_transmit_in_progress == false;
         }
     }
-    // woke up with access to terminal-- free to continue
+
+    // Woke up with access to terminal-- free to continue. Update status arrays and bits
+    // as necessary
     if (access_kind == Read) {
         TracePrintf(2, "PID %d has read access to terminal %d.\n", g_running_pcb->pid, tty_id);
         term_read_status[tty_id] = g_running_pcb->pid;
@@ -92,11 +115,7 @@ void gain_access_to_term(int tty_id, enum TermAccessKind access_kind) {
  * Mark terminal as available and wake up next process waiting on it.
  */
 int release_access_to_term(int tty_id, enum TermAccessKind access_kind) {
-
-    /**
-     * Mark terminal in appropriate queue as unused
-     */
-
+    // Mark terminal in appropriate queue as unused
     if (access_kind == Read) {
         TracePrintf(2, "PID %d releasing read access to terminal %d.\n", g_running_pcb->pid, tty_id);
         term_read_status[tty_id] = 0;
@@ -106,10 +125,7 @@ int release_access_to_term(int tty_id, enum TermAccessKind access_kind) {
         tty_transmit_in_progress = false;
     }
 
-    /**
-     * Wake up any processes waiting for this kind of access on this terminal
-     */
-
+    // Wake up any processes waiting for this kind of access on this terminal
     int *key = malloc(sizeof(int));
     if (key == NULL) {
         TP_ERROR("`malloc()` failed.\n");
@@ -136,33 +152,8 @@ int release_access_to_term(int tty_id, enum TermAccessKind access_kind) {
 }
 
 /**
- * (From manual)
- *
- * Read the next line of input from terminal `tty_id`, copying it into the buffer
- * referenced by `buf`. The maximum length of the line to be returned is given by `len`.
- *
- * Note: The line returned in the buffer is not null-terminated.
- *
- * Return behavior:
- *  - If there are sufficient unread bytes already waiting, the call will return right away,
- *  with those.
- *  - Otherwise, the calling process is blocked until a line of input is available to be
- *  returned.
- *      - If the length of the next available input line is longer than `len` bytes, only the
- *      first `len` bytes of the line are copied to the calling process, and the remaining
- *      bytes of the line are saved by the kernel for the next `TtyRead()` (by this or another
- *      process).
- *      - If the length of the next available input line is shorter than len bytes, only as
- *      many bytes are copied to the calling process as are available in the input line; On
- *      success, the number of bytes actually copied into the calling process’s buffer is
- *      returned; in case of any error, the value ERROR is returned.
- *
- * If there bytes left in the buffer from the previous read, do we still need to
- * receive from the terminal? This implementation assumes we do NOT.
- *
- * If I understand correctly, WRITING more than `TERMINAL_MAX_LINE` is valid and should
- * be supported, but READING more than `TERMINAL_MAX_LINE` is undefined. So here I
- * exit with error if that is attempted.
+ * Reading more than `TERMINAL_MAX_LINE` is undefined. So we exit with error if
+ * that is attempted.
  */
 int kTtyRead(int tty_id, void *buf, int len) {
     TracePrintf(2, "Entering `TtyRead()`...\n");
@@ -186,9 +177,7 @@ int kTtyRead(int tty_id, void *buf, int len) {
         return ERROR;
     }
 
-    /**
-     * Check if terminal is being used by another process. If so, sleep.
-     */
+    // Check if terminal is being used by another process. If so, sleep.
     gain_access_to_term(tty_id, Read);
 
     /**
@@ -239,18 +228,13 @@ int kTtyRead(int tty_id, void *buf, int len) {
 }
 
 /**
- * Write the contents of the buffer referenced by buf to the terminal tty id. The length
- * of the buffer in bytes is given by `len`. The calling process is blocked until all
- * characters from the buffer have been written on the terminal. On success, the number of
- * bytes written (`len`) is returned; in case of any error, the value `ERROR` is returned.
- *
- * Calls to TtyWrite for more than TERMINAL MAX LINE bytes should be supported.
+ * Calls to `TtyWrite` for more than `TERMINAL MAX LINE` bytes are supported.
  */
 int kTtyWrite(int tty_id, void *buf, int len) {
     TracePrintf(2, "Entering `kTtyWrite()`...\n");
 
     /**
-     * Valid user input
+     * Validate user input
      */
 
     if (!(tty_id >= 0 && tty_id < NUM_TERMINALS)) {

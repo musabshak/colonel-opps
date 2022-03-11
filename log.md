@@ -14,6 +14,12 @@
 - Can improve frametable code
     - ~Use a queue of frames instead of bitvector~
     - ~Even if use bitvector, can store an additional field "num_frames_available_right_now" so before allocating multiple frames, we can check if we have physical memory availabile in order to perform a particular syscall/operation~
+- Reading more than `TERMINAL_MAX_LINES` is undefined, so if this is attempted with 
+`TtyRead` then we immediately return with error.
+- Typing more than `TERMINAL_MAX_LINES` (bytes of) characters into the terminal is not 
+defined-- we do not gaurentee that the entire line will be accepted. 
+    - Not to be confused with writing more than that many character with `TtyWrite`, which is
+    supported.
     
 
 ### Dealing with phyical memory running out
