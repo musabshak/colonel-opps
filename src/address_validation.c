@@ -1,3 +1,11 @@
+/**
+ * address_validation.c
+ *
+ * Authors: Varun Malladi
+ *
+ * Functions related to validating addresses passed to the kernel by the user. For example,
+ * strings and arrays.
+ */
 
 #include "address_validation.h"
 
@@ -62,27 +70,27 @@ unsigned int get_last_allocated_ustack_page(pte_t *r1_ptable) {
     return last_allocated_userstack_page;
 }
 
+/**
+ * Returns the page the passed address is on (not relative)
+ */
 unsigned int get_page_of_addr(void *addr) { return ((unsigned int)(addr) >> PAGESHIFT); }
 
 /**
- * Checks if the address lies in region 1. (1 means it does, 0 means it doesn't)
+ * Checks if the address lies in region 1. True if yes.
  */
 bool is_r1_addr(void *addr) {
     unsigned int addr_page = ((unsigned int)(addr) >> PAGESHIFT);
     if (addr_page < g_len_pagetable || addr_page >= 2 * MAX_PT_LEN) {
         // the address points to r0 (kernel) memory, or past r1 memory
-
         return false;
     }
 
-    // TracePrintf(2, "is an R1 address!\n");
     return true;
 }
 
 /**
  * Check that the address pointed to by a pointer passed from userland, is write-able.
  */
-
 bool is_writeable_addr(pte_t *r1_ptable, void *addr) {
 
     // Check that pointer is a valid R1 pointer
@@ -98,11 +106,9 @@ bool is_writeable_addr(pte_t *r1_ptable, void *addr) {
     addr_page = addr_page % g_len_pagetable;
 
     if (r1_ptable[addr_page].prot & PROT_WRITE == PROT_WRITE) {
-        TracePrintf(2, "is a writeable address!\n");
         return true;
     }
 
-    TracePrintf(2, "is not a writeable address!\n");
     return false;
 }
 
@@ -112,15 +118,18 @@ bool is_writeable_addr(pte_t *r1_ptable, void *addr) {
 bool is_readable_str(pte_t *r1_ptable, char *str) {
     // We iterate in this way so that we even validate the terminating character
     for (char *pointer_to_char = str;; pointer_to_char++) {
+        // Tells us when to break out of the loop
         int should_break = 0;
         if (*pointer_to_char == '\0') {
             should_break = 1;
         }
 
+        // Check if address is in region 1
         if (is_r1_addr((void *)pointer_to_char) == false) {
             return false;
         }
 
+        // Check if user has read permissions to this page
         unsigned int addr_page = ((unsigned int)(str) >> PAGESHIFT);
         addr_page = addr_page % g_len_pagetable;
 
@@ -128,6 +137,7 @@ bool is_readable_str(pte_t *r1_ptable, char *str) {
             return false;
         }
 
+        // Break out of loop if necessary
         if (should_break == 1) {
             break;
         }
