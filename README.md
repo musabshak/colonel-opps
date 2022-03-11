@@ -28,21 +28,21 @@ Here, we provide an overview of some implementation details that the course staf
 ### Dealing with running out of physical memory
 We (to our knowledge) gracefully handle scenarios where we run out of physical memory.  
 
-Places where we may run out of physical memory (basically anywhere find_free_frame() is called in a loop)
-    - `setKernelBrk` (while raising kernel heap) 
-        - We `Halt()` the CPU.
-    - `kBrk` (while raising user heap) 
-        - No memory leaks (no frames that will permanently remain marked as "used")
-        - The user process is exited with ERROR.
-    - `MemoryTrap` (while raising user stack) 
-        - No memory leaks (no frames that will permanently remain marked as "used")
-        - The user process is exited with ERROR.
-    - `kFork` (while allocating frames for the new process - R1 ptable, kernel stack)
-        - No memory leaks (no frames that will permanently remain marked as "used")
-        - User's `Fork()` call returns with failure
-    - `kExec` 
-        - Should not run out of memory since we just cleared memory from an earlier process but ...
-        - Process that exec-ed exits with ERROR.
+Places where we may run out of physical memory (basically anywhere find_free_frame() is called in a loop)  
+- `setKernelBrk` (while raising kernel heap) 
+    - We `Halt()` the CPU.
+- `kBrk` (while raising user heap) 
+    - No memory leaks (no frames that will permanently remain marked as "used")
+    - The user process is exited with ERROR.
+- `MemoryTrap` (while raising user stack) 
+    - No memory leaks (no frames that will permanently remain marked as "used")
+    - The user process is exited with ERROR.
+- `kFork` (while allocating frames for the new process - R1 ptable, kernel stack)
+    - No memory leaks (no frames that will permanently remain marked as "used")
+    - User's `Fork()` call returns with failure
+- `kExec` 
+    - Should not run out of memory since we just cleared memory from an earlier process but ...
+    - Process that exec-ed exits with ERROR.
 
 
 
