@@ -57,30 +57,13 @@ bool pcb_delay_finished(void *elementp, const void *key) {
     return true;
 }
 
-/*
- *  ===================
- *  === TRAP KERNEL ===
- *  ===================
- *
- *  OS response (manual, p. 36):
- *      Execute the requested syscall, as indicated by the syscall number
- *      in the code field of the UserContext passed by reference to this
- *      trap handler function.
- *      The arguments to the syscall will be found in the registers, starting
- *      with regs[0].
- *      The return value from the syscall should be returned to the user process
- *      in the regs[0] field of the UserContext.
- *
- *  - The code numbers are found in include/yalnix.h
- *
+/**
  * This handler really only needs to call the appropriate kernel syscall subroutine,
  * based on the kernel code received in user_context->code field. The only implementation
  * design of significance is how arguments are parsed from *user_context and passed into
  * the syscall, and how the syscall return value is passed back to userland via
  * user_context.
- *
  */
-
 int TrapKernelHandler(UserContext *user_context) {
     TracePrintf(2, "Entering TrapKernelHandler\n");
     int syscall_code = user_context->code;
@@ -124,6 +107,7 @@ int TrapKernelHandler(UserContext *user_context) {
             if (kFork() == ERROR) {
                 user_context->regs[0] = ERROR;
             } else {
+                // the running pcb was updated in `kFork()`
                 user_context->regs[0] = g_running_pcb->uctxt.regs[0];
             }
             break;
@@ -225,20 +209,9 @@ int TrapKernelHandler(UserContext *user_context) {
     TracePrintf(2, "Exiting TrapKernelHandler\n");
 }
 
-/*
- *  =================
- *  === TRAPCLOCK ===
- *  =================
- *
- *  OS response (manual, p. 36):
- *      If there are other runnable processes on the ready queue, perform
- *      a context switch to the next runnable process. (The Yalnix kernel
- *      should implement round-robin process scheduling with a CPU quantum
- *      per process of 1 clock tick.)
- *      If there are no runnable processes, dispatch idle.
- *
+/**
+ * Schedule, but also check waiting queues and handle delayed processes
  */
-
 int TrapClock(UserContext *user_context) {
 
     TracePrintf(2, "Entering TrapClock\n");
@@ -278,44 +251,9 @@ int TrapClock(UserContext *user_context) {
     return rc;
 }
 
-/*
- *  ==================
- *  === TRAPMEMORY ===
- *  ==================
- *
- *  OS response (manual, p. 36):
- *      The kernel must determine if this exception represents an implicit
- *      request by the current process to enlarge the amount of memory allocated
- *      to the process’s stack. If so, the kernel enlarges the process’s stack
- *      to “cover” the address that was being referenced that caused the exception
- *      (the addr field in the UserContext) and then returns from the exception,
- *      allowing the process to continue execution with the larger stack. (For
- *      more discussion, see Section 3.5.2 below.)
- *      Otherwise, abort the currently running Yalnix user process but continue
- *      running other processes.
- *
- * Cases that don't lead to error/program exitting
- * - Page fault
- *      - In case you're trying to access a page that's on disk
- * - Trying to access empty space below stack
- *      - Indicator for growing stack size
- * - COW stuff
- *      - If trying to write to COW frame
- *
- * From manual:
- * This exception results from a disallowed memory access by the current user process.
- * The access may be disallowed because the address is outside the virtual address range
- * of the hardware (outside Region 0 and Region 1), because the address is not mapped in
- * the current page tables, or because the access violates the page protection specified
- * in the corresponding page table entry
- *
- *  user_context->code tells us some context around the trap
- *  code = 0 means addr is outside virtual address range
- *  code = 1 means addr is not mapped in current page tables
- *  code = 2 means access violates the page protection specified in ptable
- *
+/**
+ * Handles the case where this might be an implicit request to grow user stack
  */
-
 int TrapMemory(UserContext *user_context) {
     TracePrintf(2, "CALLING MEMORY TRAP HANDLER!!\n");
 
@@ -323,6 +261,7 @@ int TrapMemory(UserContext *user_context) {
                 (unsigned int)(user_context->addr) >> PAGESHIFT);
     TracePrintf(2, "TrapMemory() called with code %d.\n", user_context->code);
 
+    // Immediately return error if code is not 1
     unsigned int code = user_context->code;
     if (code == 0 || code == 2) {
         TP_ERROR(
@@ -356,7 +295,6 @@ int TrapMemory(UserContext *user_context) {
     }
 
     int num_pages_to_grow = last_stack_page - relative_addr_page;
-    // TODO: use malloc builder here (!!)
     int *frames_found = find_n_free_frames(g_frametable, num_pages_to_grow);
     if (frames_found == NULL) {
         TP_ERROR("Failed to grow user stack (ran out of physical memory). Exiting process now.\n");
@@ -382,27 +320,14 @@ int TrapMemory(UserContext *user_context) {
     free(frames_found);
 
     // Update PCB to reflect this change
-
-    // varun: do we do this even if we haven't put anything on the newly allocated pages?
-    // (or are we only going to reach this code if those pages are going to be populated
-    // right away)
-    // musab: hmm good question, not sure. let's keep this comment here.
     g_running_pcb->user_stack_base = (void *)DOWN_TO_PAGE((unsigned int)addr);
 
     return SUCCESS;
 }
 
 /*
- *  ===================
- *  === TRAPILLEGAL ===
- *  ===================
- *
- *  OS response (manual, p. 36):
- *      Abort the currently running Yalnix user process but continue running
- *      other processes.
- *
+ * Exit the process that trapped here, unless it is `init`, in which case halt the CPU.
  */
-
 int TrapIllegal(UserContext *user_context) {
     TracePrintf(2, "Entering `TrapIllegal()`...\n");
     int caller_pid = g_running_pcb->pid;
@@ -416,6 +341,9 @@ int TrapIllegal(UserContext *user_context) {
     }
 }
 
+/*
+ * Exit the process that trapped here, unless it is `init`, in which case halt the CPU.
+ */
 int TrapMath(UserContext *user_context) {
     TracePrintf(2, "Entering `TrapMath()`...\n");
     int caller_pid = g_running_pcb->pid;
@@ -425,7 +353,7 @@ int TrapMath(UserContext *user_context) {
     } else {
         // this is init that trapped here
         TP_ERROR("`init` process error, halting CPU.\n");
-        Halt();  // shouldn't be necessary - kExit Halts() if init process exiting
+        Halt();
     }
 }
 
@@ -438,27 +366,13 @@ bool is_waiting_for_term_id(void *elt, const void *key) {
     return (pcb->blocked_term == tty_id);
 }
 
-/*
- *  ======================
- *  === TRAPTTYRECEIVE ===
- *  ======================
- *
- *  OS response (manual, p. 36):
- *      This interrupt signifies that a new line of input is available
- *      from the terminal indicated by the code field in the UserContext
- *      passed by reference to this interrupt handler func- tion. The
- *      kernel should read the input from the terminal using a TtyReceive
- *      hardware operation and if necessary buffer the input line for a
- *      subsequent TtyRead syscall by some user process.
- *
+/**
+ * If more than `TERMINAL_MAX_LEN` bytes are typed into the terminal, we do not support
+ * reading every byte. All we support is reading `TERMINAL_MAX_LEN` bytes. For instance,
+ * manual testing of typing an excessive amonut of characters and pressing return resulted
+ * in reading far fewer characters, which seems on first inspection to be `TERMINAL_MAX_LEN`
+ * number of characters.
  */
-
-// If more than `TERMINAL_MAX_LEN` bytes are typed into the terminal, we do not support
-// reading every byte. All we support is reading `TERMINAL_MAX_LEN` bytes. For instance,
-// manual testing of typing an excessive amonut of characters and pressing return resulted
-// in reading far fewer characters, which seems on first inspection to be `TERMINAL_MAX_LEN`
-// number of characters.
-
 int TrapTTYReceive(UserContext *user_context) {
     TracePrintf(2, "Entering `TrapTTYReceive()`...\n");
 
@@ -472,10 +386,10 @@ int TrapTTYReceive(UserContext *user_context) {
 
     /**
      * Copy terminal data into kernel buffer. This will overwrite the contents of that
-     * kernel buffer (e.g. from a previous trap). TODO: is this the right behavior?
+     * kernel buffer (e.g. from a previous trap).
      */
 
-    // allocate kernel buffer, if necessary
+    // Allocate kernel buffer, if necessary
     if (k_buf->ptr == NULL) {
         k_buf->ptr = malloc(TERMINAL_MAX_LINE);
         if (k_buf->ptr == NULL) {
@@ -483,10 +397,10 @@ int TrapTTYReceive(UserContext *user_context) {
             free(tty_id);
             return ERROR;
         }
-        k_buf->curr_pos_offset, k_buf->end_pos_offset = 0;  // not really necessary, I think
+        k_buf->curr_pos_offset, k_buf->end_pos_offset = 0;
     }
 
-    // receive from terminal. This will overwrite whatever is in the kernel buf
+    // Receive from terminal. This will overwrite whatever is in the kernel buf
     int bytes_received = TtyReceive(*tty_id, k_buf->ptr, TERMINAL_MAX_LINE);
     k_buf->end_pos_offset = bytes_received;
 
@@ -506,21 +420,10 @@ int TrapTTYReceive(UserContext *user_context) {
 }
 
 /*
- *  =======================
- *  === TRAPTTYTRANSMIT ===
- *  =======================
- *
- *  OS response (manual, p. 36):
- *      This interrupt signifies that a previous TtyTransmit hardware
- *      operation on some terminal has completed. The specific terminal is
- *      indicated by the code field in the UserContext passed by reference
- *      to this interrupt handler function. The kernel should complete the
- *      blocked process that started this terminal output from a TtyWrite
- *      syscall, as necessary; also start the next terminal output on this
- *      terminal, if any.
- *
+ * We get here when a call to `TtyTransmit()` has concluded. Recall that the process that
+ * called it doesn't wait for it to finish, and doesn't get back on the ready queue, so we
+ * need to do that here.
  */
-
 int TrapTTYTransmit(UserContext *user_context) {
     // Place the process that was blocking for this terminal back on the ready queue
     // so that when it starts running, it will pick up where it left off (e.g. in
@@ -547,17 +450,9 @@ int TrapTTYTransmit(UserContext *user_context) {
     return SUCCESS;
 }
 
-/*
- *  ================
- *  === TRAPDISK ===
- *  ================
- *
- *  OS response (manual, p. 36):
- *      Your OS can ignore these traps, unless you’ve decided to implement
- *      extra functionality involving the disk.
- *
+/**
+ * Exit the process that trapped here, unless it is `init`, in which case halt the CPU.
  */
-
 int TrapDisk(UserContext *user_context) {
     TracePrintf(2, "Entering `TrapDisk()`...\n");
     int caller_pid = g_running_pcb->pid;

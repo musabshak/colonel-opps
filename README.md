@@ -13,8 +13,7 @@ Here, we provide an overview of some implementation details that the course staf
 - The internal pipe buffer does not use a generic queue. The pipe buffer is actually a queue ADT implemented using a circular array implementation (so we avoided the overhead of queue pointers by using a circular array)- Pipes/locks/cvars, are stored in hashtables to ensure an `O(1)` lookup in the syscalls associated with these objects (`PipeRead`, `PipeWrite`, `Acquire`, `Release`, etc)
 - We implemented sophisticated, atomic handling of `Fork()` call failure. 
     - All malloced memory is carefully freed before `Fork()` exits with ERROR
-    - TODO VARUN
-    - Refer to documentation for `malloc builder` provided in `docs/mbuilder.md`
+    - This is the done with the `malloc builder`, documented in `docs/mbuilder.md`
 - We were careful to ensure graceful handling of cases where processes run out of physical memory. Refer to the next subsection `Dealing with running out of physical memory`
 - There is no blocked process queue associated with the `kWait()` syscall (no need for a queue, we just mark the PCB with the attribute: `is_wait_blocked`)
 - Our `kReclaim()` implementation is not very sophisticated
