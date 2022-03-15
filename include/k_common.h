@@ -50,9 +50,9 @@ extern hashtable_t *g_locks_htable;
 extern int g_max_locks;
 extern int g_lock_id;
 
-hashtable_t *g_cvars_htable;
-int g_max_cvars;
-int g_cvar_id;
+extern hashtable_t *g_cvars_htable;
+extern int g_max_cvars;
+extern int g_cvar_id;
 
 // E========= EXTERN DECLARATIONS ========== //
 
